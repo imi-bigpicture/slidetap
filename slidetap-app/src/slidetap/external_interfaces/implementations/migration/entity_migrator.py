@@ -31,8 +31,8 @@ from slidetap.model import (
     AnyEntitySchema,
     AttributeSchema,
     Dataset,
+    EntityMigrationResult,
     Item,
-    ObjectMigrationResult,
     Project,
     UnresolvedAttributeMigration,
 )
@@ -40,7 +40,7 @@ from slidetap.model import (
 T = TypeVar("T", bound=Project | Dataset | Item)
 
 
-class ObjectMigrator(Generic[T]):
+class EntityMigrator(Generic[T]):
     """Migrates a project, a dataset, or an item from its schema in the source
     root to its schema in the target root.
 
@@ -48,7 +48,7 @@ class ObjectMigrator(Generic[T]):
     attribute of that tag, at any depth, with the attributes it holds. What
     else becomes of an attribute is declared by its source attribute schema, at
     any depth: migrated by an attribute migrator, such as an enum whose values
-    changed, renamed to another attribute of the same object, or dropped. A
+    changed, renamed to another attribute of the same entity, or dropped. A
     target attribute that no source attribute becomes is left without a value.
 
     A migrator is refused when it is created if a declaration is not of the
@@ -82,7 +82,7 @@ class ObjectMigrator(Generic[T]):
             their values.
         renamed_attributes: Sequence[tuple[AttributeSchema, AttributeSchema]] = ()
             Source attribute schemas, with the target attribute schema of another
-            tag in the same object that each becomes.
+            tag in the same entity that each becomes.
         dropped_attributes: Iterable[AttributeSchema] = ()
             Source attribute schemas that are left out.
 
@@ -127,17 +127,17 @@ class ObjectMigrator(Generic[T]):
         """The schema of the target root."""
         return self._target
 
-    def migrate(self, obj: T) -> ObjectMigrationResult:
+    def migrate(self, entity: T) -> EntityMigrationResult:
         """Migrate a project, dataset, or item to the target schema.
 
         Parameters
         ----------
-        obj: T
+        entity: T
             The project, dataset, or item, on the source schema. Not changed.
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The target schema, the attributes on it by target tag, and the
             attributes whose value in effect lost values as unresolved.
 
@@ -146,11 +146,11 @@ class ObjectMigrator(Generic[T]):
         ValueError
             If an attribute is held at a tag that is not of the source schema.
         """
-        return ObjectMigrationResult(
+        return EntityMigrationResult(
             schema_uid=self._target.uid,
-            attributes=self._migrate_attributes(obj.attributes, self._attributes),
+            attributes=self._migrate_attributes(entity.attributes, self._attributes),
             private_attributes=self._migrate_attributes(
-                obj.private_attributes, self._private_attributes
+                entity.private_attributes, self._private_attributes
             ),
         )
 
@@ -181,7 +181,7 @@ class ObjectMigrator(Generic[T]):
         path_prefix: str,
         undeclared: list[str],
     ) -> dict[str, AttributePair | None]:
-        """Pair the attributes of the object, adding the paths of those nothing
+        """Pair the attributes of the entity, adding the paths of those nothing
         is declared about to `undeclared`."""
         try:
             return declarations.pair(sources, targets, path_prefix)
@@ -194,7 +194,7 @@ class ObjectMigrator(Generic[T]):
         attributes: Mapping[str, AnyAttribute],
         pairs: Mapping[str, AttributePair | None],
     ) -> dict[str, AnyAttribute | UnresolvedAttributeMigration]:
-        """Migrate the attributes of the object to their tags in the target,
+        """Migrate the attributes of the entity to their tags in the target,
         each that lost values as unresolved.
 
         Raises

@@ -51,7 +51,7 @@ import {
 import {
   MigrationStatus,
   type AttributeMigrationIssue,
-  type ObjectMigrationIssues,
+  type EntityMigrationIssues,
   type ProjectMigration,
 } from 'src/models/migration'
 import type { Project } from 'src/models/project'
@@ -138,8 +138,8 @@ function StartMigration({ project }: MigrateProps): ReactElement {
     },
   })
   // Where the project cannot be converted now, why not is said.
-  const { hasMigration, migrateRefusal } = useProjectActions()
-  const canMigrate = hasMigration && migrateRefusal === null
+  const { migrationAvailable, migrateRefusal } = useProjectActions()
+  const canMigrate = migrationAvailable && migrateRefusal === null
   return (
     <Stack spacing={1}>
       <Typography>
@@ -218,7 +218,7 @@ function MigrationInProgress({
       queryClient.setQueryData(migrationKey, submitted)
     },
   })
-  const issues = migration.issues.flatMap((object) => object.attributeIssues)
+  const issues = migration.issues.flatMap((entity) => entity.attributeIssues)
   const resolvedCount = issues.filter((issue) => issue.resolvedAt !== null).length
   const revertButton = (
     <Button
@@ -289,7 +289,7 @@ function MigrationInProgress({
   )
 }
 
-/** The objects with something to resolve or accept, and the selected one's. */
+/** The entities with something to resolve or accept, and the selected one's. */
 function CurateMigration({
   project,
   migration,
@@ -298,11 +298,11 @@ function CurateMigration({
   migration: ProjectMigration
 }): ReactElement {
   const [selectedUid, setSelectedUid] = React.useState<string | undefined>(
-    migration.issues.find((object) =>
-      object.attributeIssues.some((issue) => issue.resolvedAt === null),
+    migration.issues.find((entity) =>
+      entity.attributeIssues.some((issue) => issue.resolvedAt === null),
     )?.uid ?? migration.issues[0]?.uid,
   )
-  const selected = migration.issues.find((object) => object.uid === selectedUid)
+  const selected = migration.issues.find((entity) => entity.uid === selectedUid)
   const targetRoot = useSchemaContext()
   // The schemas of dropped attributes are in the root the project is on.
   const sourceRootQuery = useQuery({
@@ -324,19 +324,19 @@ function CurateMigration({
     <Grid container spacing={1}>
       <Grid size={{ xs: 3 }}>
         <List dense>
-          {migration.issues.map((object) => {
-            const resolved = object.attributeIssues.filter(
+          {migration.issues.map((entity) => {
+            const resolved = entity.attributeIssues.filter(
               (issue) => issue.resolvedAt !== null,
             ).length
             return (
               <ListItemButton
-                key={object.uid}
-                selected={object.uid === selectedUid}
-                onClick={() => setSelectedUid(object.uid)}
+                key={entity.uid}
+                selected={entity.uid === selectedUid}
+                onClick={() => setSelectedUid(entity.uid)}
               >
                 <ListItemText
-                  primary={object.identifier}
-                  secondary={`${objectSchema(targetRoot, object.targetSchemaUid)?.displayName ?? ''}: ${resolved} of ${object.attributeIssues.length} resolved`}
+                  primary={entity.identifier}
+                  secondary={`${entitySchema(targetRoot, entity.targetSchemaUid)?.displayName ?? ''}: ${resolved} of ${entity.attributeIssues.length} resolved`}
                 />
               </ListItemButton>
             )
@@ -345,10 +345,10 @@ function CurateMigration({
       </Grid>
       <Grid size={{ xs: 9 }}>
         {selected !== undefined && (
-          <CurateObject
+          <CurateEntity
             key={selected.uid}
             project={project}
-            object={selected}
+            entity={selected}
             sourceRoot={sourceRootQuery.data}
           />
         )}
@@ -358,13 +358,13 @@ function CurateMigration({
 }
 
 /** A project, dataset, or item schema, as far as an attribute issue needs it. */
-type ObjectSchema = Pick<
+type EntitySchema = Pick<
   ProjectSchema,
   'uid' | 'displayName' | 'attributes' | 'privateAttributes'
 >
 
 /** The project, dataset, and item schemas of a root. */
-function objectSchemas(root: RootSchema): ObjectSchema[] {
+function entitySchemas(root: RootSchema): EntitySchema[] {
   return [
     root.project,
     root.dataset,
@@ -376,13 +376,13 @@ function objectSchemas(root: RootSchema): ObjectSchema[] {
 }
 
 /** Find the project, dataset, or item schema of a uid in a root. */
-function objectSchema(root: RootSchema, uid: string): ObjectSchema | undefined {
-  return objectSchemas(root).find((schema) => schema.uid === uid)
+function entitySchema(root: RootSchema, uid: string): EntitySchema | undefined {
+  return entitySchemas(root).find((schema) => schema.uid === uid)
 }
 
-/** Find the top-level attribute schema of a uid in an object schema. */
+/** Find the top-level attribute schema of a uid in an entity schema. */
 function attributeSchema(
-  schema: ObjectSchema | undefined,
+  schema: EntitySchema | undefined,
   uid: string | undefined,
 ): AttributeSchema | undefined {
   if (schema === undefined) {
@@ -394,25 +394,25 @@ function attributeSchema(
   ].find((attribute) => attribute.uid === uid)
 }
 
-function CurateObject({
+function CurateEntity({
   project,
-  object,
+  entity,
   sourceRoot,
 }: {
   project: Project
-  object: ObjectMigrationIssues
+  entity: EntityMigrationIssues
   sourceRoot: RootSchema
 }): ReactElement {
-  const targetSchema = objectSchema(useSchemaContext(), object.targetSchemaUid)
+  const targetSchema = entitySchema(useSchemaContext(), entity.targetSchemaUid)
   return (
     <Stack spacing={1}>
       <Typography variant="h6">
-        {object.identifier} ({targetSchema?.displayName})
+        {entity.identifier} ({targetSchema?.displayName})
       </Typography>
-      {object.attributeIssues.map((issue) => {
+      {entity.attributeIssues.map((issue) => {
         if (issue.targetAttributeSchemaUid === null) {
           const sourceUid = issue.original?.schemaUid
-          const source = objectSchemas(sourceRoot)
+          const source = entitySchemas(sourceRoot)
             .map((schema) => attributeSchema(schema, sourceUid))
             .find((schema) => schema !== undefined)
           return (
@@ -428,7 +428,7 @@ function CurateObject({
         return schema === undefined ? (
           <Alert key={issue.uid} severity="error">
             Attribute schema {issue.targetAttributeSchemaUid} is not an attribute of{' '}
-            {targetSchema?.displayName ?? object.targetSchemaUid}.
+            {targetSchema?.displayName ?? entity.targetSchemaUid}.
           </Alert>
         ) : (
           <CurateIssue

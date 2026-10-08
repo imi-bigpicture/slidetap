@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Migrating objects between two roots with declared migrators.
+"""Migrating entities between two roots with declared migrators.
 
 The source being has a sex, a colour nested in an object, in a list, and in a
 union, an attribute renamed, one dropped, one kept as it is, and a private
@@ -28,16 +28,17 @@ import pytest
 
 from slidetap.external_interfaces.implementations.migration import (
     DeclarativeSchemaMigration,
+    EntityMigrator,
     EnumAttributeMigrator,
     FixedValueAttributeMigrator,
     NestedAttributeMigrator,
-    ObjectMigrator,
     UnchangedAttributeMigrator,
 )
 from slidetap.model import (
     AnyAttribute,
     AttributeSchema,
     DatasetSchema,
+    EntityMigrationResult,
     EnumAttribute,
     EnumAttributeSchema,
     Item,
@@ -45,7 +46,6 @@ from slidetap.model import (
     ListAttributeSchema,
     ObjectAttribute,
     ObjectAttributeSchema,
-    ObjectMigrationResult,
     ProjectSchema,
     RejectedValues,
     RootSchema,
@@ -135,11 +135,11 @@ class Schemas:
             [self.secret],
         )
 
-    def migrator(self, **declared: Any) -> ObjectMigrator[Item]:
+    def migrator(self, **declared: Any) -> EntityMigrator[Item]:
         """The migrator of the being, declaring every change unless given."""
         arguments = self.migrator_declarations()
         arguments.update(declared)
-        return ObjectMigrator[Item](self.source, self.target, **arguments)
+        return EntityMigrator[Item](self.source, self.target, **arguments)
 
     def migrator_declarations(self) -> dict[str, Any]:
         """What the migrator of the being declares about every change."""
@@ -304,10 +304,10 @@ def schemas() -> Schemas:
 
 
 @pytest.mark.unittest
-class TestObjectMigrator:
+class TestEntityMigrator:
     @staticmethod
     def _unresolved(
-        migrated: ObjectMigrationResult,
+        migrated: EntityMigrationResult,
     ) -> dict[str, UnresolvedAttributeMigration]:
         """Get the unresolved attributes of a result, public and private, by tag."""
         return {
@@ -415,7 +415,7 @@ class TestObjectMigrator:
             }
         )
         source_details = schemas.details_attribute("Red")
-        migrator = ObjectMigrator[Item](
+        migrator = EntityMigrator[Item](
             schemas.source,
             target,
             **{
@@ -601,7 +601,7 @@ class TestObjectMigrator:
 
         # Act & Assert
         with pytest.raises(ValueError, match="says nothing about kept"):
-            ObjectMigrator[Item](
+            EntityMigrator[Item](
                 schemas.source, target, **schemas.migrator_declarations()
             )
 
@@ -611,7 +611,7 @@ class TestObjectMigrator:
 
         # Act & Assert
         with pytest.raises(ValueError, match="says nothing about !secret"):
-            ObjectMigrator[Item](
+            EntityMigrator[Item](
                 schemas.source, target, **schemas.migrator_declarations()
             )
 
@@ -913,7 +913,7 @@ class TestDeclarativeSchemaMigration:
             self._root(schemas.target, other_target),
             item_migrators=[
                 schemas.migrator(),
-                ObjectMigrator[Item](
+                EntityMigrator[Item](
                     other_source, other_target, **schemas.migrator_declarations()
                 ),
             ],
@@ -946,7 +946,7 @@ class TestDeclarativeSchemaMigration:
                 self._root(schemas.target, other_target),
                 item_migrators=[
                     schemas.migrator(),
-                    ObjectMigrator[Item](other_source, other_target, **declarations),
+                    EntityMigrator[Item](other_source, other_target, **declarations),
                 ],
             )
 
@@ -967,7 +967,7 @@ class TestDeclarativeSchemaMigration:
                 self._root(schemas.target, other_target),
                 item_migrators=[
                     schemas.migrator(),
-                    ObjectMigrator[Item](
+                    EntityMigrator[Item](
                         other_source, other_target, **schemas.migrator_declarations()
                     ),
                 ],

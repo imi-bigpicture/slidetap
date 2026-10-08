@@ -19,7 +19,7 @@ import type { ProjectActions } from 'src/models/project_actions'
  * project nothing is known to refuse, and the server refuses what it has to. */
 export const ALL_PROJECT_ACTIONS: ProjectActions = {
   edit: true,
-  hasMigration: false,
+  migrationAvailable: false,
   migrateRefusal: null,
 }
 

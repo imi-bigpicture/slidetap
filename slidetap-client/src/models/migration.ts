@@ -23,7 +23,7 @@ export enum MigrationStatus {
   FAILED = 'failed',
 }
 
-/** A top-level attribute of an object that the migration could not convert,
+/** A top-level attribute of an entity that the migration could not convert,
  * left invalid, or dropped, and how the curator resolved it. Its tag and
  * display name are in the attribute schema in the target root, or in that of
  * the original in the source root for a dropped attribute. */
@@ -31,7 +31,7 @@ export interface AttributeMigrationIssue {
   readonly uid: string
   /** The attribute schema in the target root, null for a dropped attribute. */
   readonly targetAttributeSchemaUid: string | null
-  /** The attribute of the source object, null where it had none. */
+  /** The attribute of the source entity, null where it had none. */
   readonly original: Attribute<AttributeValueTypes> | null
   /** What could be converted, to start from. */
   readonly proposed: Attribute<AttributeValueTypes> | null
@@ -48,7 +48,7 @@ export interface AttributeMigrationIssue {
 }
 
 /** A project, dataset, or item with attribute issues. */
-export interface ObjectMigrationIssues {
+export interface EntityMigrationIssues {
   readonly uid: string
   /** The name of the project or dataset, the identifier of an item. */
   readonly identifier: string
@@ -69,7 +69,7 @@ export interface ProjectMigration {
   readonly error: string | null
   readonly created: string
   readonly updated: string
-  /** The issues of each object that has any: the project, the dataset, then
+  /** The issues of each entity that has any: the project, the dataset, then
    * the items by identifier. */
-  readonly issues: ObjectMigrationIssues[]
+  readonly issues: EntityMigrationIssues[]
 }

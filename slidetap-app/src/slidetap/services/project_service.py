@@ -226,15 +226,15 @@ class ProjectService:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 raise NotFoundError(f"Project {uid} not found")
-            has_migration = (
+            migration_available = (
                 self._schema_service.migration_of(project.root_schema_uid) is not None
             )
             return ProjectActions(
                 edit=self._schema_service.can_change(project, session),
-                has_migration=has_migration,
+                migration_available=migration_available,
                 migrate_refusal=(
                     self._migration_service.migrate_refusal(project, session)
-                    if has_migration
+                    if migration_available
                     else None
                 ),
             )

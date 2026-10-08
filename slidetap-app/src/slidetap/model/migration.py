@@ -33,7 +33,7 @@ class UnresolvedAttributeMigration:
     to decide."""
 
     original: AnyAttribute | None
-    """The attribute of the source object, or None where it had none."""
+    """The attribute of the source entity, or None where it had none."""
 
     proposed: AnyAttribute | None
     """What could be converted, on the attribute schema of the target tag, for
@@ -45,7 +45,7 @@ class UnresolvedAttributeMigration:
 
 
 @dataclass(frozen=True)
-class ObjectMigrationResult:
+class EntityMigrationResult:
     """What a migration returns for one project, dataset, or item, which core
     applies when the migration is completed: the schema it is on, and its
     attributes.
@@ -90,7 +90,7 @@ class MigrationStatus(Enum):
 
 
 class AttributeMigrationIssue(CamelCaseBaseModel):
-    """A top-level attribute of an object that the migration could not
+    """A top-level attribute of an entity that the migration could not
     convert, left invalid, or dropped, and how the curator resolved it.
 
     The tag and display name of the attribute are in the schemas: the
@@ -103,7 +103,7 @@ class AttributeMigrationIssue(CamelCaseBaseModel):
     None for a dropped attribute."""
 
     original: AnyAttribute | None = None
-    """The attribute of the source object, None where it had none."""
+    """The attribute of the source entity, None where it had none."""
 
     proposed: AnyAttribute | None = None
     """What could be converted, for the curator to start from."""
@@ -122,7 +122,7 @@ class AttributeMigrationIssue(CamelCaseBaseModel):
     until it is."""
 
 
-class ObjectMigrationIssues(CamelCaseBaseModel):
+class EntityMigrationIssues(CamelCaseBaseModel):
     """A project, dataset, or item with attribute issues to resolve."""
 
     uid: UUID
@@ -130,10 +130,10 @@ class ObjectMigrationIssues(CamelCaseBaseModel):
     """The name of the project or dataset, the identifier of an item."""
 
     target_schema_uid: UUID
-    """The schema of the object in the target root."""
+    """The schema of the entity in the target root."""
 
     attribute_issues: list[AttributeMigrationIssue] = Field(default_factory=list)
-    """The attribute issues of the object, the dropped attributes included."""
+    """The attribute issues of the entity, the dropped attributes included."""
 
 
 class ProjectMigration(CamelCaseBaseModel):
@@ -158,6 +158,6 @@ class ProjectMigration(CamelCaseBaseModel):
 
     created: datetime
     updated: datetime
-    issues: list[ObjectMigrationIssues] = Field(default_factory=list)
-    """The issues of each object that has any: the project, the dataset, then
+    issues: list[EntityMigrationIssues] = Field(default_factory=list)
+    """The issues of each entity that has any: the project, the dataset, then
     the items by identifier."""

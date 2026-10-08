@@ -28,9 +28,9 @@ class ProjectActions(CamelCaseBaseModel):
     """Every change to the project: editing, search, images, pseudonyms,
     preview, and export."""
 
-    has_migration: bool
-    """Whether the projects on the project's root can be converted to the root
-    of new projects."""
+    migration_available: bool
+    """Whether a migration is available from the project's root to the root of
+    new projects, whether or not the project can be migrated now."""
 
     migrate_refusal: str | None
     """Why the project cannot be converted now, None where it can or where its

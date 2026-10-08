@@ -29,23 +29,23 @@ import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
 
-from slidetap.database import DatabaseMigrationObject
+from slidetap.database import DatabaseMigrationEntity
 from slidetap.external_interfaces.implementations.migration import (
     DeclarativeSchemaMigration,
+    EntityMigrator,
     EnumAttributeMigrator,
-    ObjectMigrator,
 )
 from slidetap.model import (
     Code,
     CodeAttribute,
     Dataset,
+    EntityMigrationResult,
     EnumAttribute,
     Item,
     ListAttribute,
     MetadataImportStatus,
     MetadataSearchItem,
     MigrationError,
-    ObjectMigrationResult,
     Observation,
     Project,
     RootSchema,
@@ -91,7 +91,7 @@ class _SexMigration(DeclarativeSchemaMigration):
             schema,
             other_schema,
             item_migrators=[
-                ObjectMigrator[Item](
+                EntityMigrator[Item](
                     schema.patient,
                     other_schema.samples[schema.patient_schema_uid],
                     migrated_attributes=[
@@ -110,16 +110,16 @@ class _SexMigration(DeclarativeSchemaMigration):
         self.wrong_tag = False
         """Whether the attributes are put under tags the target does not have."""
 
-    def migrate_project(self, project: Project) -> ObjectMigrationResult:
+    def migrate_project(self, project: Project) -> EntityMigrationResult:
         migrated = self._break(super().migrate_project(project))
         if self.project_schema_uid is not None:
             return dataclasses.replace(migrated, schema_uid=self.project_schema_uid)
         return migrated
 
-    def migrate_dataset(self, dataset: Dataset) -> ObjectMigrationResult:
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult:
         return self._break(super().migrate_dataset(dataset))
 
-    def migrate_item(self, item: Item) -> ObjectMigrationResult:
+    def migrate_item(self, item: Item) -> EntityMigrationResult:
         migrated = self._break(super().migrate_item(item))
         if self.wrong_kind and item.schema_uid == self._schema.slide_schema_uid:
             return dataclasses.replace(
@@ -127,8 +127,8 @@ class _SexMigration(DeclarativeSchemaMigration):
             )
         return migrated
 
-    def _break(self, migrated: ObjectMigrationResult) -> ObjectMigrationResult:
-        """The migrated object, changed as the test asks."""
+    def _break(self, migrated: EntityMigrationResult) -> EntityMigrationResult:
+        """The migrated entity, changed as the test asks."""
         attributes = {
             f"{tag}-wrong" if self.wrong_tag else tag: attribute
             for tag, attribute in migrated.attributes.items()
@@ -198,18 +198,18 @@ _Plan = Callable[..., ProjectMigrationPlan]
 def plan(
     planner: ProjectMigrationPlanner, schema: ExampleSchema, target_schema: RootSchema
 ) -> _Plan:
-    """Plans the migration of objects and search items to the second root."""
+    """Plans the migration of entities and search items to the second root."""
 
     def plan(
-        objects: Iterable[Project | Dataset | Item],
+        entities: Iterable[Project | Dataset | Item],
         search_items: Iterable[MetadataSearchItem] = (),
     ) -> ProjectMigrationPlan:
-        return planner.plan(schema.uid, target_schema.uid, objects, search_items)
+        return planner.plan(schema.uid, target_schema.uid, entities, search_items)
 
     return plan
 
 
-class _Objects:
+class _Entities:
     """A project on the example root, with a patient of a sex the second root
     has, one of a sex it has not, one without a sex, a case, a slide, and an
     observation holding a private attribute."""
@@ -298,40 +298,40 @@ class _Objects:
 
 
 @pytest.fixture()
-def objects(schema: ExampleSchema) -> _Objects:
-    return _Objects(schema)
+def entities(schema: ExampleSchema) -> _Entities:
+    return _Entities(schema)
 
 
 @pytest.mark.unittest
 class TestProjectMigrationPlanner:
-    def test_every_object_is_put_on_its_target_schema(
+    def test_every_entity_is_put_on_its_target_schema(
         self,
         plan: _Plan,
-        objects: _Objects,
+        entities: _Entities,
         target_schema: RootSchema,
     ):
         # Act
-        migrated = plan(objects.all).objects
+        migrated = plan(entities.all).entities
 
         # Assert
-        assert [object_.source.uid for object_ in migrated] == [
-            object_.uid for object_ in objects.all
+        assert [entity.source.uid for entity in migrated] == [
+            entity.uid for entity in entities.all
         ]
-        assert [object_.target_schema.uid for object_ in migrated] == [
+        assert [entity.target_schema.uid for entity in migrated] == [
             target_schema.project.uid,
             target_schema.dataset.uid,
-            *(item.schema_uid for item in objects.items),
+            *(item.schema_uid for item in entities.items),
         ]
         male = migrated[2].target_attributes["sex"]
         assert isinstance(male, EnumAttribute)
         assert (male.schema_uid, male.original_value) == (OTHER_SEX_SCHEMA_UID, "Male")
 
     def test_an_unconverted_value_is_an_attribute_issue(
-        self, plan: _Plan, objects: _Objects
+        self, plan: _Plan, entities: _Entities
     ):
         # Act
-        planned = plan([objects.other])
-        (other,) = planned.objects
+        planned = plan([entities.other])
+        (other,) = planned.entities
         issues = planned.attribute_issues[other.source.uid]
 
         # Assert
@@ -339,16 +339,16 @@ class TestProjectMigrationPlanner:
         issue = issues[0]
         assert issue.target_attribute_schema_uid == OTHER_SEX_SCHEMA_UID
         assert issue.original is not None
-        assert issue.original.uid == objects.other.attributes["sex"].uid
+        assert issue.original.uid == entities.other.attributes["sex"].uid
         assert issue.original.display_value == "Other"
         assert not issue.dropped
 
     def test_a_newly_required_attribute_is_an_attribute_issue(
-        self, plan: _Plan, objects: _Objects
+        self, plan: _Plan, entities: _Entities
     ):
         # Act
-        planned = plan([objects.case])
-        (case,) = planned.objects
+        planned = plan([entities.case])
+        (case,) = planned.entities
         issues = planned.attribute_issues[case.source.uid]
 
         # Assert
@@ -366,12 +366,12 @@ class TestProjectMigrationPlanner:
         ]
 
     def test_an_attribute_invalid_before_is_not_an_attribute_issue(
-        self, plan: _Plan, objects: _Objects
+        self, plan: _Plan, entities: _Entities
     ):
         """The sex is required on both roots."""
         # Act
-        planned = plan([objects.without_sex])
-        (without_sex,) = planned.objects
+        planned = plan([entities.without_sex])
+        (without_sex,) = planned.entities
 
         # Assert
         assert list(without_sex.unresolved()) == []
@@ -381,18 +381,18 @@ class TestProjectMigrationPlanner:
         self,
         plan: _Plan,
         migration: _SexMigration,
-        objects: _Objects,
+        entities: _Entities,
     ):
         # Arrange
         migration.dropped_tags = {"report"}
 
         # Act
-        planned = plan([objects.observation])
-        (observation,) = planned.objects
+        planned = plan([entities.observation])
+        (observation,) = planned.entities
         issues = planned.attribute_issues[observation.source.uid]
 
         # Assert
-        report = objects.observation.private_attributes["report"]
+        report = entities.observation.private_attributes["report"]
         assert observation.dropped_attributes == [report]
         assert [
             (
@@ -415,19 +415,19 @@ class TestProjectMigrationPlanner:
         self,
         plan: _Plan,
         migration: _SexMigration,
-        objects: _Objects,
+        entities: _Entities,
     ):
         """The staining of the slide is required on both roots."""
         # Arrange
         migration.dropped_tags = {"staining"}
 
         # Act
-        planned = plan([objects.slide])
-        (slide,) = planned.objects
+        planned = plan([entities.slide])
+        (slide,) = planned.entities
         issues = planned.attribute_issues[slide.source.uid]
 
         # Assert
-        staining = objects.slide.attributes["staining"]
+        staining = entities.slide.attributes["staining"]
         assert slide.dropped_attributes == []
         assert len(issues) == 1
         issue = issues[0]
@@ -441,70 +441,70 @@ class TestProjectMigrationPlanner:
         planner: ProjectMigrationPlanner,
         plan: _Plan,
         migration: _SexMigration,
-        objects: _Objects,
+        entities: _Entities,
     ):
         # Arrange
-        planned = plan(objects.all)
+        planned = plan(entities.all)
         stored = [
-            DatabaseMigrationObject(
-                object_.source.uid,
-                object_.target_schema.uid,
-                object_.identifier,
+            DatabaseMigrationEntity(
+                entity.source.uid,
+                entity.target_schema.uid,
+                entity.identifier,
                 position,
-                planned.attribute_issues[object_.source.uid],
+                planned.attribute_issues[entity.source.uid],
             )
-            for position, object_ in enumerate(planned.objects)
+            for position, entity in enumerate(planned.entities)
         ]
-        planner.refuse_changed_plan(plan(objects.all), "project", stored)
+        planner.refuse_changed_plan(plan(entities.all), "project", stored)
         migration.dropped_tags = {"staining"}
 
         # Act & Assert
         with pytest.raises(MigrationError, match="no longer"):
-            planner.refuse_changed_plan(plan(objects.all), "project", stored)
+            planner.refuse_changed_plan(plan(entities.all), "project", stored)
 
     def test_a_project_off_the_target_schema_is_refused(
         self,
         plan: _Plan,
         migration: _SexMigration,
-        objects: _Objects,
+        entities: _Entities,
     ):
         # Arrange
         migration.project_schema_uid = uuid4()
 
         # Act & Assert
         with pytest.raises(MigrationError, match="target root"):
-            plan([objects.project])
+            plan([entities.project])
 
     def test_an_item_on_another_kind_of_schema_is_refused(
         self,
         plan: _Plan,
         migration: _SexMigration,
-        objects: _Objects,
+        entities: _Entities,
     ):
         # Arrange
         migration.wrong_kind = True
 
         # Act & Assert
         with pytest.raises(MigrationError, match="same kind"):
-            plan([objects.slide])
+            plan([entities.slide])
 
     def test_an_attribute_off_the_target_schema_is_refused(
         self,
         plan: _Plan,
         migration: _SexMigration,
-        objects: _Objects,
+        entities: _Entities,
     ):
         # Arrange
         migration.wrong_tag = True
 
         # Act & Assert
         with pytest.raises(MigrationError, match="not an attribute"):
-            plan([objects.male])
+            plan([entities.male])
 
     def test_a_search_item_is_moved_to_the_item_schema_of_its_kind(
         self,
         plan: _Plan,
-        objects: _Objects,
+        entities: _Entities,
         schema: ExampleSchema,
         monkeypatch: pytest.MonkeyPatch,
         migration: _SexMigration,
@@ -512,7 +512,7 @@ class TestProjectMigrationPlanner:
         # Arrange
         search_item = MetadataSearchItem(
             uid=uuid4(),
-            batch_uid=objects.batch_uid,
+            batch_uid=entities.batch_uid,
             identifier="slide-1",
             schema_uid=schema.slide_schema_uid,
             status=MetadataImportStatus.COMPLETE,

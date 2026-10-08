@@ -84,9 +84,9 @@ from slidetap.model.metadata_search_result import (
 )
 from slidetap.model.migration import (
     AttributeMigrationIssue,
+    EntityMigrationIssues,
+    EntityMigrationResult,
     MigrationStatus,
-    ObjectMigrationIssues,
-    ObjectMigrationResult,
     ProjectMigration,
     UnresolvedAttributeMigration,
 )
@@ -282,9 +282,9 @@ __all__ = [
     "HierarchyLevelLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
-    "ObjectMigrationResult",
+    "EntityMigrationResult",
     "AttributeMigrationIssue",
-    "ObjectMigrationIssues",
+    "EntityMigrationIssues",
     "MigrationStatus",
     "ProjectMigration",
     "UnresolvedAttributeMigration",

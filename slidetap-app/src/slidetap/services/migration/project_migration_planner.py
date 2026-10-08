@@ -23,7 +23,7 @@ from uuid import UUID
 
 from slidetap.database import (
     DatabaseAttributeMigrationIssue,
-    DatabaseMigrationObject,
+    DatabaseMigrationEntity,
 )
 from slidetap.external_interfaces import SchemaMigration
 from slidetap.model import (
@@ -32,13 +32,13 @@ from slidetap.model import (
     AnyEntitySchema,
     AttributeSchema,
     Dataset,
+    EntityMigrationResult,
     ImageSchema,
     Item,
     ItemSchema,
     MetadataSearchItem,
     MigrationError,
     NotAllowedActionError,
-    ObjectMigrationResult,
     ObservationSchema,
     Project,
     RootSchemaIndex,
@@ -50,11 +50,11 @@ from slidetap.services.validators.attribute_validator import AttributeValidator
 
 
 @dataclass(frozen=True)
-class ObjectInMigration:
-    """An object of the project, and what the migration returned for it."""
+class EntityInMigration:
+    """An entity of the project, and what the migration returned for it."""
 
     source: Project | Dataset | Item
-    """The object as it is on the source root."""
+    """The entity as it is on the source root."""
 
     target_schema: AnyEntitySchema
     """Its schema on the target root."""
@@ -75,7 +75,7 @@ class ObjectInMigration:
 
     @property
     def order(self) -> tuple[int, str]:
-        """Where the object goes among those of a migration: the project, the
+        """Where the entity goes among those of a migration: the project, the
         dataset, then the items by identifier."""
         if isinstance(self.source, Project):
             return 0, self.identifier
@@ -97,7 +97,7 @@ class ObjectInMigration:
 
     @property
     def dropped_attributes(self) -> list[AnyAttribute]:
-        """The attributes of the source object with a value that the migration
+        """The attributes of the source entity with a value that the migration
         neither converted nor left unresolved."""
         kept = {
             attribute.uid
@@ -172,7 +172,7 @@ class ProjectMigrationPlan:
     target_root: RootSchemaIndex
     """The root the project is migrated to."""
 
-    objects: list[ObjectInMigration]
+    entities: list[EntityInMigration]
     """The project, the dataset, and the items, in the order given, with every
     attribute that the migration left invalid, and that was valid before,
     unresolved."""
@@ -181,12 +181,12 @@ class ProjectMigrationPlan:
     """The search items, with their target item schemas."""
 
     attribute_issues: Mapping[UUID, list[DatabaseAttributeMigrationIssue]]
-    """The attribute issues of each object by its uid: one for each unresolved
+    """The attribute issues of each entity by its uid: one for each unresolved
     attribute and each dropped attribute."""
 
 
 class ProjectMigrationPlanner:
-    """Runs the migration of a root on the objects and search items of a
+    """Runs the migration of a root on the entities and search items of a
     project without saving anything, checks what it returns against the target
     root, and works out the attribute issues the curator resolves.
 
@@ -211,10 +211,10 @@ class ProjectMigrationPlanner:
         self,
         source_root_schema_uid: UUID,
         target_root_schema_uid: UUID,
-        objects: Iterable[Project | Dataset | Item],
+        entities: Iterable[Project | Dataset | Item],
         search_items: Iterable[MetadataSearchItem],
     ) -> ProjectMigrationPlan:
-        """Run the migration of the source root for the objects of a project,
+        """Run the migration of the source root for the entities of a project,
         on copies of them, check what it returns against the target root, pair
         the search items with the item schemas it moves them to, and work out
         the attribute issues.
@@ -225,7 +225,7 @@ class ProjectMigrationPlanner:
             The uid of the root the project is on.
         target_root_schema_uid: UUID
             The uid of the root the project is migrated to.
-        objects: Iterable[Project | Dataset | Item]
+        entities: Iterable[Project | Dataset | Item]
             The project, the dataset, and the items, on the source root.
         search_items: Iterable[MetadataSearchItem]
             The search items of the project, on the source root.
@@ -233,8 +233,8 @@ class ProjectMigrationPlanner:
         Returns
         -------
         ProjectMigrationPlan
-            The objects and the search items on the target root, and the
-            attribute issues of each object.
+            The entities and the search items on the target root, and the
+            attribute issues of each entity.
 
         Raises
         ------
@@ -252,7 +252,7 @@ class ProjectMigrationPlanner:
             raise NotAllowedActionError(
                 f"Root schema {source_root.display_name} has no migration."
             )
-        objects_in_migration = [
+        entities_in_migration = [
             self._check_against_target_schema(
                 source_root,
                 target_root,
@@ -260,14 +260,14 @@ class ProjectMigrationPlanner:
                     source_root,
                     target_root,
                     source,
-                    self._migrate_object_copy(migration, source),
+                    self._migrate_entity_copy(migration, source),
                 ),
             )
-            for source in objects
+            for source in entities
         ]
         return ProjectMigrationPlan(
             target_root,
-            objects_in_migration,
+            entities_in_migration,
             [
                 SearchItemInMigration(
                     search_item,
@@ -284,10 +284,10 @@ class ProjectMigrationPlanner:
                 for search_item in search_items
             ],
             {
-                object_.source.uid: list(
-                    self._create_attribute_issues(source_root, target_root, object_)
+                entity.source.uid: list(
+                    self._create_attribute_issues(source_root, target_root, entity)
                 )
-                for object_ in objects_in_migration
+                for entity in entities_in_migration
             },
         )
 
@@ -295,7 +295,7 @@ class ProjectMigrationPlanner:
         self,
         plan: ProjectMigrationPlan,
         project_name: str,
-        planned: Iterable[DatabaseMigrationObject],
+        planned: Iterable[DatabaseMigrationEntity],
     ) -> None:
         """Refuse a migration that no longer leaves unresolved or drops what
         the stored plan has attribute issues of.
@@ -306,8 +306,8 @@ class ProjectMigrationPlanner:
             The migration of the project as it is planned now.
         project_name: str
             The name of the project, for the error.
-        planned: Iterable[DatabaseMigrationObject]
-            The objects of the stored plan, with their attribute issues.
+        planned: Iterable[DatabaseMigrationEntity]
+            The entities of the stored plan, with their attribute issues.
 
         Raises
         ------
@@ -316,14 +316,14 @@ class ProjectMigrationPlanner:
             stored plan.
         """
         now = {
-            self._get_issue_key(object_uid, database_issue)
-            for object_uid, database_issues in plan.attribute_issues.items()
+            self._get_issue_key(entity_uid, database_issue)
+            for entity_uid, database_issues in plan.attribute_issues.items()
             for database_issue in database_issues
         }
         stored = {
-            self._get_issue_key(database_object.object_uid, database_issue)
-            for database_object in planned
-            for database_issue in database_object.attribute_issues
+            self._get_issue_key(database_entity.entity_uid, database_issue)
+            for database_entity in planned
+            for database_issue in database_entity.attribute_issues
         }
         if now != stored:
             raise MigrationError(
@@ -336,26 +336,26 @@ class ProjectMigrationPlanner:
 
     @staticmethod
     def _get_issue_key(
-        object_uid: UUID, database_issue: DatabaseAttributeMigrationIssue
+        entity_uid: UUID, database_issue: DatabaseAttributeMigrationIssue
     ) -> tuple[UUID, UUID | None, UUID | None]:
-        """Get what an attribute issue is about: the object, and the target
+        """Get what an attribute issue is about: the entity, and the target
         attribute schema, or the source attribute schema of a dropped one.
 
         Parameters
         ----------
-        object_uid: UUID
-            The uid of the object of the attribute issue.
+        entity_uid: UUID
+            The uid of the entity of the attribute issue.
         database_issue: DatabaseAttributeMigrationIssue
             The attribute issue.
 
         Returns
         -------
         tuple[UUID, UUID | None, UUID | None]
-            The uid of the object, of the target attribute schema, and of the
+            The uid of the entity, of the target attribute schema, and of the
             source attribute schema where the attribute is dropped.
         """
         return (
-            object_uid,
+            entity_uid,
             database_issue.target_attribute_schema_uid,
             database_issue.source_attribute_schema_uid
             if database_issue.dropped
@@ -363,22 +363,22 @@ class ProjectMigrationPlanner:
         )
 
     @staticmethod
-    def _migrate_object_copy(
+    def _migrate_entity_copy(
         migration: SchemaMigration, source: Project | Dataset | Item
-    ) -> ObjectMigrationResult:
-        """Run the migration for an object, on a copy of it.
+    ) -> EntityMigrationResult:
+        """Run the migration for an entity, on a copy of it.
 
         Parameters
         ----------
         migration: SchemaMigration
             The migration of the source root.
         source: Project | Dataset | Item
-            The object, on the source root.
+            The entity, on the source root.
 
         Returns
         -------
-        ObjectMigrationResult
-            What the migration returned for the object.
+        EntityMigrationResult
+            What the migration returned for the entity.
         """
         copy = source.model_copy(deep=True)
         if isinstance(copy, Project):
@@ -392,9 +392,9 @@ class ProjectMigrationPlanner:
         source_root: RootSchemaIndex,
         target_root: RootSchemaIndex,
         source: Project | Dataset | Item,
-        migrated: ObjectMigrationResult,
-    ) -> ObjectInMigration:
-        """Pair an object with what the migration returned for it, on the
+        migrated: EntityMigrationResult,
+    ) -> EntityInMigration:
+        """Pair an entity with what the migration returned for it, on the
         target schema the migration put it on.
 
         Parameters
@@ -404,14 +404,14 @@ class ProjectMigrationPlanner:
         target_root: RootSchemaIndex
             The root the project is migrated to.
         source: Project | Dataset | Item
-            The object, on the source root.
-        migrated: ObjectMigrationResult
-            What the migration returned for the object.
+            The entity, on the source root.
+        migrated: EntityMigrationResult
+            What the migration returned for the entity.
 
         Returns
         -------
-        ObjectInMigration
-            The object, with the target schema and what the migration returned.
+        EntityInMigration
+            The entity, with the target schema and what the migration returned.
 
         Raises
         ------
@@ -440,7 +440,7 @@ class ProjectMigrationPlanner:
                 source.schema_uid,
                 migrated.schema_uid,
             )
-        return ObjectInMigration(
+        return EntityInMigration(
             source,
             target_schema,
             migrated.attributes,
@@ -498,8 +498,8 @@ class ProjectMigrationPlanner:
         self,
         source_root: RootSchemaIndex,
         target_root: RootSchemaIndex,
-        object_: ObjectInMigration,
-    ) -> ObjectInMigration:
+        entity: EntityInMigration,
+    ) -> EntityInMigration:
         """Refuse what the migration returned off the target schema, and leave
         unresolved what it left invalid that was valid.
 
@@ -509,13 +509,13 @@ class ProjectMigrationPlanner:
             The root the project is on.
         target_root: RootSchemaIndex
             The root the project is migrated to.
-        object_: ObjectInMigration
-            The object, as the migration returned it.
+        entity: EntityInMigration
+            The entity, as the migration returned it.
 
         Returns
         -------
-        ObjectInMigration
-            The object, with every attribute that the migration left invalid,
+        EntityInMigration
+            The entity, with every attribute that the migration left invalid,
             and that was valid before, unresolved.
 
         Raises
@@ -526,16 +526,16 @@ class ProjectMigrationPlanner:
             the private attributes as it is, or is proposed on another
             attribute schema.
         """
-        uid, target_schema = object_.source.uid, object_.target_schema
+        uid, target_schema = entity.source.uid, entity.target_schema
         for attributes, schemas in (
-            (object_.migrated_attributes, target_schema.attributes),
-            (object_.migrated_private_attributes, target_schema.private_attributes),
+            (entity.migrated_attributes, target_schema.attributes),
+            (entity.migrated_private_attributes, target_schema.private_attributes),
         ):
             for tag, attribute in attributes.items():
                 RootSchemaIndex.refuse_attribute_off_schema(
                     uid, tag, attribute, schemas.get(tag)
                 )
-        for tag, unresolved, attribute_schema in object_.unresolved():
+        for tag, unresolved, attribute_schema in entity.unresolved():
             if attribute_schema is None:
                 raise MigrationError(
                     f"The migration left {tag!r} of {uid} unresolved, which "
@@ -545,14 +545,14 @@ class ProjectMigrationPlanner:
                 RootSchemaIndex.refuse_attribute_off_schema(
                     uid, tag, unresolved.proposed, attribute_schema
                 )
-        return self._unresolve_invalidated_attributes(source_root, target_root, object_)
+        return self._unresolve_invalidated_attributes(source_root, target_root, entity)
 
     def _unresolve_invalidated_attributes(
         self,
         source_root: RootSchemaIndex,
         target_root: RootSchemaIndex,
-        object_: ObjectInMigration,
-    ) -> ObjectInMigration:
+        entity: EntityInMigration,
+    ) -> EntityInMigration:
         """Leave unresolved every top-level attribute that the migration left
         invalid, and that was valid before: one newly required and without a
         value, or one whose value is not valid on the target schema. One that
@@ -564,24 +564,24 @@ class ProjectMigrationPlanner:
             The root the project is on.
         target_root: RootSchemaIndex
             The root the project is migrated to.
-        object_: ObjectInMigration
-            The object, as the migration returned it.
+        entity: EntityInMigration
+            The entity, as the migration returned it.
 
         Returns
         -------
-        ObjectInMigration
-            The object, with those attributes unresolved.
+        EntityInMigration
+            The entity, with those attributes unresolved.
         """
-        source_schema = source_root.get_entity_schema(object_.source.schema_uid)
-        attributes = dict(object_.target_attributes)
-        for tag, target_attribute_schema in object_.target_schema.attributes.items():
+        source_schema = source_root.get_entity_schema(entity.source.schema_uid)
+        attributes = dict(entity.target_attributes)
+        for tag, target_attribute_schema in entity.target_schema.attributes.items():
             attribute = attributes.get(tag)
             if isinstance(attribute, UnresolvedAttributeMigration):
                 continue
             if self._is_attribute_valid(attribute, target_attribute_schema):
                 continue
             source_tag, original = self._get_original_attribute(
-                object_.source, attribute, tag
+                entity.source, attribute, tag
             )
             source_attribute_schema = source_schema.attributes.get(source_tag)
             if source_attribute_schema is not None and not self._is_attribute_valid(
@@ -597,15 +597,15 @@ class ProjectMigrationPlanner:
                     else f"Not a valid value in {target_root.display_name}."
                 ),
             )
-        return dataclasses.replace(object_, target_attributes=attributes)
+        return dataclasses.replace(entity, target_attributes=attributes)
 
     def _create_attribute_issues(
         self,
         source_root: RootSchemaIndex,
         target_root: RootSchemaIndex,
-        object_: ObjectInMigration,
+        entity: EntityInMigration,
     ) -> Iterator[DatabaseAttributeMigrationIssue]:
-        """Make the attribute issues of what an object left unresolved, and of
+        """Make the attribute issues of what an entity left unresolved, and of
         what it dropped.
 
         Parameters
@@ -614,8 +614,8 @@ class ProjectMigrationPlanner:
             The root the project is on.
         target_root: RootSchemaIndex
             The root the project is migrated to.
-        object_: ObjectInMigration
-            The object, checked.
+        entity: EntityInMigration
+            The entity, checked.
 
         Returns
         -------
@@ -628,14 +628,14 @@ class ProjectMigrationPlanner:
         MigrationError
             If an unresolved attribute is not a tag of the target schema.
         """
-        for tag, unresolved, schema in object_.unresolved():
+        for tag, unresolved, schema in entity.unresolved():
             original = None
             if unresolved.original is not None:
                 original = unresolved.original.model_copy(deep=True)
                 self._set_display_value(source_root, original)
             if schema is None:
                 raise MigrationError(
-                    f"The migration left {tag!r} of {object_.source.uid} "
+                    f"The migration left {tag!r} of {entity.source.uid} "
                     f"unresolved, which is not an attribute of the target schema."
                 )
             yield DatabaseAttributeMigrationIssue(
@@ -645,7 +645,7 @@ class ProjectMigrationPlanner:
                 unresolved.proposed,
                 unresolved.problem,
             )
-        for attribute in object_.dropped_attributes:
+        for attribute in entity.dropped_attributes:
             original = attribute.model_copy(deep=True)
             self._set_display_value(source_root, original)
             schema = self._get_source_attribute_schema(source_root, original.schema_uid)
@@ -666,12 +666,12 @@ class ProjectMigrationPlanner:
     def _get_original_attribute(
         source: Project | Dataset | Item, attribute: AnyAttribute | None, tag: str
     ) -> tuple[str, AnyAttribute | None]:
-        """Get the attribute of the source object a migrated attribute was.
+        """Get the attribute of the source entity a migrated attribute was.
 
         Parameters
         ----------
         source: Project | Dataset | Item
-            The object, on the source root.
+            The entity, on the source root.
         attribute: AnyAttribute | None
             The migrated attribute, or None where there is none.
         tag: str
@@ -681,7 +681,7 @@ class ProjectMigrationPlanner:
         -------
         tuple[str, AnyAttribute | None]
             The source tag and the attribute of the same uid, else the tag and
-            the attribute of the source object at it, None where it has none.
+            the attribute of the source entity at it, None where it has none.
         """
         if attribute is not None:
             for source_tag, original in source.attributes.items():

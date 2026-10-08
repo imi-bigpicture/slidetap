@@ -23,7 +23,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
-    DatabaseMigrationObject,
+    DatabaseMigrationEntity,
     DatabaseProject,
     DatabaseProjectMigration,
 )
@@ -55,14 +55,14 @@ class MigrationService:
     new projects, in steps.
 
     Created, the project is locked as migrating, and the migration planned in
-    a task: run for every object without saving, with what it could not
+    a task: run for every entity without saving, with what it could not
     convert stored as attribute issues, as is every top-level attribute that
     was valid before and is not after, and every attribute with a value it
     dropped. The curator resolves each attribute issue, accepts each dropped
     attribute, and submits, which completes the migration in a task, or
     reverts.
     Completing runs the migration again, puts the resolved values at their
-    tags, and replaces the attributes of every object, in one transaction for
+    tags, and replaces the attributes of every entity, in one transaction for
     the whole project, which is validated again on the target root.
 
     Planning and completing run the migration with the
@@ -198,25 +198,25 @@ class MigrationService:
             plan = self._planner.plan(
                 database_project.root_schema_uid,
                 database_migration.target_root_schema_uid,
-                self._get_objects(session, database_project),
+                self._get_entities(session, database_project),
                 self._get_search_items(session, database_project),
             )
-            for object_ in sorted(plan.objects, key=lambda object_: object_.order):
-                database_issues = plan.attribute_issues[object_.source.uid]
+            for entity in sorted(plan.entities, key=lambda entity: entity.order):
+                database_issues = plan.attribute_issues[entity.source.uid]
                 if database_issues:
-                    database_migration.objects.append(
-                        DatabaseMigrationObject(
-                            object_.source.uid,
-                            object_.target_schema.uid,
-                            object_.identifier,
-                            len(database_migration.objects),
+                    database_migration.entities.append(
+                        DatabaseMigrationEntity(
+                            entity.source.uid,
+                            entity.target_schema.uid,
+                            entity.identifier,
+                            len(database_migration.entities),
                             database_issues,
                         )
                     )
             database_migration.set_status(MigrationStatus.CURATING)
             count = sum(
-                len(database_object.attribute_issues)
-                for database_object in database_migration.objects
+                len(database_entity.attribute_issues)
+                for database_entity in database_migration.entities
             )
             self._logger.info(
                 f"Migration of project {database_project.uid} planned, with {count} "
@@ -234,7 +234,7 @@ class MigrationService:
         Returns
         -------
         ProjectMigration
-            The migration, with its attribute issues by object.
+            The migration, with its attribute issues by entity.
 
         Raises
         ------
@@ -289,9 +289,9 @@ class MigrationService:
             self._assert_migration_status(database_migration, MigrationStatus.CURATING)
             found = next(
                 (
-                    (database_object, database_issue)
-                    for database_object in database_migration.objects
-                    for database_issue in database_object.attribute_issues
+                    (database_entity, database_issue)
+                    for database_entity in database_migration.entities
+                    for database_issue in database_entity.attribute_issues
                     if database_issue.uid == attribute_issue_uid
                 ),
                 None,
@@ -301,7 +301,7 @@ class MigrationService:
                     f"The migration of project {database_project.uid} has no "
                     f"attribute issue {attribute_issue_uid}."
                 )
-            database_object, database_issue = found
+            database_entity, database_issue = found
             if database_issue.target_attribute_schema_uid is None:
                 if attribute is not None:
                     raise NotAllowedActionError(
@@ -313,7 +313,7 @@ class MigrationService:
                     database_migration.target_root_schema_uid
                 )
                 tag, schema = target_root.get_entity_attribute_schema(
-                    database_object.target_object_schema_uid,
+                    database_entity.target_entity_schema_uid,
                     database_issue.target_attribute_schema_uid,
                 )
                 if attribute is not None and attribute.schema_uid != schema.uid:
@@ -353,8 +353,8 @@ class MigrationService:
             self._assert_migration_status(database_migration, MigrationStatus.CURATING)
             unresolved = sum(
                 1
-                for database_object in database_migration.objects
-                for database_issue in database_object.attribute_issues
+                for database_entity in database_migration.entities
+                for database_issue in database_entity.attribute_issues
                 if database_issue.resolved_at is None
             )
             if unresolved:
@@ -390,7 +390,7 @@ class MigrationService:
 
     def complete(self, project_uid: UUID, session: Session | None = None) -> None:
         """Complete a submitted migration: run it again, put the resolved values
-        at their tags, replace the attributes of every object, validate the
+        at their tags, replace the attributes of every entity, validate the
         project again, and set it back to the status it had.
 
         A migration is applied whole or not at all. Nothing is done where the
@@ -431,19 +431,19 @@ class MigrationService:
             plan = self._planner.plan(
                 database_project.root_schema_uid,
                 database_migration.target_root_schema_uid,
-                self._get_objects(session, database_project),
+                self._get_entities(session, database_project),
                 self._get_search_items(session, database_project),
             )
             self._planner.refuse_changed_plan(
-                plan, database_project.name, database_migration.objects
+                plan, database_project.name, database_migration.entities
             )
             resolutions = {
                 (
-                    database_object.object_uid,
+                    database_entity.entity_uid,
                     database_issue.target_attribute_schema_uid,
                 ): database_issue
-                for database_object in database_migration.objects
-                for database_issue in database_object.attribute_issues
+                for database_entity in database_migration.entities
+                for database_issue in database_entity.attribute_issues
                 if database_issue.target_attribute_schema_uid is not None
             }
             self._executor.execute(session, database_project, plan, resolutions)
@@ -665,7 +665,7 @@ class MigrationService:
                 f"{status.value}."
             )
 
-    def _get_objects(
+    def _get_entities(
         self, session: Session, database_project: DatabaseProject
     ) -> list[Project | Dataset | Item]:
         """Get the project, its dataset, and its items, with their attributes.

@@ -39,7 +39,7 @@ from slidetap.model import (
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.migration.project_migration_planner import (
-    ObjectInMigration,
+    EntityInMigration,
     ProjectMigrationPlan,
 )
 from slidetap.services.review_service import ReviewService
@@ -48,7 +48,7 @@ from slidetap.services.validation_service import ValidationService
 
 class ProjectMigrationExecutor:
     """Writes the migration of a project in a session: puts the resolved values
-    at their tags, replaces the attributes of every object, moves the search
+    at their tags, replaces the attributes of every entity, moves the search
     items and the project to the target root, and validates the project again.
     """
 
@@ -85,7 +85,7 @@ class ProjectMigrationExecutor:
         resolutions: Mapping[tuple[UUID, UUID], DatabaseAttributeMigrationIssue],
     ) -> None:
         """Put the resolved values at their tags, replace the attributes of
-        every object, and move the search items and the project to the target
+        every entity, and move the search items and the project to the target
         root.
 
         Parameters
@@ -97,7 +97,7 @@ class ProjectMigrationExecutor:
         plan: ProjectMigrationPlan
             The migration of the project, planned again.
         resolutions: Mapping[tuple[UUID, UUID], DatabaseAttributeMigrationIssue]
-            The resolved attribute issues with a target, by object uid and
+            The resolved attribute issues with a target, by entity uid and
             target attribute schema uid, with one for each unresolved
             attribute.
 
@@ -106,8 +106,8 @@ class ProjectMigrationExecutor:
         MigrationError
             If an attribute is not on the attribute schema of its tag.
         """
-        for object_ in plan.objects:
-            self._write_object(session, self._apply_resolutions(object_, resolutions))
+        for entity in plan.entities:
+            self._write_entity(session, self._apply_resolutions(entity, resolutions))
         for search_item in plan.search_items:
             database_search_item = self._database_service.get_metadata_search_item(
                 session, search_item.source.uid
@@ -141,9 +141,9 @@ class ProjectMigrationExecutor:
 
     @staticmethod
     def _apply_resolutions(
-        object_: ObjectInMigration,
+        entity: EntityInMigration,
         resolutions: Mapping[tuple[UUID, UUID], DatabaseAttributeMigrationIssue],
-    ) -> ObjectInMigration:
+    ) -> EntityInMigration:
         """Put the resolved values at their tags, and nothing at a tag left
         empty.
 
@@ -153,26 +153,26 @@ class ProjectMigrationExecutor:
 
         Parameters
         ----------
-        object_: ObjectInMigration
-            The object, checked.
+        entity: EntityInMigration
+            The entity, checked.
         resolutions: Mapping[tuple[UUID, UUID], DatabaseAttributeMigrationIssue]
-            The resolved attribute issues with a target, by object uid and
+            The resolved attribute issues with a target, by entity uid and
             target attribute schema uid, with one for each unresolved attribute
-            of the object.
+            of the entity.
 
         Returns
         -------
-        ObjectInMigration
-            The object, with the resolved values and nothing unresolved.
+        EntityInMigration
+            The entity, with the resolved values and nothing unresolved.
         """
         resolved_mappings: list[
             dict[str, AnyAttribute | UnresolvedAttributeMigration]
         ] = []
         for attributes, schemas in (
-            (object_.target_attributes, object_.target_schema.attributes),
+            (entity.target_attributes, entity.target_schema.attributes),
             (
-                object_.target_private_attributes,
-                object_.target_schema.private_attributes,
+                entity.target_private_attributes,
+                entity.target_schema.private_attributes,
             ),
         ):
             resolved_attributes: dict[
@@ -184,7 +184,7 @@ class ProjectMigrationExecutor:
                     continue
                 # The planner refuses an unresolved attribute off the target
                 # schema, so its tag has an attribute schema.
-                resolved = resolutions[(object_.source.uid, schemas[tag].uid)].resolved
+                resolved = resolutions[(entity.source.uid, schemas[tag].uid)].resolved
                 if resolved is None:
                     continue
                 replaced = attribute.original or attribute.proposed
@@ -194,15 +194,15 @@ class ProjectMigrationExecutor:
             resolved_mappings.append(resolved_attributes)
         attributes, private_attributes = resolved_mappings
         return dataclasses.replace(
-            object_,
+            entity,
             target_attributes=attributes,
             target_private_attributes=private_attributes,
         )
 
-    def _write_object(
-        self, session: Session, object_: ObjectInMigration
+    def _write_entity(
+        self, session: Session, entity: EntityInMigration
     ) -> DatabaseProject | DatabaseDataset | DatabaseItem:
-        """Put an object on its target schema, and replace its attributes with
+        """Put an entity on its target schema, and replace its attributes with
         the target ones.
 
         The old attributes are deleted and the target attributes inserted,
@@ -214,25 +214,25 @@ class ProjectMigrationExecutor:
         Parameters
         ----------
         session: Session
-            The session to write the object in.
-        object_: ObjectInMigration
-            The object, with the resolved values and nothing unresolved.
+            The session to write the entity in.
+        entity: EntityInMigration
+            The entity, with the resolved values and nothing unresolved.
 
         Returns
         -------
         DatabaseProject | DatabaseDataset | DatabaseItem
-            The object, written.
+            The entity, written.
 
         Raises
         ------
         MigrationError
             If an attribute is not on the attribute schema of its tag.
         """
-        database_object = self._get_database_object(session, object_.source)
-        target_schema = object_.target_schema
+        database_entity = self._get_database_entity(session, entity.source)
+        target_schema = entity.target_schema
         old_database_attributes: list[DatabaseAttribute] = [
-            *database_object.attributes,
-            *database_object.private_attributes,
+            *database_entity.attributes,
+            *database_entity.private_attributes,
         ]
         flags = {
             old.uid: (old.read_only, old.locked) for old in old_database_attributes
@@ -241,42 +241,42 @@ class ProjectMigrationExecutor:
             # Deleted with them by the database, but said here for a database
             # that does not enforce its foreign keys.
             self._database_service.delete_unmapped_values(session, list(flags))
-        database_object.attributes = set()
-        database_object.private_attributes = set()
+        database_entity.attributes = set()
+        database_entity.private_attributes = set()
         session.flush()
-        database_object.schema_uid = target_schema.uid
-        database_object.attributes = self._add_attributes(
+        database_entity.schema_uid = target_schema.uid
+        database_entity.attributes = self._add_attributes(
             session,
-            database_object,
-            object_.migrated_attributes,
+            database_entity,
+            entity.migrated_attributes,
             target_schema.attributes,
             flags,
         )
-        database_object.private_attributes = self._add_attributes(
+        database_entity.private_attributes = self._add_attributes(
             session,
-            database_object,
-            object_.migrated_private_attributes,
+            database_entity,
+            entity.migrated_private_attributes,
             target_schema.private_attributes,
             flags,
         )
-        return database_object
+        return database_entity
 
-    def _get_database_object(
+    def _get_database_entity(
         self, session: Session, source: Project | Dataset | Item
     ) -> DatabaseProject | DatabaseDataset | DatabaseItem:
-        """Get the database object of a project, dataset, or item.
+        """Get the database entity of a project, dataset, or item.
 
         Parameters
         ----------
         session: Session
             The session to get it in.
         source: Project | Dataset | Item
-            The object.
+            The entity.
 
         Returns
         -------
         DatabaseProject | DatabaseDataset | DatabaseItem
-            The database object.
+            The database entity.
         """
         if isinstance(source, Project):
             return self._database_service.get_project(session, source)
@@ -287,19 +287,19 @@ class ProjectMigrationExecutor:
     def _add_attributes(
         self,
         session: Session,
-        database_object: DatabaseProject | DatabaseDataset | DatabaseItem,
+        database_entity: DatabaseProject | DatabaseDataset | DatabaseItem,
         attributes: Mapping[str, AnyAttribute],
         schemas: Mapping[str, AttributeSchema],
         flags: Mapping[UUID, tuple[bool, bool]],
     ) -> set[DatabaseAttribute]:
-        """Add the target attributes of an object.
+        """Add the target attributes of an entity.
 
         Parameters
         ----------
         session: Session
             The session to add them in.
-        database_object: DatabaseProject | DatabaseDataset | DatabaseItem
-            The object.
+        database_entity: DatabaseProject | DatabaseDataset | DatabaseItem
+            The entity.
         attributes: Mapping[str, AnyAttribute]
             The target attributes, by tag.
         schemas: Mapping[str, AttributeSchema]
@@ -320,7 +320,7 @@ class ProjectMigrationExecutor:
         database_attributes: set[DatabaseAttribute] = set()
         for tag, attribute in attributes.items():
             schema = RootSchemaIndex.refuse_attribute_off_schema(
-                database_object.uid, tag, attribute, schemas.get(tag)
+                database_entity.uid, tag, attribute, schemas.get(tag)
             )
             # Mapping items a mapper move removed are referred to by nothing.
             attribute = attribute.without_mapping_items(

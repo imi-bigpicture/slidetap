@@ -20,9 +20,9 @@ export interface ProjectActions {
   /** Every change to the project: editing, search, images, pseudonyms,
    * preview, and export. */
   readonly edit: boolean
-  /** Whether the projects on the project's root can be converted to the
-   * root of new projects. */
-  readonly hasMigration: boolean
+  /** Whether a migration is available from the project's root to the root of
+   * new projects, whether or not the project can be migrated now. */
+  readonly migrationAvailable: boolean
   /** Why the project cannot be converted now, null where it can or where its
    * root has no migration. */
   readonly migrateRefusal: string | null

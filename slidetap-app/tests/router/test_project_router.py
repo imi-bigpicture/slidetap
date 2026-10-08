@@ -525,18 +525,18 @@ class TestSlideTapProjectRouter:
         assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
         decoy.verify(migration_service.resume_curating(project.uid), times=1)
 
-    @pytest.mark.parametrize("has_migration", [True, False])
+    @pytest.mark.parametrize("migration_available", [True, False])
     def test_a_migration_is_reverted(
         self,
         decoy: Decoy,
         test_client: TestClient,
         migration_service: MigrationService,
         project: Project,
-        has_migration: bool,
+        migration_available: bool,
     ):
         # Arrange
         when = decoy.when(migration_service.revert(project.uid))
-        if has_migration:
+        if migration_available:
             when.then_return(project)
         else:
             when.then_raise(NotFoundError("no migration"))
@@ -546,9 +546,9 @@ class TestSlideTapProjectRouter:
 
         # Assert
         assert response.status_code == (
-            HTTPStatus.OK if has_migration else HTTPStatus.NOT_FOUND
+            HTTPStatus.OK if migration_available else HTTPStatus.NOT_FOUND
         )
-        if has_migration:
+        if migration_available:
             assert response.json()["status"] == project.status
 
     def test_the_actions_of_a_project_say_whether_it_can_be_migrated(
@@ -562,7 +562,7 @@ class TestSlideTapProjectRouter:
         decoy.when(project_service.get_actions(project.uid)).then_return(
             ProjectActions(
                 edit=False,
-                has_migration=True,
+                migration_available=True,
                 migrate_refusal=None,
             )
         )
@@ -572,7 +572,7 @@ class TestSlideTapProjectRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert response.json()["hasMigration"] is True
+        assert response.json()["migrationAvailable"] is True
         assert response.json()["migrateRefusal"] is None
         assert response.json()["edit"] is False
 

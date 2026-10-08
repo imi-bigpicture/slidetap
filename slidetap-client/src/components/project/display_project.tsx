@@ -413,7 +413,7 @@ export default function DisplayProject({
       // offered where the project can be moved now, or is being, for what the
       // conversion could not convert to be resolved; where it cannot, why not
       // is what the entry says.
-      ...(actions.hasMigration
+      ...(actions.migrationAvailable
         ? [
             {
               name: 'Convert',

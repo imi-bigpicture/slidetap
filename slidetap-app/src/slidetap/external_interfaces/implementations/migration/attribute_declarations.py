@@ -137,7 +137,7 @@ class AttributeDeclarations:
             their values.
         renamed: Iterable[tuple[AttributeSchema, AttributeSchema]] = ()
             Source attribute schemas, with the target attribute schema of another
-            tag in the same object that each becomes.
+            tag in the same entity that each becomes.
         dropped: Iterable[AttributeSchema] = ()
             Source attribute schemas that are left out.
 

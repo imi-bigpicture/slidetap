@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""A schema migration of object migrators."""
+"""A schema migration of entity migrators."""
 
 from collections.abc import Iterable
 from typing import Any, cast
@@ -21,17 +21,17 @@ from uuid import UUID
 from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
     AttributeMigrator,
 )
-from slidetap.external_interfaces.implementations.migration.object_migrator import (
-    ObjectMigrator,
+from slidetap.external_interfaces.implementations.migration.entity_migrator import (
+    EntityMigrator,
 )
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
     AnyAttribute,
     AttributeSchema,
     Dataset,
+    EntityMigrationResult,
     Item,
     ItemSchema,
-    ObjectMigrationResult,
     Project,
     RootSchema,
 )
@@ -39,20 +39,20 @@ from slidetap.model import (
 
 class DeclarativeSchemaMigration(SchemaMigration):
     """Moves projects from a source root to a target root with an
-    `ObjectMigrator` for the project, the dataset, and each item schema of the
+    `EntityMigrator` for the project, the dataset, and each item schema of the
     source.
 
-    A migrator not given is a plain `ObjectMigrator`, which declares nothing:
+    A migrator not given is a plain `EntityMigrator`, which declares nothing:
     for the project and the dataset, and for an item schema of the source that
     the target has under the same uid. An item schema of the source with
     neither a migrator nor such a target is refused.
 
-    The attribute migrators of the object migrators, at any depth, are
+    The attribute migrators of the entity migrators, at any depth, are
     registered by their source attribute schema when the migration is created;
     one held in several places must be migrated alike in each. With them,
     `migrate_attribute` migrates an attribute, so that the mapping items of a
     mapper moved to the target root are migrated as the attributes of the
-    objects are, and `migrate_attribute_schema` gives the target schema of an
+    entities are, and `migrate_attribute_schema` gives the target schema of an
     attribute schema. `migrate_item_schema` gives the target item schema of the
     migrator of an item schema.
     """
@@ -61,9 +61,9 @@ class DeclarativeSchemaMigration(SchemaMigration):
         self,
         source_schema: RootSchema,
         target_schema: RootSchema,
-        project_migrator: ObjectMigrator[Project] | None = None,
-        dataset_migrator: ObjectMigrator[Dataset] | None = None,
-        item_migrators: Iterable[ObjectMigrator[Item]] = (),
+        project_migrator: EntityMigrator[Project] | None = None,
+        dataset_migrator: EntityMigrator[Dataset] | None = None,
+        item_migrators: Iterable[EntityMigrator[Item]] = (),
     ):
         """Create the migration between two roots.
 
@@ -73,11 +73,11 @@ class DeclarativeSchemaMigration(SchemaMigration):
             The root schema the projects are moved from.
         target_schema: RootSchema
             The root schema the projects are moved to.
-        project_migrator: ObjectMigrator[Project] | None = None
+        project_migrator: EntityMigrator[Project] | None = None
             The migrator of the project.
-        dataset_migrator: ObjectMigrator[Dataset] | None = None
+        dataset_migrator: EntityMigrator[Dataset] | None = None
             The migrator of the dataset.
-        item_migrators: Iterable[ObjectMigrator[Item]] = ()
+        item_migrators: Iterable[EntityMigrator[Item]] = ()
             The migrators of the items, each of its source item schema.
 
         Raises
@@ -93,12 +93,12 @@ class DeclarativeSchemaMigration(SchemaMigration):
         self._source_schema = source_schema
         self._target_schema = target_schema
         self._project_migrator = (
-            ObjectMigrator[Project](source_schema.project, target_schema.project)
+            EntityMigrator[Project](source_schema.project, target_schema.project)
             if project_migrator is None
             else project_migrator
         )
         self._dataset_migrator = (
-            ObjectMigrator[Dataset](source_schema.dataset, target_schema.dataset)
+            EntityMigrator[Dataset](source_schema.dataset, target_schema.dataset)
             if dataset_migrator is None
             else dataset_migrator
         )
@@ -111,7 +111,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
             ]
         )
 
-    def migrate_project(self, project: Project) -> ObjectMigrationResult:
+    def migrate_project(self, project: Project) -> EntityMigrationResult:
         """Migrate a project from its schema on the source root to the target
         root, with the project migrator.
 
@@ -122,13 +122,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The project schema of the target root, the project's attributes on
             it, and the attributes that lost values as unresolved.
         """
         return self._project_migrator.migrate(project)
 
-    def migrate_dataset(self, dataset: Dataset) -> ObjectMigrationResult:
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult:
         """Migrate a dataset from its schema on the source root to the target
         root, with the dataset migrator.
 
@@ -139,13 +139,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The dataset schema of the target root, the dataset's attributes on
             it, and the attributes that lost values as unresolved.
         """
         return self._dataset_migrator.migrate(dataset)
 
-    def migrate_item(self, item: Item) -> ObjectMigrationResult:
+    def migrate_item(self, item: Item) -> EntityMigrationResult:
         """Migrate an item from its schema on the source root to the target root,
         with the migrator of its item schema.
 
@@ -156,7 +156,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The target item schema of the migrator, the item's attributes on
             it, and the attributes that lost values as unresolved.
 
@@ -175,7 +175,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
         """Migrate the attribute of a mapping item with the attribute migrator
-        of its schema, at any depth of an object migrator.
+        of its schema, at any depth of an entity migrator.
 
         An attribute whose value has no counterpart on the target schema is
         returned without it.
@@ -189,7 +189,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
         -------
         AnyAttribute | None
             The attribute on the target attribute schema, or None where no
-            object migrator has a migrator of its schema.
+            entity migrator has a migrator of its schema.
         """
         found = self._attribute_migrators.get(attribute.schema_uid)
         if found is None:
@@ -227,7 +227,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
         self, schema: AttributeSchema
     ) -> AttributeSchema | None:
         """Give the target attribute schema of the attribute migrator of a
-        source attribute schema, at any depth of an object migrator.
+        source attribute schema, at any depth of an entity migrator.
 
         Parameters
         ----------
@@ -237,15 +237,15 @@ class DeclarativeSchemaMigration(SchemaMigration):
         Returns
         -------
         AttributeSchema | None
-            The target attribute schema, or None where no object migrator has a
+            The target attribute schema, or None where no entity migrator has a
             migrator of the schema.
         """
         found = self._attribute_migrators.get(schema.uid)
         return None if found is None else found[1]
 
     def _create_item_migrators(
-        self, declared: Iterable[ObjectMigrator[Item]]
-    ) -> dict[UUID, ObjectMigrator[Item]]:
+        self, declared: Iterable[EntityMigrator[Item]]
+    ) -> dict[UUID, EntityMigrator[Item]]:
         """Index the declared migrators by the uid of their source item schema,
         adding a plain one for every other item schema of the source, to the
         item schema of the same uid in the target.
@@ -260,7 +260,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
         """
         source_items = self._item_schemas(self._source_schema)
         target_items = self._item_schemas(self._target_schema)
-        by_source: dict[UUID, ObjectMigrator[Item]] = {}
+        by_source: dict[UUID, EntityMigrator[Item]] = {}
         for migrator in declared:
             if migrator.source.uid in by_source:
                 raise ValueError(
@@ -268,7 +268,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
                     f"{migrator.source.name} ({migrator.source.uid})."
                 )
             by_source[migrator.source.uid] = migrator
-        migrators: dict[UUID, ObjectMigrator[Item]] = {}
+        migrators: dict[UUID, EntityMigrator[Item]] = {}
         for uid, source_item in source_items.items():
             migrator = by_source.get(uid)
             if migrator is not None:
@@ -281,7 +281,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
                     f"{self._source_schema.name} has no migrator, and no item schema "
                     f"of the same uid in root {self._target_schema.name}."
                 )
-            migrators[uid] = ObjectMigrator[Item](source_item, target_item)
+            migrators[uid] = EntityMigrator[Item](source_item, target_item)
         unknown = by_source.keys() - source_items.keys()
         if unknown:
             raise ValueError(
@@ -292,9 +292,9 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     @staticmethod
     def _register_attribute_migrators(
-        object_migrators: Iterable[ObjectMigrator[Any]],
+        entity_migrators: Iterable[EntityMigrator[Any]],
     ) -> dict[UUID, tuple[AttributeMigrator, AttributeSchema]]:
-        """Index the attribute migrators of the object migrators, at any depth,
+        """Index the attribute migrators of the entity migrators, at any depth,
         by the uid of their source attribute schema.
 
         An attribute schema held in several places, such as one shared by item
@@ -303,7 +303,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Parameters
         ----------
-        object_migrators: Iterable[ObjectMigrator[Any]]
+        entity_migrators: Iterable[EntityMigrator[Any]]
             The migrators of the project, the dataset, and the items.
 
         Returns
@@ -318,14 +318,14 @@ class DeclarativeSchemaMigration(SchemaMigration):
             If an attribute schema is migrated differently in two places.
         """
         registry: dict[UUID, tuple[AttributeMigrator, AttributeSchema]] = {}
-        registered_by: dict[UUID, ObjectMigrator[Any]] = {}
+        registered_by: dict[UUID, EntityMigrator[Any]] = {}
         conflicts: dict[UUID, str] = {}
-        for object_migrator in object_migrators:
-            for uid, migrator, target in object_migrator.attribute_migrators():
+        for entity_migrator in entity_migrators:
+            for uid, migrator, target in entity_migrator.attribute_migrators():
                 registered = registry.get(uid)
                 if registered is None:
                     registry[uid] = (migrator, target)
-                    registered_by[uid] = object_migrator
+                    registered_by[uid] = entity_migrator
                     continue
                 registered_migrator, registered_target = registered
                 if registered_target.uid == target.uid and (
@@ -338,7 +338,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
                     f"{registered_by[uid].source.name} (to {registered_target.tag} "
                     f"({registered_target.uid}) with "
                     f"{type(registered_migrator).__name__}) and "
-                    f"{object_migrator.source.name} (to {target.tag} ({target.uid}) "
+                    f"{entity_migrator.source.name} (to {target.tag} ({target.uid}) "
                     f"with {type(migrator).__name__})",
                 )
         if conflicts:

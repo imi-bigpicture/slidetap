@@ -48,8 +48,8 @@ from slidetap.database import (
 from slidetap.external_interfaces import MapperInjectorInterface, SchemaInterface
 from slidetap.external_interfaces.implementations.migration import (
     DeclarativeSchemaMigration,
+    EntityMigrator,
     EnumAttributeMigrator,
-    ObjectMigrator,
     UnchangedAttributeMigrator,
 )
 from slidetap.model import (
@@ -60,6 +60,7 @@ from slidetap.model import (
     Code,
     CodeAttribute,
     Dataset,
+    EntityMigrationResult,
     EnumAttribute,
     Item,
     ItemSchema,
@@ -71,7 +72,6 @@ from slidetap.model import (
     MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
-    ObjectMigrationResult,
     Observation,
     Project,
     ProjectMigration,
@@ -140,7 +140,7 @@ class _SexMigration(DeclarativeSchemaMigration):
             schema,
             other_schema,
             item_migrators=[
-                ObjectMigrator[Item](
+                EntityMigrator[Item](
                     schema.patient,
                     other_schema.samples[schema.patient_schema_uid],
                     migrated_attributes=[
@@ -163,13 +163,13 @@ class _SexMigration(DeclarativeSchemaMigration):
         target does not have, proposed on another schema, or among the private
         attributes."""
 
-    def migrate_project(self, project: Project) -> ObjectMigrationResult:
+    def migrate_project(self, project: Project) -> EntityMigrationResult:
         return self._break(super().migrate_project(project))
 
-    def migrate_dataset(self, dataset: Dataset) -> ObjectMigrationResult:
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult:
         return self._break(super().migrate_dataset(dataset))
 
-    def migrate_item(self, item: Item) -> ObjectMigrationResult:
+    def migrate_item(self, item: Item) -> EntityMigrationResult:
         migrated = self._break(super().migrate_item(item))
         if self.wrong_kind and item.schema_uid == self._schema.slide_schema_uid:
             return dataclasses.replace(
@@ -177,8 +177,8 @@ class _SexMigration(DeclarativeSchemaMigration):
             )
         return migrated
 
-    def _break(self, migrated: ObjectMigrationResult) -> ObjectMigrationResult:
-        """The migrated object, changed as the test asks."""
+    def _break(self, migrated: EntityMigrationResult) -> EntityMigrationResult:
+        """The migrated entity, changed as the test asks."""
         attributes = self._without_dropped(migrated.attributes)
         private_attributes = self._without_dropped(migrated.private_attributes)
         for moved in (attributes, private_attributes):
@@ -200,7 +200,7 @@ class _SexMigration(DeclarativeSchemaMigration):
             for tag, value in list(attributes.items()):
                 if isinstance(value, UnresolvedAttributeMigration):
                     private_attributes[tag] = attributes.pop(tag)
-        return ObjectMigrationResult(
+        return EntityMigrationResult(
             schema_uid=migrated.schema_uid,
             attributes=attributes,
             private_attributes=private_attributes,
@@ -565,8 +565,8 @@ class TestMigratingAProject:
         """Count the resolved or accepted attribute issues of the migration."""
         return sum(
             issue.resolved_at is not None
-            for object_ in migration_service.get(stored.project.uid).issues
-            for issue in object_.attribute_issues
+            for entity in migration_service.get(stored.project.uid).issues
+            for issue in entity.attribute_issues
         )
 
     @staticmethod
@@ -593,8 +593,8 @@ class TestMigratingAProject:
         """Resolve every issue, by default the sex as female, and accept every
         dropped attribute."""
         planned = migration_service.get(stored.project.uid)
-        for object_ in planned.issues:
-            for issue in object_.attribute_issues:
+        for entity in planned.issues:
+            for issue in entity.attribute_issues:
                 if issue.target_attribute_schema_uid is None:
                     attribute = None
                 elif resolve is not None:
@@ -646,15 +646,15 @@ class TestMigratingAProject:
         assert planned.target_root_schema_uid == OTHER_ROOT_SCHEMA_UID
         assert [
             issue.resolved_at
-            for object_ in planned.issues
-            for issue in object_.attribute_issues
+            for entity in planned.issues
+            for issue in entity.attribute_issues
         ] == [None, None]
-        assert [object_.uid for object_ in planned.issues] == [
+        assert [entity.uid for entity in planned.issues] == [
             stored.observation.uid,
             stored.other_patient.uid,
         ]
-        objects = {object_.uid: object_ for object_ in planned.issues}
-        other_patient = objects[stored.other_patient.uid]
+        entities = {entity.uid: entity for entity in planned.issues}
+        other_patient = entities[stored.other_patient.uid]
         assert other_patient.identifier == "patient-2"
         assert other_patient.target_schema_uid == schema.patient_schema_uid
         [issue] = other_patient.attribute_issues
@@ -666,7 +666,7 @@ class TestMigratingAProject:
         assert issue.proposed.value is None
         assert "Other" in issue.problem
         assert issue.resolved_at is None
-        [dropped] = objects[stored.observation.uid].attribute_issues
+        [dropped] = entities[stored.observation.uid].attribute_issues
         report = schema.observation.private_attributes["report"]
         assert dropped.target_attribute_schema_uid is None
         assert dropped.original is not None
@@ -695,7 +695,7 @@ class TestMigratingAProject:
         # Arrange
         planned = self._plan(migration_service, stored)
         [issue] = [
-            issue for object_ in planned.issues for issue in object_.attribute_issues
+            issue for entity in planned.issues for issue in entity.attribute_issues
         ]
         female = self._sex(issue, "Female")
         assert female is not None
@@ -747,8 +747,8 @@ class TestMigratingAProject:
         planned = self._plan(migration_service, stored)
         [dropped] = [
             issue
-            for object_ in planned.issues
-            for issue in object_.attribute_issues
+            for entity in planned.issues
+            for issue in entity.attribute_issues
             if issue.target_attribute_schema_uid is None
         ]
         assert dropped.original is not None
@@ -776,8 +776,8 @@ class TestMigratingAProject:
         # Arrange
         migration.dropped_tags = {"report"}
         planned = self._plan(migration_service, stored)
-        for object_ in planned.issues:
-            for issue in object_.attribute_issues:
+        for entity in planned.issues:
+            for issue in entity.attribute_issues:
                 if issue.target_attribute_schema_uid is not None:
                     migration_service.resolve(
                         stored.project.uid,
@@ -802,7 +802,7 @@ class TestMigratingAProject:
         # Arrange
         planned = self._plan(migration_service, stored)
         [issue] = [
-            issue for object_ in planned.issues for issue in object_.attribute_issues
+            issue for entity in planned.issues for issue in entity.attribute_issues
         ]
         self._resolve_all(migration_service, stored)
         submitted = migration_service.submit(stored.project.uid)
@@ -932,7 +932,7 @@ class TestMigratingAProject:
             row = session.get_one(DatabaseAttribute, other_sex)
             assert (row.locked, row.read_only) == (True, True)
 
-    def test_every_object_is_moved(
+    def test_every_entity_is_moved(
         self,
         sqlite_database_service: DatabaseService,
         migration_service: MigrationService,
@@ -1299,7 +1299,7 @@ class TestMigratingAProject:
         # Assert
         planned = migration_service.get(stored.project.uid)
         assert planned.status == MigrationStatus.CURATING
-        assert sum(len(object_.attribute_issues) for object_ in planned.issues) == 1
+        assert sum(len(entity.attribute_issues) for entity in planned.issues) == 1
 
     def test_the_completing_task_sets_the_project_back_to_its_status(
         self,
@@ -1394,14 +1394,14 @@ class TestMigratingAProject:
         while_migrating = project_service.get_actions(stored.project.uid)
 
         # Assert
-        assert before.has_migration is True
+        assert before.migration_available is True
         assert before.migrate_refusal is None
-        assert while_migrating.has_migration is True
+        assert while_migrating.migration_available is True
         assert while_migrating.migrate_refusal == "the project is being migrated"
         assert stored.can_migrate(sqlite_database_service, migration_service) is False
         assert not any(
             while_migrating.model_dump(
-                exclude={"has_migration", "migrate_refusal"}
+                exclude={"migration_available", "migrate_refusal"}
             ).values()
         )
 
@@ -1606,9 +1606,9 @@ class TestMigratingIntoNewRequirements:
         migration_service.plan(stored.project.uid)
         planned = migration_service.get(stored.project.uid)
         return {
-            (object_.identifier, issue.target_attribute_schema_uid): issue
-            for object_ in planned.issues
-            for issue in object_.attribute_issues
+            (entity.identifier, issue.target_attribute_schema_uid): issue
+            for entity in planned.issues
+            for issue in entity.attribute_issues
         }
 
     def test_a_newly_required_attribute_is_an_attribute_issue(

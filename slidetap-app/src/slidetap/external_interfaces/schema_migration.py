@@ -20,29 +20,29 @@ from slidetap.model import (
     AnyAttribute,
     AttributeSchema,
     Dataset,
+    EntityMigrationResult,
     Item,
     ItemSchema,
-    ObjectMigrationResult,
     Project,
 )
 
 
 class SchemaMigration(metaclass=ABCMeta):
     """Migrates projects, datasets, and items from a previous root schema to the
-    root of new projects, one object at a time, and gives the schemas of the
+    root of new projects, one entity at a time, and gives the schemas of the
     target root that schemas of the source migrate to.
 
-    Each method that migrates an object returns what it is on the target root.
+    Each method that migrates an entity returns what it is on the target root.
     What a migration cannot migrate by itself it returns as an
     `UnresolvedAttributeMigration`, for a curator to decide; it is then run
     again to complete the migration, and must return the same.
-    Changes across objects are not supported.
+    Changes across entities are not supported.
 
-    `DeclarativeSchemaMigration` implements it from declared object migrators.
+    `DeclarativeSchemaMigration` implements it from declared entity migrators.
     """
 
     @abstractmethod
-    def migrate_project(self, project: Project) -> ObjectMigrationResult:
+    def migrate_project(self, project: Project) -> EntityMigrationResult:
         """Migrate a project from its schema on the source root to the target root.
 
         Parameters
@@ -52,7 +52,7 @@ class SchemaMigration(metaclass=ABCMeta):
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The project schema of the target root, the project's attributes on
             it, and an `UnresolvedAttributeMigration` for each attribute that
             needs a curator's decision.
@@ -60,7 +60,7 @@ class SchemaMigration(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def migrate_dataset(self, dataset: Dataset) -> ObjectMigrationResult:
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult:
         """Migrate a dataset from its schema on the source root to the target root.
 
         Parameters
@@ -70,7 +70,7 @@ class SchemaMigration(metaclass=ABCMeta):
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The dataset schema of the target root, the dataset's attributes on
             it, and an `UnresolvedAttributeMigration` for each attribute that
             needs a curator's decision.
@@ -78,7 +78,7 @@ class SchemaMigration(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def migrate_item(self, item: Item) -> ObjectMigrationResult:
+    def migrate_item(self, item: Item) -> EntityMigrationResult:
         """Migrate an item from its schema on the source root to the target root.
 
         Parameters
@@ -89,7 +89,7 @@ class SchemaMigration(metaclass=ABCMeta):
 
         Returns
         -------
-        ObjectMigrationResult
+        EntityMigrationResult
             The item schema of the target root, of the same kind, the item's
             attributes on it, and an `UnresolvedAttributeMigration` for each
             attribute that needs a curator's decision.

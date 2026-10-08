@@ -759,7 +759,7 @@ class TestViewOnlyRoot:
 
         # Assert
         # Nothing migrates the projects on either root.
-        migration = {"has_migration", "migrate_refusal"}
+        migration = {"migration_available", "migrate_refusal"}
         assert set(on_example.model_dump(exclude=migration).values()) == {True}
         assert set(on_other.model_dump(exclude=migration).values()) == {False}
         assert on_other.edit is False
