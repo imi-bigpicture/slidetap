@@ -353,17 +353,18 @@ The stored mappers are set up by a deploy step too, run after the migrations
 on every deploy, and not by the web app:
 
 ```console
-> SLIDETAP_DBURI=postgresql://... uv run slidetap-mappers set-up --container your_package.container:create_container
+> SLIDETAP_DBURI=postgresql://... SLIDETAP_TASK_APP=your_package uv run slidetap-mappers set-up
 ```
 
-`--container` names the application's container factory as `module:function`,
-a function taking no arguments that returns a dishka `Container` with the
-`BaseProvider` and the configuration (`--db-uri` can be given instead of
-`SLIDETAP_DBURI`). The command gives the stored mappers the family of their
-root, migrates the mappers whose attributes the schema migrations move, and
-then injects the mapper sheets of the `MapperInjectorInterface`, if one is
-provided. It is idempotent, and the `example/docker-compose.yml` `dbmigrate`
-service runs it last.
+`SLIDETAP_TASK_APP` names the application's package, as it does for
+`slidetap-task-worker`. The command imports its `container` module and calls
+`create_container()`, a function taking no arguments that returns a dishka
+`Container` with the `BaseProvider` and the configuration (`--db-uri` can be
+given instead of `SLIDETAP_DBURI`). The command gives the stored mappers the
+family of their root, migrates the mappers whose attributes the schema
+migrations move, and then injects the mapper sheets of the
+`MapperInjectorInterface`, if one is provided. It is idempotent, and the
+`example/docker-compose.yml` `dbmigrate` service runs it last.
 
 #### How Procrastinate migrations are tracked
 

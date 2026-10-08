@@ -42,7 +42,7 @@ Configure the application environment by creating an .env-file:
 - SLIDETAP_SECRET_KEY: Secret key used to sign tokens.
 - SLIDETAP_CONFIG_FILE: Path to the config.yaml read by the Python applications.
 - SLIDETAP_WEB_APP: Uvicorn target for the web application, as `package.module:attribute`.
-- SLIDETAP_TASK_APP: Dotted name of the package whose `task_app.py` exposes `task_app`.
+- SLIDETAP_TASK_APP: Dotted name of the package whose `task_app.py` exposes `task_app` and whose `container.py` exposes `create_container()`.
 
 ```bash
 SLIDETAP_SERVERNAME=server_hostname

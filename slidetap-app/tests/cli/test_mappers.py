@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import os
 from pathlib import Path
 
 import pytest
@@ -20,40 +19,14 @@ import pytest
 # typer.testing.CliRunner mangles the output streams with click 8.4, so the
 # commands are invoked through click's runner instead.
 from click.testing import CliRunner
-from dishka import Container, make_container
-from slidetap_example import (
-    ExampleImagePreProcessor,
-    ExampleMapperInjector,
-    ExampleMetadataExportInterface,
-    ExampleMetadataImportInterface,
-    ExampleSchema,
-)
-from slidetap_example.schema import ExampleSchemaInterface
+from slidetap_example import ExampleSchema
 from sqlalchemy import create_engine
 from typer.main import get_command
 
-from slidetap import BaseProvider
+from slidetap.cli.mappers import app
 from slidetap.config import DatabaseConfig
 from slidetap.database import Base
-from slidetap.mappers_cli import app
-from slidetap.service_provider import ConfigProvider
 from slidetap.services import DatabaseService
-
-
-def create_container() -> Container:
-    """Create a container of the example application, reading the database
-    from SLIDETAP_DBURI as an application does."""
-    base_provider = BaseProvider(
-        schema_interface=ExampleSchemaInterface,
-        metadata_export_interface=ExampleMetadataExportInterface,
-        metadata_import_interface=ExampleMetadataImportInterface,
-        mapper_injector=ExampleMapperInjector,
-    )
-    base_provider.provide(ExampleImagePreProcessor)
-    config_provider = ConfigProvider(
-        database_config=lambda: DatabaseConfig(os.environ["SLIDETAP_DBURI"], False)
-    )
-    return make_container(base_provider, config_provider)
 
 
 @pytest.fixture
@@ -71,10 +44,12 @@ def database_service(uri: str) -> DatabaseService:
 
 
 def test_set_up_gives_families_and_injects_mappers(
-    uri: str, database_service: DatabaseService
+    uri: str, database_service: DatabaseService, monkeypatch: pytest.MonkeyPatch
 ):
-    """The `slidetap-mappers set-up` command, from parsing to stored mappers."""
+    """The `slidetap-mappers set-up` command, from the container of the
+    application named by SLIDETAP_TASK_APP to stored mappers."""
     # Arrange
+    monkeypatch.setenv("SLIDETAP_TASK_APP", "tests.cli")
     attribute = ExampleSchema().specimen.attributes["collection"].uid
     with database_service.get_session() as session:
         stored_uid = database_service.add_mapper(
@@ -82,16 +57,7 @@ def test_set_up_gives_families_and_injects_mappers(
         ).uid
 
     # Act
-    result = CliRunner().invoke(
-        get_command(app),
-        [
-            "set-up",
-            "--container",
-            f"{__name__}:create_container",
-            "--db-uri",
-            uri,
-        ],
-    )
+    result = CliRunner().invoke(get_command(app), ["set-up", "--db-uri", uri])
 
     # Assert
     assert result.exit_code == 0, result.output
@@ -101,15 +67,14 @@ def test_set_up_gives_families_and_injects_mappers(
         assert list(database_service.get_mapper_groups(session)) != []
 
 
-@pytest.mark.parametrize(
-    "container",
-    ["no_colon", f"{__name__}:missing", f"{__name__}:", ":create_container"],
-)
-def test_set_up_refuses_what_is_not_a_container_factory(container: str, uri: str):
+def test_set_up_fails_for_a_package_without_container_module(
+    uri: str, monkeypatch: pytest.MonkeyPatch
+):
+    # Arrange
+    monkeypatch.setenv("SLIDETAP_TASK_APP", "tests.services")
+
     # Act
-    result = CliRunner().invoke(
-        get_command(app), ["set-up", "--container", container, "--db-uri", uri]
-    )
+    result = CliRunner().invoke(get_command(app), ["set-up", "--db-uri", uri])
 
     # Assert
-    assert result.exit_code != 0
+    assert isinstance(result.exception, ModuleNotFoundError)

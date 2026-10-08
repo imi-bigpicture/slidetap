@@ -14,24 +14,22 @@
 
 """Commands that set up the stored mappers of an application.
 
-``slidetap-mappers set-up --container module:function`` is a deploy step, run
-after ``slidetap-db upgrade``. It gives the stored mappers their family,
-migrates the mappers whose attributes the schema migrations move, and injects
-the mapper sheets of the plugin, in that order: a mapper sheet of the root
-migrated to finds the mapper it names migrated there already, with its mapping
-items migrated.
+``slidetap-mappers set-up`` is a deploy step, run after ``slidetap-db upgrade``.
+It gives the stored mappers their family, migrates the mappers whose attributes
+the schema migrations move, and injects the mapper sheets of the plugin, in
+that order: a mapper sheet of the root migrated to finds the mapper it names
+migrated there already, with its mapping items migrated.
 
-The container is created by the application's container factory, a callable
-taking no arguments and returning a dishka ``Container``. The database is given
-by ``--db-uri`` or, if that is omitted, by the ``SLIDETAP_DBURI`` environment
-variable, which is where the container reads it from.
+The container is created by ``create_container()`` in the ``container`` module
+of the application's package, which ``SLIDETAP_TASK_APP`` names as it does for
+``slidetap-task-worker``. The database is given by ``--db-uri`` or, if that is
+omitted, by the ``SLIDETAP_DBURI`` environment variable, which is where the
+container reads it from.
 """
 
 import importlib
 import logging
 import os
-from collections.abc import Callable
-from typing import Annotated, cast
 
 import typer
 from dishka import Container
@@ -79,39 +77,6 @@ class MapperSetUp:
         """
         return cls(container.get(MapperService), container.get(MigrationService))
 
-    @staticmethod
-    def load_container_factory(path: str) -> Callable[[], Container]:
-        """Import a container factory given as ``module:function``.
-
-        Parameters
-        ----------
-        path: str
-            The module and the name of the factory in it, separated by a colon.
-
-        Returns
-        -------
-        Callable[[], Container]
-            The factory.
-
-        Raises
-        ------
-        typer.BadParameter
-            If the path is not of a callable in a module.
-        """
-        module_name, separator, name = path.partition(":")
-        if not separator or not module_name or not name:
-            raise typer.BadParameter(
-                f"'{path}' is not of the form module:function.",
-                param_hint="--container",
-            )
-        factory = getattr(importlib.import_module(module_name), name, None)
-        if not callable(factory):
-            raise typer.BadParameter(
-                f"Module '{module_name}' has no callable '{name}'.",
-                param_hint="--container",
-            )
-        return cast(Callable[[], Container], factory)
-
     def run(self) -> None:
         """Give the stored mappers their family, migrate the mappers the schema
         migrations move, and inject the mapper sheets of the plugin.
@@ -132,20 +97,8 @@ def main() -> None:
 
 
 @app.command()
-def set_up(
-    container: Annotated[
-        str,
-        typer.Option(
-            "--container",
-            help=(
-                "The container factory of the application, as module:function, "
-                "returning a dishka Container."
-            ),
-        ),
-    ],
-    db_uri: DbUri = "",
-) -> None:
-    """Set up the stored mappers of an application.
+def set_up(db_uri: DbUri = "") -> None:
+    """Set up the stored mappers of the application named by SLIDETAP_TASK_APP.
 
     Give the stored mappers their family, migrate the mappers the schema
     migrations move, and inject the mapper sheets of the plugin. Run after
@@ -155,13 +108,13 @@ def set_up(
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)-5.5s [%(name)s] %(message)s"
     )
-    factory = MapperSetUp.load_container_factory(container)
     if db_uri:
         # The container reads the database URL from the environment.
         os.environ["SLIDETAP_DBURI"] = db_uri
-    created = factory()
+    module = importlib.import_module(f"{os.environ['SLIDETAP_TASK_APP']}.container")
+    container: Container = module.create_container()
     try:
-        MapperSetUp.from_container(created).run()
+        MapperSetUp.from_container(container).run()
     finally:
-        created.close()
+        container.close()
     print("Mappers set up.")

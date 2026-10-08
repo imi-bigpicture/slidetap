@@ -34,6 +34,7 @@ from decoy import Decoy
 from slidetap_example import ExampleSchema
 from sqlalchemy import select
 
+from slidetap.cli.mappers import MapperSetUp
 from slidetap.database import (
     DatabaseAttribute,
     DatabaseMapper,
@@ -51,7 +52,6 @@ from slidetap.external_interfaces.implementations.migration import (
     ObjectMigrator,
     UnchangedAttributeMigrator,
 )
-from slidetap.mappers_cli import MapperSetUp
 from slidetap.model import (
     AnyAttribute,
     BatchCreate,

@@ -71,7 +71,7 @@ database that has not had them applied:
 Then set up the mappers, which injects the example's mapper sheets:
 
 ```console
-> uv run slidetap-mappers set-up --container slidetap_example.container:create_container
+> SLIDETAP_TASK_APP=slidetap_example uv run slidetap-mappers set-up
 ```
 
 Then, in separate terminals:

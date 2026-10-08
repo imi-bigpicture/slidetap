@@ -43,8 +43,9 @@ those, each image reads one variable of its own:
   FastAPI app as `package.module:attribute`, and `SLIDETAP_APIPORT`, the port
   it listens on.
 - `taskservice.Dockerfile` needs `SLIDETAP_TASK_APP`, the dotted name of the
-  package whose `task_app.py` exposes `task_app`. Not a module path and not an
-  attribute reference.
+  package whose `task_app.py` exposes `task_app` and, for
+  `slidetap-mappers set-up`, whose `container.py` exposes `create_container()`.
+  Not a module path and not an attribute reference.
 
 ## Migrations
 
@@ -61,7 +62,7 @@ dbmigrate:
   command: >
     sh -c "slidetap-db upgrade &&
            slidetap-task-init-schema &&
-           slidetap-mappers set-up --container ${SLIDETAP_TASK_APP}.container:create_container"
+           slidetap-mappers set-up"
   restart: "no"
 ```
 

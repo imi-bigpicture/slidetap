@@ -41,6 +41,7 @@ from slidetap_example.interfaces.metadata_import import (
 from slidetap_example.mapper_injector import ExampleMapperInjector
 from slidetap_example.schema import ExampleSchema, ExampleSchemaInterface
 
+from slidetap.cli.mappers import MapperSetUp
 from slidetap.config import (
     DatabaseConfig,
     DicomizationConfig,
@@ -55,7 +56,6 @@ from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
     JsonFileAuthInterface,
 )
-from slidetap.mappers_cli import MapperSetUp
 from slidetap.model import BatchStatus, ImageStatus, ProjectStatus
 from slidetap.service_provider import BaseProvider
 from slidetap.task import (

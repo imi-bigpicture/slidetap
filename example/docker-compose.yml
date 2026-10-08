@@ -18,6 +18,9 @@ services:
     environment:
       SLIDETAP_STORAGE: /storage
       SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+      # The package whose container module the mapper set-up creates its
+      # container from.
+      SLIDETAP_TASK_APP: ${SLIDETAP_TASK_APP}
     build:
       context: ../slidetap-app
       dockerfile: dockerfiles/taskservice.Dockerfile
@@ -27,7 +30,7 @@ services:
     command: >
       sh -c "slidetap-db upgrade &&
              slidetap-task-init-schema &&
-             slidetap-mappers set-up --container ${SLIDETAP_TASK_APP}.container:create_container"
+             slidetap-mappers set-up"
     restart: "no"
     depends_on:
       dbservice:
