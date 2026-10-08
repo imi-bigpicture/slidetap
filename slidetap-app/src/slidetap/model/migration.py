@@ -111,8 +111,9 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     attribute."""
 
     source_attribute_schema_uid: UUID | None = None
-    """The attribute schema of the original in the source root, None where the
-    object had no attribute."""
+    """The schema in the source root of the original attribute, or None where
+    the issue has no original attribute, such as for an attribute that is new
+    in the target root."""
 
     target_attribute_schema_uid: UUID | None = None
     """The attribute schema of the tag in the target root, which a resolved
@@ -133,9 +134,9 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     """What could be converted, for the curator to start from."""
 
     problem: str
-    """What needs the curator's decision: a value the migration could not
-    migrate, an attribute the migration made invalid, or an attribute it
-    dropped."""
+    """A description, for the curator, of why the issue needs resolving: a
+    value the migration could not migrate, an attribute the migration made
+    invalid, or an attribute the migration dropped."""
 
     resolved_at: datetime | None = None
     """When the issue was resolved, or the dropped attribute accepted, None

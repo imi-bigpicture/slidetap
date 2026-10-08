@@ -45,7 +45,6 @@ def upgrade() -> None:
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
         sa.Column("object_uid", sa.Uuid(), nullable=False),
-        sa.Column("item_uid", sa.Uuid(), nullable=True),
         sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("source_attribute_schema_uid", sa.Uuid(), nullable=True),
         sa.Column("target_attribute_schema_uid", sa.Uuid(), nullable=True),
@@ -57,7 +56,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["migration_uid"], ["project_migration.uid"], ondelete="CASCADE"
         ),
-        sa.ForeignKeyConstraint(["item_uid"], ["item.uid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("uid"),
         sa.CheckConstraint(
             "source_attribute_schema_uid IS NOT NULL "

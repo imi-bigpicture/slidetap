@@ -99,11 +99,6 @@ class ObjectInMigration:
     unresolved: Mapping[str, UnresolvedAttribute]
     """Attributes of the target schema for the curator to resolve, by tag."""
 
-    @property
-    def item_uid(self) -> UUID | None:
-        """The uid of the item, or None for the project or the dataset."""
-        return self.source.uid if isinstance(self.source, Item) else None
-
 
 @dataclass(frozen=True)
 class SearchItemInMigration:
@@ -1345,7 +1340,6 @@ class MigrationService:
                 )
             yield DatabaseMigrationAttributeIssue(
                 object_.source.uid,
-                object_.item_uid,
                 object_.target_schema.uid,
                 original.schema_uid if original is not None else None,
                 schema.uid,
@@ -1361,7 +1355,6 @@ class MigrationService:
             dropped = display_name if value is None else f"'{value}' of {display_name}"
             yield DatabaseMigrationAttributeIssue(
                 object_.source.uid,
-                object_.item_uid,
                 object_.target_schema.uid,
                 original.schema_uid,
                 None,

@@ -81,18 +81,13 @@ class DatabaseMigrationAttributeIssue(Base):
     object_uid: Mapped[UUID] = mapped_column(Uuid)
     """The project, the dataset, or the item the attribute belongs to."""
 
-    item_uid: Mapped[UUID | None] = mapped_column(
-        Uuid, ForeignKey("item.uid", ondelete="CASCADE")
-    )
-    """The item, for the row to go with it, or None for the project or the
-    dataset."""
-
     target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The schema of the object in the target root."""
 
     source_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
-    """The schema of the original attribute in the source root, or None where
-    the object had no such attribute."""
+    """The schema in the source root of the original attribute, or None where
+    the issue has no original attribute, such as for an attribute that is new
+    in the target root."""
 
     target_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
     """The schema of the attribute in the target root that the issue is
@@ -105,9 +100,9 @@ class DatabaseMigrationAttributeIssue(Base):
     """What could be converted, for the curator to start from, or None."""
 
     problem: Mapped[str] = mapped_column(Text)
-    """What needs the curator's decision: a value the migration could not
-    migrate, an attribute the migration made invalid, or an attribute it
-    dropped."""
+    """A description, for the curator, of why the issue needs resolving: a
+    value the migration could not migrate, an attribute the migration made
+    invalid, or an attribute the migration dropped."""
 
     resolved: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     """The value the issue is resolved with, None where left empty, accepted
@@ -119,7 +114,6 @@ class DatabaseMigrationAttributeIssue(Base):
     def __init__(
         self,
         object_uid: UUID,
-        item_uid: UUID | None,
         target_object_schema_uid: UUID,
         source_attribute_schema_uid: UUID | None,
         target_attribute_schema_uid: UUID | None,
@@ -133,8 +127,6 @@ class DatabaseMigrationAttributeIssue(Base):
         ----------
         object_uid: UUID
             The project, the dataset, or the item.
-        item_uid: UUID | None
-            The item, or None for the project or the dataset.
         target_object_schema_uid: UUID
             The target schema of the object.
         source_attribute_schema_uid: UUID | None
@@ -152,7 +144,6 @@ class DatabaseMigrationAttributeIssue(Base):
         super().__init__(
             uid=uuid4(),
             object_uid=object_uid,
-            item_uid=item_uid,
             target_object_schema_uid=target_object_schema_uid,
             source_attribute_schema_uid=source_attribute_schema_uid,
             target_attribute_schema_uid=target_attribute_schema_uid,
