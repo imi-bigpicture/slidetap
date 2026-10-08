@@ -18,6 +18,8 @@ from slidetap.external_interfaces.implementations.migration.attribute_migrator i
     AttributeMigrator,
     EnumAttributeMigrator,
     FixedValueAttributeMigrator,
+    MigratedAttribute,
+    NestedAttributeMigrator,
     UnchangedAttributeMigrator,
 )
 from slidetap.external_interfaces.implementations.migration.declarative_schema_migration import (  # noqa: E501
@@ -32,6 +34,8 @@ __all__ = [
     "DeclarativeSchemaMigration",
     "EnumAttributeMigrator",
     "FixedValueAttributeMigrator",
+    "MigratedAttribute",
+    "NestedAttributeMigrator",
     "ObjectMigrator",
     "UnchangedAttributeMigrator",
 ]

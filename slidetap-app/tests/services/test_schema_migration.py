@@ -1904,7 +1904,7 @@ class TestAttributeMigrator:
         )
 
         # Act
-        migrated = UnchangedAttributeMigrator().migrate(attribute, moved_to)
+        migrated = UnchangedAttributeMigrator().migrate(attribute, moved_to).attribute
 
         # Assert
         assert migrated.uid == attribute.uid

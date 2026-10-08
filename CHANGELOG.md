@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UnchangedAttributeMigrator`, in `slidetap.external_interfaces.implementations.migration` with the other migration helpers, moves an attribute to the attribute schema of another root.
 - `DeclarativeSchemaMigration` implements a migration from an `ObjectMigrator` per project, dataset, and item schema, each declaring what changed and refused when it says nothing about a changed attribute.
 - `EnumAttributeMigrator` and `FixedValueAttributeMigrator` migrate an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.
+- `NestedAttributeMigrator` migrates an object, list, or union attribute through the migrators of the attributes it holds, and `ObjectMigrator.attribute_migrator_of()` finds the migrator of an attribute schema at any depth.
+- `AttributeMigrator.migrate()` returns a `MigratedAttribute`, the migrated attribute with why its value in effect lost values.
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.

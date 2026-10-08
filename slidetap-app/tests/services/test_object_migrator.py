@@ -14,9 +14,10 @@
 
 """Migrating objects between two roots with declared migrators.
 
-The source being has a sex, a colour nested in an object and in a list, an
-attribute renamed, one dropped, and one kept as it is; the target being has a
-sex and colours of other values, the renamed attribute, and one that is new.
+The source being has a sex, a colour nested in an object, in a list, and in a
+union, an attribute renamed, one dropped, one kept as it is, and a private
+attribute; the target being has a sex and colours of other values, the renamed
+attribute, and one that is new.
 """
 
 from enum import Enum
@@ -29,7 +30,9 @@ from slidetap.external_interfaces.implementations.migration import (
     DeclarativeSchemaMigration,
     EnumAttributeMigrator,
     FixedValueAttributeMigrator,
+    NestedAttributeMigrator,
     ObjectMigrator,
+    UnchangedAttributeMigrator,
 )
 from slidetap.model import (
     AnyAttribute,
@@ -50,6 +53,8 @@ from slidetap.model import (
     SampleSchema,
     StringAttribute,
     StringAttributeSchema,
+    UnionAttribute,
+    UnionAttributeSchema,
 )
 
 
@@ -87,27 +92,46 @@ class Schemas:
         self.target_colour = self._enum("colour", "Colour", TargetColour)
         self.list_colour = self._enum("colour", "Colour", Colour)
         self.target_list_colour = self._enum("colour", "Colour", TargetColour)
+        self.shade = self._enum("shade", "Shade", Colour)
+        self.target_shade = self._enum("shade", "Shade", TargetColour)
         self.note = self._string("note")
+        self.label = self._string("label")
         self.kept = self._string("kept")
         self.old_name = self._string("old_name")
         self.new_name = self._string("new_name")
         self.gone = self._string("gone")
         self.added = self._string("added")
+        self.secret = self._string("secret")
         self.details = self._object("details", self.colour, self.note)
         self.target_details = self._object("details", self.target_colour, self.note)
         self.colours = self._list("colours", self.list_colour)
         self.target_colours = self._list("colours", self.target_list_colour)
+        self.tint = self._union("tint", self.label, self.shade)
+        self.target_tint = self._union("tint", self.label, self.target_shade)
         self.being_uid = uuid4()
         self.source = self._sample(
-            self.sex, self.kept, self.details, self.colours, self.old_name, self.gone
+            [
+                self.sex,
+                self.kept,
+                self.details,
+                self.colours,
+                self.tint,
+                self.old_name,
+                self.gone,
+            ],
+            [self.secret],
         )
         self.target = self._sample(
-            self.target_sex,
-            self.kept,
-            self.target_details,
-            self.target_colours,
-            self.new_name,
-            self.added,
+            [
+                self.target_sex,
+                self.kept,
+                self.target_details,
+                self.target_colours,
+                self.target_tint,
+                self.new_name,
+                self.added,
+            ],
+            [self.secret],
         )
 
     def migrator(self, **declared: Any) -> ObjectMigrator[Item]:
@@ -128,10 +152,10 @@ class Schemas:
                 (self.sex, EnumAttributeMigrator(Sex, TargetSex)),
                 (self.colour, colours),
                 (self.list_colour, colours),
+                (self.shade, colours),
             ],
             "renamed": [(self.old_name, self.new_name)],
             "dropped": [self.gone],
-            "unset": [self.added],
         }
 
     def root(self, being: SampleSchema) -> RootSchema:
@@ -143,7 +167,11 @@ class Schemas:
             samples={being.uid: being},
         )
 
-    def being(self, **attributes: AnyAttribute) -> Sample:
+    def being(
+        self,
+        private_attributes: dict[str, AnyAttribute] | None = None,
+        **attributes: AnyAttribute,
+    ) -> Sample:
         return Sample(
             uid=uuid4(),
             identifier="being",
@@ -151,6 +179,7 @@ class Schemas:
             batch_uid=uuid4(),
             schema_uid=self.being_uid,
             attributes=attributes,
+            private_attributes=private_attributes or {},
         )
 
     @staticmethod
@@ -161,14 +190,17 @@ class Schemas:
     def string(schema: AttributeSchema, value: str) -> StringAttribute:
         return StringAttribute(uid=uuid4(), schema_uid=schema.uid, original_value=value)
 
+    def details_value(self, colour: str) -> dict[str, AnyAttribute]:
+        return {
+            "colour": self.enum(self.colour, original_value=colour),
+            "note": self.string(self.note, "a note"),
+        }
+
     def details_attribute(self, colour: str) -> ObjectAttribute:
         return ObjectAttribute(
             uid=uuid4(),
             schema_uid=self.details.uid,
-            original_value={
-                "colour": self.enum(self.colour, original_value=colour),
-                "note": self.string(self.note, "a note"),
-            },
+            original_value=self.details_value(colour),
         )
 
     def colours_attribute(self, *colours: str) -> ListAttribute:
@@ -180,13 +212,26 @@ class Schemas:
             ],
         )
 
-    def _sample(self, *attributes: AttributeSchema) -> SampleSchema:
+    def tint_attribute(self, member: AnyAttribute) -> UnionAttribute:
+        return UnionAttribute(
+            uid=uuid4(), schema_uid=self.tint.uid, original_value=member
+        )
+
+    def _sample(
+        self,
+        attributes: list[AttributeSchema],
+        private_attributes: list[AttributeSchema],
+    ) -> SampleSchema:
         return SampleSchema(
             uid=self.being_uid,
             name="being",
             display_name="Being",
             display_order=0,
             attributes={attribute.tag: attribute for attribute in attributes},  # type: ignore
+            private_attributes={
+                attribute.tag: attribute  # type: ignore
+                for attribute in private_attributes
+            },
         )
 
     @staticmethod
@@ -239,6 +284,18 @@ class Schemas:
             attribute=attribute,  # type: ignore
         )
 
+    @staticmethod
+    def _union(tag: str, *members: AttributeSchema) -> UnionAttributeSchema:
+        return UnionAttributeSchema(
+            uid=uuid4(),
+            tag=tag,
+            name=tag,
+            display_name=tag.capitalize(),
+            optional=True,
+            read_only=False,
+            attributes=members,  # type: ignore
+        )
+
 
 @pytest.fixture()
 def schemas() -> Schemas:
@@ -281,91 +338,54 @@ class TestObjectMigrator:
         assert details.original_value["colour"].value == "BLUE"
         assert details.original_value["note"].value == "a note"
         colours = attributes["colours"]
+        assert colours.schema_uid == schemas.target_colours.uid
         assert [colour.value for colour in colours.original_value] == ["RED", "BLUE"]
+        assert [colour.schema_uid for colour in colours.original_value] == [
+            schemas.target_list_colour.uid
+        ] * 2
 
-    @pytest.mark.parametrize(
-        ("source", "target"),
-        [
-            ("sex", "target_sex"),
-            ("kept", "kept"),
-            ("details", "target_details"),
-            ("colour", "target_colour"),
-            ("note", "note"),
-            ("colours", "target_colours"),
-            ("list_colour", "target_list_colour"),
-            ("old_name", "new_name"),
-            ("gone", None),
-            ("added", None),
-        ],
-    )
-    def test_the_target_of_every_attribute_at_any_depth(
-        self, schemas: Schemas, source: str, target: str | None
-    ):
-        """Dropped, and of the target only, have none."""
-        # Act
-        found = schemas.migrator().target_of(getattr(schemas, source))
-
-        # Assert
-        assert found == (None if target is None else getattr(schemas, target))
-
-    def test_an_undeclared_change_is_refused(self, schemas: Schemas):
-        """An enum of other values, at any depth, and an attribute the target
-        has no tag for."""
-        # Act & Assert
-        with pytest.raises(ValueError) as error:
-            schemas.migrator(migrated=[], dropped=[])
-        message = str(error.value)
-        for path in ("sex", "details/colour", "colours[]", "gone"):
-            assert path in message
-
-    @pytest.mark.parametrize(
-        "declaration", ["migrated", "renamed", "renamed to", "dropped", "unset"]
-    )
-    def test_a_declaration_not_of_the_schemas_is_refused(
-        self, schemas: Schemas, declaration: str
-    ):
-        """Migrated, renamed and dropped are of the source, renamed to and
-        unset of the target."""
+    def test_a_private_attribute_is_moved(self, schemas: Schemas):
         # Arrange
-        foreign = {
-            "migrated": {
-                "migrated": [(schemas.target_sex, FixedValueAttributeMigrator("M"))]
-            },
-            "renamed": {"renamed": [(schemas.new_name, schemas.new_name)]},
-            "renamed to": {"renamed": [(schemas.old_name, schemas.old_name)]},
-            "dropped": {"dropped": [schemas.gone, schemas.added]},
-            "unset": {"unset": [schemas.added, schemas.gone]},
-        }[declaration]
-
-        # Act & Assert
-        with pytest.raises(ValueError, match=f"as {declaration}"):
-            schemas.migrator(**foreign)
-
-    def test_an_attribute_declared_twice_is_refused(self, schemas: Schemas):
-        # Act & Assert
-        with pytest.raises(ValueError, match="gone .* as dropped more than once"):
-            schemas.migrator(dropped=[schemas.gone, schemas.gone])
-
-    def test_an_attribute_declared_unset_that_a_source_becomes_is_refused(
-        self, schemas: Schemas
-    ):
-        # Act & Assert
-        with pytest.raises(ValueError, match="new_name .* unset"):
-            schemas.migrator(unset=[schemas.added, schemas.new_name])
-
-    def test_a_target_attribute_not_declared_unset_is_left_unset(
-        self, schemas: Schemas
-    ):
-        # Arrange
-        migrator = schemas.migrator(unset=[])
+        secret = schemas.string(schemas.secret, "secret")
 
         # Act
-        migrated = migrator.migrate(
-            schemas.being(kept=schemas.string(schemas.kept, "kept"))
+        migrated = schemas.migrator().migrate(
+            schemas.being(private_attributes={"secret": secret})
         )
 
         # Assert
-        assert migrated.attributes.keys() == {"kept"}
+        assert migrated.attributes == {}
+        assert migrated.private_attributes == {"secret": secret}
+
+    @pytest.mark.parametrize(
+        ("member", "expected_schema", "expected_value"),
+        [("shade", "target_shade", "BLUE"), ("label", "label", "a label")],
+    )
+    def test_a_union_member_is_migrated_to_the_member_of_its_position(
+        self,
+        schemas: Schemas,
+        member: str,
+        expected_schema: str,
+        expected_value: str,
+    ):
+        # Arrange
+        value = (
+            schemas.enum(schemas.shade, original_value="Navy")
+            if member == "shade"
+            else schemas.string(schemas.label, "a label")
+        )
+
+        # Act
+        migrated = schemas.migrator().migrate(
+            schemas.being(tint=schemas.tint_attribute(value))
+        )
+
+        # Assert
+        tint = migrated.attributes["tint"]
+        assert tint.schema_uid == schemas.target_tint.uid
+        assert tint.original_value.uid == value.uid
+        assert tint.original_value.schema_uid == (getattr(schemas, expected_schema).uid)
+        assert tint.original_value.value == expected_value
 
     def test_a_nested_attribute_is_renamed(self, schemas: Schemas):
         # Arrange
@@ -402,23 +422,6 @@ class TestObjectMigrator:
         assert details["remark"].schema_uid == remark.uid
         assert details["remark"].value == "a note"
 
-    def test_an_attribute_of_another_kind_is_refused(self, schemas: Schemas):
-        # Arrange
-        target = schemas.target.model_copy(
-            update={
-                "attributes": {
-                    **schemas.target.attributes,
-                    "kept": schemas.target_sex.model_copy(
-                        update={"uid": uuid4(), "tag": "kept"}
-                    ),
-                }
-            }
-        )
-
-        # Act & Assert
-        with pytest.raises(ValueError, match="kept"):
-            ObjectMigrator[Item](schemas.source, target)
-
     def test_a_value_with_no_target_leaves_the_attribute_unresolved(
         self, schemas: Schemas
     ):
@@ -442,10 +445,10 @@ class TestObjectMigrator:
     def test_a_nested_value_with_no_target_leaves_the_top_attribute_unresolved(
         self, schemas: Schemas
     ):
-        """With what could be migrated proposed."""
+        """With what could be migrated proposed, and each reason once."""
         # Arrange
         details = schemas.details_attribute("Green")
-        colours = schemas.colours_attribute("Red", "Green")
+        colours = schemas.colours_attribute("Red", "Green", "Green")
         being = schemas.being(details=details, colours=colours)
 
         # Act
@@ -463,6 +466,7 @@ class TestObjectMigrator:
         assert proposed_colours is not None
         assert [colour.value for colour in proposed_colours.original_value] == [
             "RED",
+            None,
             None,
         ]
         assert migrated.unresolved["colours"].reason == (
@@ -485,11 +489,28 @@ class TestObjectMigrator:
         sex = migrated.attributes["sex"]
         assert (sex.original_value, sex.value) == (None, "Female")
 
+    def test_a_nested_value_lost_below_the_value_in_effect_is_migrated(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        details = schemas.details_attribute("Green").model_copy(
+            update={"updated_value": schemas.details_value("Red")}
+        )
+
+        # Act
+        migrated = schemas.migrator().migrate(schemas.being(details=details))
+
+        # Assert
+        assert migrated.unresolved == {}
+        migrated_details = migrated.attributes["details"]
+        assert migrated_details.original_value["colour"].value is None
+        assert migrated_details.updated_value["colour"].value == "RED"
+
     def test_a_fixed_value_migrator_sets_its_value(self, schemas: Schemas):
         # Arrange
         migrator = schemas.migrator(
             migrated=[
-                *schemas.migrator().migrated,
+                *schemas.migrator_declarations()["migrated"],
                 (schemas.kept, FixedValueAttributeMigrator("set")),
             ]
         )
@@ -500,6 +521,121 @@ class TestObjectMigrator:
 
         # Assert
         assert migrated.attributes["kept"].value == "set"
+
+    @pytest.mark.parametrize(
+        ("source", "target", "migrator_type"),
+        [
+            ("sex", "target_sex", EnumAttributeMigrator),
+            ("kept", "kept", UnchangedAttributeMigrator),
+            ("details", "target_details", NestedAttributeMigrator),
+            ("colour", "target_colour", EnumAttributeMigrator),
+            ("note", "note", UnchangedAttributeMigrator),
+            ("colours", "target_colours", NestedAttributeMigrator),
+            ("list_colour", "target_list_colour", EnumAttributeMigrator),
+            ("tint", "target_tint", NestedAttributeMigrator),
+            ("shade", "target_shade", EnumAttributeMigrator),
+            ("old_name", "new_name", UnchangedAttributeMigrator),
+            ("secret", "secret", UnchangedAttributeMigrator),
+        ],
+    )
+    def test_the_attribute_migrator_of_an_attribute_at_any_depth(
+        self, schemas: Schemas, source: str, target: str, migrator_type: type
+    ):
+        # Act
+        found = schemas.migrator().attribute_migrator_of(getattr(schemas, source).uid)
+
+        # Assert
+        assert found is not None
+        migrator, target_schema = found
+        assert isinstance(migrator, migrator_type)
+        assert target_schema == getattr(schemas, target)
+
+    @pytest.mark.parametrize("schema", ["gone", "added", "target_sex"])
+    def test_a_dropped_or_target_attribute_has_no_attribute_migrator(
+        self, schemas: Schemas, schema: str
+    ):
+        # Act & Assert
+        assert (
+            schemas.migrator().attribute_migrator_of(getattr(schemas, schema).uid)
+            is None
+        )
+
+    def test_an_undeclared_change_is_refused(self, schemas: Schemas):
+        """An enum of other values, at any depth, and an attribute the target
+        has no tag for."""
+        # Act & Assert
+        with pytest.raises(ValueError, match="says nothing about") as error:
+            schemas.migrator(migrated=[], dropped=[])
+        message = str(error.value)
+        for path in ("sex", "details/colour", "colours[]", "tint<1>", "gone"):
+            assert path in message
+
+    def test_an_attribute_of_another_kind_is_refused(self, schemas: Schemas):
+        # Arrange
+        target = schemas.target.model_copy(
+            update={
+                "attributes": {
+                    **schemas.target.attributes,
+                    "kept": schemas.target_sex.model_copy(
+                        update={"uid": uuid4(), "tag": "kept"}
+                    ),
+                }
+            }
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="says nothing about kept"):
+            ObjectMigrator[Item](
+                schemas.source, target, **schemas.migrator_declarations()
+            )
+
+    def test_a_private_attribute_without_target_is_refused(self, schemas: Schemas):
+        # Arrange
+        target = schemas.target.model_copy(update={"private_attributes": {}})
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="says nothing about !secret"):
+            ObjectMigrator[Item](
+                schemas.source, target, **schemas.migrator_declarations()
+            )
+
+    def test_a_rename_to_another_object_is_refused(self, schemas: Schemas):
+        """The nested note cannot become a top-level attribute."""
+        # Act & Assert
+        with pytest.raises(ValueError, match="says nothing about details/note"):
+            schemas.migrator(
+                renamed=[
+                    (schemas.old_name, schemas.new_name),
+                    (schemas.note, schemas.added),
+                ]
+            )
+
+    @pytest.mark.parametrize(
+        "declaration", ["migrated", "renamed", "renamed to", "dropped"]
+    )
+    def test_a_declaration_not_of_the_schemas_is_refused(
+        self, schemas: Schemas, declaration: str
+    ):
+        """Migrated, renamed and dropped are of the source, renamed to of the
+        target."""
+        # Arrange
+        foreign = {
+            "migrated": {
+                "migrated": [(schemas.target_sex, FixedValueAttributeMigrator("M"))]
+            },
+            "renamed": {"renamed": [(schemas.new_name, schemas.new_name)]},
+            "renamed to": {"renamed": [(schemas.old_name, schemas.old_name)]},
+            "dropped": {"dropped": [schemas.gone, schemas.added]},
+        }[declaration]
+
+        # Act & Assert
+        with pytest.raises(ValueError, match=f"as {declaration}"):
+            schemas.migrator(**foreign)
+
+    def test_an_attribute_declared_twice_is_refused(self, schemas: Schemas):
+        # Act & Assert
+        with pytest.raises(ValueError, match="gone .* as dropped more than once"):
+            schemas.migrator(dropped=[schemas.gone, schemas.gone])
 
 
 @pytest.mark.unittest
@@ -518,7 +654,7 @@ class TestEnumAttributeMigrator:
 
     def test_each_value_is_migrated_on_its_own(self, schemas: Schemas):
         """And the values below one in effect with no target are refused, so
-        that the attribute is left without a value."""
+        that the attribute is left without a value, which is reported lost."""
         # Arrange
         attribute = schemas.enum(
             schemas.sex,
@@ -530,11 +666,12 @@ class TestEnumAttributeMigrator:
         )
 
         # Act
-        migrated = EnumAttributeMigrator(Sex, TargetSex).migrate(
+        result = EnumAttributeMigrator(Sex, TargetSex).migrate(
             attribute, schemas.target_sex
         )
 
         # Assert
+        migrated = result.attribute
         assert migrated.uid == attribute.uid
         assert migrated.schema_uid == schemas.target_sex.uid
         assert (
@@ -546,18 +683,35 @@ class TestEnumAttributeMigrator:
         assert migrated.mapping_item_uid == attribute.mapping_item_uid
         assert migrated.rejected == RejectedValues.ORIGINAL | RejectedValues.MAPPABLE
         assert migrated.value is None
+        assert result.lost == ("'Other' is no longer an option of Sex.",)
+
+    def test_a_value_lost_below_the_value_in_effect_is_not_reported(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        attribute = schemas.enum(schemas.sex, original_value="Other", updated_value="M")
+
+        # Act
+        result = EnumAttributeMigrator(Sex, TargetSex).migrate(
+            attribute, schemas.target_sex
+        )
+
+        # Assert
+        assert result.lost == ()
+        assert result.attribute.value == "Male"
 
     def test_a_value_not_of_the_source_enum_is_cleared(self, schemas: Schemas):
         # Arrange
         attribute = schemas.enum(schemas.sex, original_value="Unknown")
 
         # Act
-        migrated = EnumAttributeMigrator(Sex, TargetSex).migrate(
+        result = EnumAttributeMigrator(Sex, TargetSex).migrate(
             attribute, schemas.target_sex
         )
 
         # Assert
-        assert migrated.original_value is None
+        assert result.attribute.original_value is None
+        assert result.lost == ("'Unknown' is no longer an option of Sex.",)
 
 
 @pytest.mark.unittest
@@ -565,9 +719,7 @@ class TestDeclarativeSchemaMigration:
     def test_an_item_schema_of_both_roots_gets_a_plain_migrator(self, schemas: Schemas):
         # Arrange
         unchanged = schemas.source.model_copy(
-            update={
-                "attributes": {"kept": schemas.kept},
-            }
+            update={"attributes": {"kept": schemas.kept}, "private_attributes": {}}
         )
         root = schemas.root(unchanged)
 
@@ -576,7 +728,9 @@ class TestDeclarativeSchemaMigration:
 
         # Assert
         [migrator] = migration.item_migrators
-        assert (migrator.migrated, migrator.renamed) == ((), ())
+        found = migrator.attribute_migrator_of(schemas.kept.uid)
+        assert found is not None
+        assert isinstance(found[0], UnchangedAttributeMigrator)
         search_item = MetadataSearchItem(
             uid=uuid4(), batch_uid=uuid4(), identifier="being", schema_uid=unchanged.uid
         )
@@ -625,7 +779,12 @@ class TestDeclarativeSchemaMigration:
 
     @pytest.mark.parametrize(
         ("attribute_name", "value", "expected"),
-        [("colour", "Navy", "BLUE"), ("list_colour", "Green", None)],
+        [
+            ("sex", "M", "Male"),
+            ("colour", "Navy", "BLUE"),
+            ("list_colour", "Green", None),
+            ("shade", "Red", "RED"),
+        ],
     )
     def test_an_attribute_at_any_depth_is_migrated_for_a_mapper(
         self,
@@ -634,6 +793,7 @@ class TestDeclarativeSchemaMigration:
         value: str,
         expected: str | None,
     ):
+        """One whose value has no target is returned without it."""
         # Arrange
         migration = self._migration(schemas)
         attribute = schemas.enum(getattr(schemas, attribute_name), original_value=value)
@@ -643,8 +803,35 @@ class TestDeclarativeSchemaMigration:
 
         # Assert
         assert migrated is not None
+        assert migrated.uid == attribute.uid
         assert migrated.schema_uid == (getattr(schemas, f"target_{attribute_name}").uid)
         assert migrated.original_value == expected
+
+    def test_an_object_attribute_is_migrated_for_a_mapper(self, schemas: Schemas):
+        # Arrange
+        migration = self._migration(schemas)
+        attribute = schemas.details_attribute("Navy")
+
+        # Act
+        migrated = migration.migrate_attribute(attribute)
+
+        # Assert
+        assert migrated is not None
+        assert migrated.schema_uid == schemas.target_details.uid
+        assert migrated.original_value["colour"].value == "BLUE"
+
+    def test_an_empty_attribute_gives_its_target_schema(self, schemas: Schemas):
+        # Arrange
+        migration = self._migration(schemas)
+        attribute = StringAttribute(uid=uuid4(), schema_uid=schemas.old_name.uid)
+
+        # Act
+        migrated = migration.migrate_attribute(attribute)
+
+        # Assert
+        assert migrated is not None
+        assert migrated.schema_uid == schemas.new_name.uid
+        assert migrated.value is None
 
     @pytest.mark.parametrize("schema_uid", ["gone", None])
     def test_a_dropped_or_unknown_attribute_is_not_migrated_for_a_mapper(

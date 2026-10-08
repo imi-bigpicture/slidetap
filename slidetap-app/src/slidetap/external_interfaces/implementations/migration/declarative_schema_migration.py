@@ -143,18 +143,17 @@ class DeclarativeSchemaMigration(SchemaMigration):
         ).target.uid
 
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
-        """The attribute migrated by the migrator whose schemas hold it, or
-        None where it is dropped or not of the source root."""
-        return next(
-            (
-                migrated
-                for migrated in (
-                    migrator.migrate_attribute(attribute) for migrator in self.migrators
-                )
-                if migrated is not None
-            ),
-            None,
-        )
+        """The attribute migrated by the attribute migrator of its schema, at
+        any depth of an object migrator, or None where it has none.
+
+        An attribute whose value has no counterpart on the target schema is
+        returned without it."""
+        for migrator in self.migrators:
+            found = migrator.attribute_migrator_of(attribute.schema_uid)
+            if found is not None:
+                attribute_migrator, target = found
+                return attribute_migrator.migrate(attribute, target).attribute
+        return None
 
     def _item_migrator(self, name: str, schema_uid: UUID) -> ObjectMigrator[Item]:
         """The migrator of an item schema of the source root, for an item or a
