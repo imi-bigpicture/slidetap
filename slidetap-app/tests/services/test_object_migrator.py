@@ -552,15 +552,17 @@ class TestObjectMigrator:
             ("secret", "secret", UnchangedAttributeMigrator),
         ],
     )
-    def test_the_attribute_migrator_of_an_attribute_at_any_depth(
+    def test_the_attribute_migrators_reach_every_depth(
         self, schemas: Schemas, source: str, target: str, migrator_type: type
     ):
         # Act
-        found = schemas.migrator().attribute_migrator_of(getattr(schemas, source).uid)
+        found = {
+            uid: (migrator, target_schema)
+            for uid, migrator, target_schema in schemas.migrator().attribute_migrators()
+        }
 
         # Assert
-        assert found is not None
-        migrator, target_schema = found
+        migrator, target_schema = found[getattr(schemas, source).uid]
         assert isinstance(migrator, migrator_type)
         assert target_schema == getattr(schemas, target)
 
@@ -568,11 +570,11 @@ class TestObjectMigrator:
     def test_a_dropped_or_target_attribute_has_no_attribute_migrator(
         self, schemas: Schemas, schema: str
     ):
-        # Act & Assert
-        assert (
-            schemas.migrator().attribute_migrator_of(getattr(schemas, schema).uid)
-            is None
-        )
+        # Act
+        uids = [uid for uid, _, _ in schemas.migrator().attribute_migrators()]
+
+        # Assert
+        assert getattr(schemas, schema).uid not in uids
 
     def test_an_undeclared_change_is_refused(self, schemas: Schemas):
         """An enum of other values, at any depth, and an attribute the target
@@ -898,10 +900,105 @@ class TestDeclarativeSchemaMigration:
         # Act & Assert
         assert migration.migrate_attribute(attribute) is None
 
+    def test_an_attribute_schema_shared_by_item_schemas_migrated_alike_is_kept(
+        self, schemas: Schemas
+    ):
+        """Each item schema declares the migrators of its own."""
+        # Arrange
+        other_source, other_target = self._other_being(schemas)
+
+        # Act
+        migration = DeclarativeSchemaMigration(
+            self._root(schemas.source, other_source),
+            self._root(schemas.target, other_target),
+            item_migrators=[
+                schemas.migrator(),
+                ObjectMigrator[Item](
+                    other_source, other_target, **schemas.migrator_declarations()
+                ),
+            ],
+        )
+
+        # Assert
+        migrated = migration.migrate_attribute(
+            schemas.enum(schemas.colour, original_value="Navy")
+        )
+        assert migrated is not None
+        assert migrated.schema_uid == schemas.target_colour.uid
+        assert migrated.original_value == "BLUE"
+        assert migration.migrate_attribute_schema(schemas.sex) == schemas.target_sex
+
+    def test_an_attribute_schema_shared_with_another_migrator_is_refused(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        other_source, other_target = self._other_being(schemas)
+        declarations = schemas.migrator_declarations()
+        declarations["migrated_attributes"] = [
+            (schemas.sex, FixedValueAttributeMigrator("Male")),
+            *declarations["migrated_attributes"][1:],
+        ]
+
+        # Act & Assert
+        with pytest.raises(ValueError, match=str(schemas.sex.uid)):
+            DeclarativeSchemaMigration(
+                self._root(schemas.source, other_source),
+                self._root(schemas.target, other_target),
+                item_migrators=[
+                    schemas.migrator(),
+                    ObjectMigrator[Item](other_source, other_target, **declarations),
+                ],
+            )
+
+    def test_an_attribute_schema_shared_with_another_target_is_refused(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        other_source, other_target = self._other_being(schemas)
+        other_sex = schemas.target_sex.model_copy(update={"uid": uuid4()})
+        other_target = other_target.model_copy(
+            update={"attributes": {**other_target.attributes, "sex": other_sex}}
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="migrated differently") as error:
+            DeclarativeSchemaMigration(
+                self._root(schemas.source, other_source),
+                self._root(schemas.target, other_target),
+                item_migrators=[
+                    schemas.migrator(),
+                    ObjectMigrator[Item](
+                        other_source, other_target, **schemas.migrator_declarations()
+                    ),
+                ],
+            )
+        assert str(schemas.sex.uid) in str(error.value)
+        assert str(other_sex.uid) in str(error.value)
+
     @staticmethod
     def _migration(schemas: Schemas) -> DeclarativeSchemaMigration:
         return DeclarativeSchemaMigration(
             schemas.root(schemas.source),
             schemas.root(schemas.target),
             item_migrators=[schemas.migrator()],
+        )
+
+    @staticmethod
+    def _other_being(schemas: Schemas) -> tuple[SampleSchema, SampleSchema]:
+        """A second item schema in each root, with the attribute schemas of the
+        being."""
+        uid = uuid4()
+        return (
+            schemas.source.model_copy(update={"uid": uid, "name": "other"}),
+            schemas.target.model_copy(update={"uid": uid, "name": "other"}),
+        )
+
+    @staticmethod
+    def _root(*samples: SampleSchema) -> RootSchema:
+        return RootSchema(
+            uid=uuid4(),
+            name="root",
+            project=ProjectSchema(uid=uuid4(), name="project", display_name="Project"),
+            dataset=DatasetSchema(uid=uuid4(), name="dataset", display_name="Dataset"),
+            samples={sample.uid: sample for sample in samples},
         )

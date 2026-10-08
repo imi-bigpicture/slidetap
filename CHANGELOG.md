@@ -42,9 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
 - `slidetap-mappers set-up` sets up the stored mappers with the container from `create_container()` in the `container` module of the package named by `SLIDETAP_TASK_APP`.
 - `UnchangedAttributeMigrator`, in `slidetap.external_interfaces.implementations.migration` with the other migration helpers, moves an attribute to the attribute schema of another root.
-- `DeclarativeSchemaMigration` implements a migration from an `ObjectMigrator` per project, dataset, and item schema, each declaring what changed and refused when it says nothing about a changed attribute.
+- `DeclarativeSchemaMigration` implements a migration from an `ObjectMigrator` per project, dataset, and item schema, each declaring what changed, refused when one says nothing about a changed attribute or two migrate a shared attribute schema differently.
 - `EnumAttributeMigrator` and `FixedValueAttributeMigrator` migrate an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.
-- `NestedAttributeMigrator` migrates an object, list, or union attribute through the migrators of the attributes it holds, and `ObjectMigrator.attribute_migrator_of()` finds the migrator of an attribute schema at any depth.
+- `NestedAttributeMigrator` migrates an object, list, or union attribute through the migrators of the attributes it holds, and `ObjectMigrator.attribute_migrators()` yields the migrator of every attribute schema at any depth.
 - `AttributeMigrator.migrate()` returns a `MigratedAttribute`, the migrated attribute with why its value in effect lost values.
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).

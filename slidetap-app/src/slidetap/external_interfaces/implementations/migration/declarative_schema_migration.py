@@ -18,6 +18,9 @@ from collections.abc import Iterable
 from typing import Any, cast
 from uuid import UUID
 
+from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
+    AttributeMigrator,
+)
 from slidetap.external_interfaces.implementations.migration.object_migrator import (
     ObjectMigrator,
 )
@@ -44,12 +47,14 @@ class DeclarativeSchemaMigration(SchemaMigration):
     the target has under the same uid. An item schema of the source with
     neither a migrator nor such a target is refused.
 
-    `migrate_attribute` migrates an attribute with the migrator whose schemas
-    hold it, at any depth, so that the mapping items of a mapper moved to the
-    target root are migrated as the attributes of the objects are, and
-    `migrate_attribute_schema` gives the target schema of that migrator.
-    `migrate_item_schema` gives the target item schema of the migrator of an
-    item schema.
+    The attribute migrators of the object migrators, at any depth, are
+    registered by their source attribute schema when the migration is created;
+    one held in several places must be migrated alike in each. With them,
+    `migrate_attribute` migrates an attribute, so that the mapping items of a
+    mapper moved to the target root are migrated as the attributes of the
+    objects are, and `migrate_attribute_schema` gives the target schema of an
+    attribute schema. `migrate_item_schema` gives the target item schema of the
+    migrator of an item schema.
     """
 
     def __init__(
@@ -80,9 +85,10 @@ class DeclarativeSchemaMigration(SchemaMigration):
         ValueError
             If an item schema of the source has neither a migrator nor an item
             schema of the same uid in the target, a migrator is given for an
-            item schema that is not of the source or that already has one, or a
+            item schema that is not of the source or that already has one, a
             plain migrator created here says nothing about an attribute it
-            cannot move as it is.
+            cannot move as it is, or an attribute schema is migrated
+            differently in two places.
         """
         self._source_schema = source_schema
         self._target_schema = target_schema
@@ -97,11 +103,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
             else dataset_migrator
         )
         self._item_migrators = self._create_item_migrators(item_migrators)
-        self._migrators: list[ObjectMigrator[Any]] = [
-            self._project_migrator,
-            self._dataset_migrator,
-            *self._item_migrators.values(),
-        ]
+        self._attribute_migrators = self._register_attribute_migrators(
+            [
+                self._project_migrator,
+                self._dataset_migrator,
+                *self._item_migrators.values(),
+            ]
+        )
 
     def migrate_project(self, project: Project) -> ObjectMigrationResult:
         """Migrate a project from its schema on the source root to the target
@@ -183,12 +191,11 @@ class DeclarativeSchemaMigration(SchemaMigration):
             The attribute on the target attribute schema, or None where no
             object migrator has a migrator of its schema.
         """
-        for migrator in self._migrators:
-            found = migrator.attribute_migrator_of(attribute.schema_uid)
-            if found is not None:
-                attribute_migrator, target = found
-                return attribute_migrator.migrate(attribute, target).attribute
-        return None
+        found = self._attribute_migrators.get(attribute.schema_uid)
+        if found is None:
+            return None
+        migrator, target = found
+        return migrator.migrate(attribute, target).attribute
 
     def migrate_item_schema(self, schema: ItemSchema) -> ItemSchema:
         """Give the target item schema of the migrator of a source item schema.
@@ -233,11 +240,8 @@ class DeclarativeSchemaMigration(SchemaMigration):
             The target attribute schema, or None where no object migrator has a
             migrator of the schema.
         """
-        for migrator in self._migrators:
-            found = migrator.attribute_migrator_of(schema.uid)
-            if found is not None:
-                return found[1]
-        return None
+        found = self._attribute_migrators.get(schema.uid)
+        return None if found is None else found[1]
 
     def _create_item_migrators(
         self, declared: Iterable[ObjectMigrator[Item]]
@@ -285,6 +289,64 @@ class DeclarativeSchemaMigration(SchemaMigration):
                 f"are not item schemas of root {self._source_schema.name}."
             )
         return migrators
+
+    @staticmethod
+    def _register_attribute_migrators(
+        object_migrators: Iterable[ObjectMigrator[Any]],
+    ) -> dict[UUID, tuple[AttributeMigrator, AttributeSchema]]:
+        """Index the attribute migrators of the object migrators, at any depth,
+        by the uid of their source attribute schema.
+
+        An attribute schema held in several places, such as one shared by item
+        schemas, is registered once where every place migrates it alike: to
+        the same target attribute schema, with equal migrators.
+
+        Parameters
+        ----------
+        object_migrators: Iterable[ObjectMigrator[Any]]
+            The migrators of the project, the dataset, and the items.
+
+        Returns
+        -------
+        dict[UUID, tuple[AttributeMigrator, AttributeSchema]]
+            The migrator of each source attribute schema, and the target
+            attribute schema it migrates to.
+
+        Raises
+        ------
+        ValueError
+            If an attribute schema is migrated differently in two places.
+        """
+        registry: dict[UUID, tuple[AttributeMigrator, AttributeSchema]] = {}
+        registered_by: dict[UUID, ObjectMigrator[Any]] = {}
+        conflicts: dict[UUID, str] = {}
+        for object_migrator in object_migrators:
+            for uid, migrator, target in object_migrator.attribute_migrators():
+                registered = registry.get(uid)
+                if registered is None:
+                    registry[uid] = (migrator, target)
+                    registered_by[uid] = object_migrator
+                    continue
+                registered_migrator, registered_target = registered
+                if registered_target.uid == target.uid and (
+                    registered_migrator == migrator
+                ):
+                    continue
+                conflicts.setdefault(
+                    uid,
+                    f"{uid}, by the migrators of "
+                    f"{registered_by[uid].source.name} (to {registered_target.tag} "
+                    f"({registered_target.uid}) with "
+                    f"{type(registered_migrator).__name__}) and "
+                    f"{object_migrator.source.name} (to {target.tag} ({target.uid}) "
+                    f"with {type(migrator).__name__})",
+                )
+        if conflicts:
+            raise ValueError(
+                f"Attribute schemas are migrated differently in two places: "
+                f"{'; '.join(conflicts.values())}."
+            )
+        return registry
 
     @staticmethod
     def _item_schemas(root: RootSchema) -> dict[UUID, ItemSchema]:

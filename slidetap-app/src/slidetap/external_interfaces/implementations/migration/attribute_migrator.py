@@ -15,7 +15,7 @@
 """Migrating an attribute to the attribute schema of another root."""
 
 from abc import ABCMeta, abstractmethod
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, TypeVar, cast
@@ -57,7 +57,12 @@ class MigratedAttribute:
 
 
 class AttributeMigrator(metaclass=ABCMeta):
-    """Migrates an attribute to the attribute schema of the target root."""
+    """Migrates an attribute to the attribute schema of the target root.
+
+    Two migrators are equal where they migrate alike: the migrators here
+    compare their type and what they are created with, and any other is equal
+    to itself only.
+    """
 
     @abstractmethod
     def migrate(
@@ -118,6 +123,15 @@ class UnchangedAttributeMigrator(AttributeMigrator):
             the values of the attribute could not be held by it.
         """
         return MigratedAttribute(self._move(attribute, target))
+
+    def __eq__(self, other: object) -> bool:
+        """Check if another migrator is an unchanged migrator too, which holds
+        nothing of its own."""
+        return type(other) is type(self)
+
+    def __hash__(self) -> int:
+        """Hash the migrator by its type."""
+        return hash(type(self))
 
     def _move(self, attribute: AnyAttribute, target: AttributeSchema) -> AnyAttribute:
         """Move an attribute and what it nests to a target schema.
@@ -366,6 +380,21 @@ class EnumAttributeMigrator(AttributeMigrator):
         )
         return MigratedAttribute(migrated, lost)
 
+    def __eq__(self, other: object) -> bool:
+        """Check if another migrator is an enum migrator between the same enums,
+        with the same exceptions."""
+        return (
+            isinstance(other, EnumAttributeMigrator)
+            and type(other) is type(self)
+            and other._source_type is self._source_type
+            and other._target_type is self._target_type
+            and other._exceptions == self._exceptions
+        )
+
+    def __hash__(self) -> int:
+        """Hash the migrator by its type and enums."""
+        return hash((type(self), self._source_type, self._target_type))
+
     def migrate_value(self, value: str | None) -> str | None:
         """Migrate a value of the source enum to the target enum.
 
@@ -462,6 +491,18 @@ class FixedValueAttributeMigrator(AttributeMigrator):
         )
         return MigratedAttribute(migrated)
 
+    def __eq__(self, other: object) -> bool:
+        """Check if another migrator sets the same value."""
+        return (
+            isinstance(other, FixedValueAttributeMigrator)
+            and type(other) is type(self)
+            and other._value == self._value
+        )
+
+    def __hash__(self) -> int:
+        """Hash the migrator by its type and value."""
+        return hash((type(self), self._value))
+
 
 @dataclass(frozen=True)
 class AttributePair:
@@ -495,28 +536,20 @@ class AttributePair:
         """
         return self.migrator.migrate(attribute, self.target)
 
-    def attribute_migrator_of(
-        self, schema_uid: UUID
-    ) -> tuple[AttributeMigrator, AttributeSchema] | None:
-        """Find the migrator of a source attribute schema, of this pair or held
-        by it at any depth.
-
-        Parameters
-        ----------
-        schema_uid: UUID
-            The uid of the source attribute schema.
+    def attribute_migrators(
+        self,
+    ) -> Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]:
+        """Iterate the migrators of the pair and of what it holds, at any depth.
 
         Returns
         -------
-        tuple[AttributeMigrator, AttributeSchema] | None
-            The migrator and the target attribute schema it migrates to, or
-            None where neither the pair nor what it holds is of the schema.
+        Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]
+            The uid of each source attribute schema, its migrator, and the
+            target attribute schema it migrates to, starting with the pair's.
         """
-        if self.source.uid == schema_uid:
-            return self.migrator, self.target
+        yield self.source.uid, self.migrator, self.target
         if isinstance(self.migrator, NestedAttributeMigrator):
-            return self.migrator.attribute_migrator_of(schema_uid)
-        return None
+            yield from self.migrator.attribute_migrators()
 
 
 class UndeclaredAttributesError(ValueError):
@@ -872,29 +905,35 @@ class NestedAttributeMigrator(AttributeMigrator):
             tuple(dict.fromkeys(lost)),
         )
 
-    def attribute_migrator_of(
-        self, schema_uid: UUID
-    ) -> tuple[AttributeMigrator, AttributeSchema] | None:
-        """Find the migrator of a source attribute schema held at any depth.
-
-        Parameters
-        ----------
-        schema_uid: UUID
-            The uid of the source attribute schema.
+    def attribute_migrators(
+        self,
+    ) -> Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]:
+        """Iterate the migrators of the attribute schemas held, at any depth.
 
         Returns
         -------
-        tuple[AttributeMigrator, AttributeSchema] | None
-            The migrator and the target attribute schema it migrates to, or
-            None where nothing held is of the schema.
+        Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]
+            The uid of each source attribute schema held, its migrator, and the
+            target attribute schema it migrates to.
         """
         for pair in self._pairs.values():
-            if pair is None:
-                continue
-            found = pair.attribute_migrator_of(schema_uid)
-            if found is not None:
-                return found
-        return None
+            if pair is not None:
+                yield from pair.attribute_migrators()
+
+    def __eq__(self, other: object) -> bool:
+        """Check if another migrator is a nested migrator between the same
+        attribute schemas, migrating what they hold alike."""
+        return (
+            isinstance(other, NestedAttributeMigrator)
+            and type(other) is type(self)
+            and other._source.uid == self._source.uid
+            and other._target.uid == self._target.uid
+            and other._pairs == self._pairs
+        )
+
+    def __hash__(self) -> int:
+        """Hash the migrator by its type and attribute schemas."""
+        return hash((type(self), self._source.uid, self._target.uid))
 
     @staticmethod
     def held(schema: AttributeSchema) -> dict[str, AttributeSchema]:

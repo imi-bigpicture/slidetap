@@ -14,7 +14,7 @@
 
 """Migrating a project, a dataset, or an item to its schema on another root."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Generic, TypeVar
 from uuid import UUID
 
@@ -152,30 +152,24 @@ class ObjectMigrator(Generic[T]):
             ),
         )
 
-    def attribute_migrator_of(
-        self, schema_uid: UUID
-    ) -> tuple[AttributeMigrator, AttributeSchema] | None:
-        """Find the migrator of a source attribute schema, at any depth.
+    def attribute_migrators(
+        self,
+    ) -> Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]:
+        """Iterate the migrators of the attribute schemas of the source schema,
+        at any depth.
 
-        Parameters
-        ----------
-        schema_uid: UUID
-            The uid of the source attribute schema.
+        An attribute schema that is dropped, or held by an attribute with a
+        declared migrator, has none.
 
         Returns
         -------
-        tuple[AttributeMigrator, AttributeSchema] | None
-            The migrator and the target attribute schema it migrates to, or
-            None where it is dropped, held by a migrated attribute, or not of
-            the source schema.
+        Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]
+            The uid of each source attribute schema, its migrator, and the
+            target attribute schema it migrates to.
         """
         for pair in (*self._attributes.values(), *self._private_attributes.values()):
-            if pair is None:
-                continue
-            found = pair.attribute_migrator_of(schema_uid)
-            if found is not None:
-                return found
-        return None
+            if pair is not None:
+                yield from pair.attribute_migrators()
 
     @staticmethod
     def _pair(
