@@ -16,6 +16,7 @@
 """Moving projects from one root schema to another, in steps."""
 
 import logging
+from collections.abc import Collection
 from typing import ClassVar
 from uuid import UUID
 
@@ -55,15 +56,16 @@ class MigrationService:
     new projects, in steps.
 
     Created, the project is locked as migrating, and the migration planned in
-    a task: run for every entity without saving, with what it could not
-    convert stored as attribute issues, as is every top-level attribute that
-    was valid before and is not after, and every attribute with a value it
-    dropped. The curator resolves each attribute issue, accepts each dropped
-    attribute, and submits, which completes the migration in a task, or
-    reverts.
+    a task: run for the project, the dataset, and the items on the item schemas
+    the migration migrates, without saving, with what it could not convert
+    stored as attribute issues, as is every top-level attribute that was valid
+    before and is not after, and every attribute with a value it dropped. The
+    curator resolves each attribute issue, accepts each dropped attribute, and
+    submits, which completes the migration in a task, or reverts.
     Completing runs the migration again, puts the resolved values at their
-    tags, and replaces the attributes of every entity, in one transaction for
-    the whole project, which is validated again on the target root.
+    tags, and replaces the attributes of every entity the migration changes,
+    leaving every other entity as it is, in one transaction for the whole
+    project, which is validated again on the target root.
 
     Planning and completing run the migration with the
     `ProjectMigrationPlanner`, and completing writes it with the
@@ -668,7 +670,8 @@ class MigrationService:
     def _get_entities(
         self, session: Session, database_project: DatabaseProject
     ) -> list[Project | Dataset | Item]:
-        """Get the project, its dataset, and its items, with their attributes.
+        """Get the project, its dataset, and its items on the item schemas the
+        migration of its root migrates, with their attributes.
 
         Parameters
         ----------
@@ -680,7 +683,7 @@ class MigrationService:
         Returns
         -------
         list[Project | Dataset | Item]
-            The project, the dataset, and the items.
+            The project, the dataset, and the items to migrate.
         """
         database_dataset = self._database_service.get_dataset(
             session, database_project.dataset_uid
@@ -691,7 +694,10 @@ class MigrationService:
             *(
                 database_item.model
                 for database_item in self._database_service.get_items_in_dataset(
-                    session, database_dataset.uid, load_attributes=True
+                    session,
+                    database_dataset.uid,
+                    load_attributes=True,
+                    schema_uids=self._get_migrated_item_schemas(database_project),
                 )
             ),
         ]
@@ -699,7 +705,8 @@ class MigrationService:
     def _get_search_items(
         self, session: Session, database_project: DatabaseProject
     ) -> list[MetadataSearchItem]:
-        """Get the search items of the batches of a project.
+        """Get the search items of the batches of a project on the item
+        schemas the migration of its root migrates.
 
         Parameters
         ----------
@@ -711,14 +718,36 @@ class MigrationService:
         Returns
         -------
         list[MetadataSearchItem]
-            The search items.
+            The search items to migrate.
         """
+        migrated_item_schemas = self._get_migrated_item_schemas(database_project)
         return [
             database_search_item.model
             for database_batch in database_project.batches
             for database_search_item in (
                 self._database_service.get_metadata_search_items_in_batch(
-                    session, database_batch.uid
+                    session, database_batch.uid, migrated_item_schemas
                 )
             )
         ]
+
+    def _get_migrated_item_schemas(
+        self, database_project: DatabaseProject
+    ) -> Collection[UUID]:
+        """Get the item schemas the migration of the root of a project
+        migrates.
+
+        Parameters
+        ----------
+        database_project: DatabaseProject
+            The project.
+
+        Returns
+        -------
+        Collection[UUID]
+            The uids of the item schemas, none where the root has no migration.
+        """
+        migration = self._schema_service.migration_of(database_project.root_schema_uid)
+        if migration is None:
+            return ()
+        return migration.migrated_item_schemas

@@ -16,7 +16,7 @@
 
 import datetime
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
     ClassVar,
@@ -458,6 +458,7 @@ class DatabaseService:
         self,
         session: Session,
         batch_uid: UUID,
+        schema_uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseMetadataSearchItem]:
         """Get the metadata search items of a batch.
 
@@ -467,15 +468,18 @@ class DatabaseService:
             The session to get them in.
         batch_uid: UUID
             The uid of the batch.
+        schema_uids: Collection[UUID] | None = None
+            The item schemas to get the search items of, or None for all.
 
         Returns
         -------
         Iterable[DatabaseMetadataSearchItem]
             The search items of the batch.
         """
-        return session.scalars(
-            select(DatabaseMetadataSearchItem).filter_by(batch_uid=batch_uid)
-        )
+        query = select(DatabaseMetadataSearchItem).filter_by(batch_uid=batch_uid)
+        if schema_uids is not None:
+            query = query.where(DatabaseMetadataSearchItem.schema_uid.in_(schema_uids))
+        return session.scalars(query)
 
     def get_metadata_search_item(
         self, session: Session, search_item_uid: UUID
@@ -635,14 +639,18 @@ class DatabaseService:
         session: Session,
         dataset_uid: UUID,
         load_attributes: bool = False,
+        schema_uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseItem]:
-        """Yield every item (any subclass) in a dataset.
+        """Yield every item (any subclass) in a dataset, or those of some item
+        schemas.
 
         Set ``load_attributes=True`` for callers that will iterate each
         item's ``attributes`` relationship (e.g. mapper remap loops) to
         avoid one query per item.
         """
         query = select(DatabaseItem).where(DatabaseItem.dataset_uid == dataset_uid)
+        if schema_uids is not None:
+            query = query.where(DatabaseItem.schema_uid.in_(schema_uids))
         if load_attributes:
             query = query.options(selectinload(DatabaseItem.attributes))
         return session.scalars(query)

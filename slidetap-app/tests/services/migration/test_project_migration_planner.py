@@ -31,9 +31,10 @@ from slidetap_example import ExampleSchema
 
 from slidetap.database import DatabaseMigrationEntity
 from slidetap.external_interfaces.implementations.migration import (
-    DeclarativeSchemaMigration,
+    AttributeMigrators,
     EntityMigrator,
     EnumAttributeMigrator,
+    RootSchemaMigration,
 )
 from slidetap.model import (
     Code,
@@ -77,9 +78,40 @@ class _OtherSex(Enum):
     FEMALE = "Female"
 
 
-class _SexMigration(DeclarativeSchemaMigration):
+class _PatientMigrator(EntityMigrator[Item]):
+    """Migrates the sex of the patient with its migrator, and moves the rest as
+    it is."""
+
+    def __init__(
+        self,
+        schema: ExampleSchema,
+        target_schema: RootSchema,
+        sex_migrator: EnumAttributeMigrator,
+    ):
+        super().__init__(
+            schema.patient, target_schema.samples[schema.patient_schema_uid]
+        )
+        self._sex_migrator = sex_migrator
+
+    def migrate(self, entity: Item) -> EntityMigrationResult:
+        attributes = self._move_all_except(entity.attributes, "sex")
+        sex = entity.attributes.get("sex")
+        if sex is not None:
+            attributes["sex"] = self._migrate(
+                sex, self._sex_migrator, self.target.attributes["sex"]
+            )
+        return EntityMigrationResult(
+            schema_uid=self.target.uid,
+            attributes=attributes,
+            private_attributes=self._move_all_except(
+                entity.private_attributes, private=True
+            ),
+        )
+
+
+class _SexMigration(RootSchemaMigration):
     """Migrates the sex of the patient with an enum migrator, which leaves a
-    sex with no counterpart unresolved, and everything else as it is.
+    sex with no counterpart unresolved, and moves everything else as it is.
 
     What it does wrong, where a test asks it to, is what the planner has to
     refuse.
@@ -87,17 +119,39 @@ class _SexMigration(DeclarativeSchemaMigration):
 
     def __init__(self, schema: ExampleSchema, other_schema: RootSchema):
         sex = schema.patient.attributes["sex"]
+        sex_migrator = EnumAttributeMigrator(_ExampleSex, _OtherSex)
+        attribute_migrators = AttributeMigrators()
+        attribute_migrators.register(
+            sex,
+            sex_migrator,
+            other_schema.samples[schema.patient_schema_uid].attributes["sex"],
+        )
+        other_items = {
+            **other_schema.samples,
+            **other_schema.images,
+            **other_schema.observations,
+        }
         super().__init__(
             schema,
             other_schema,
+            attribute_migrators,
+            project_migrator=EntityMigrator[Project](
+                schema.project, other_schema.project
+            ),
+            dataset_migrator=EntityMigrator[Dataset](
+                schema.dataset, other_schema.dataset
+            ),
             item_migrators=[
-                EntityMigrator[Item](
-                    schema.patient,
-                    other_schema.samples[schema.patient_schema_uid],
-                    migrated_attributes=[
-                        (sex, EnumAttributeMigrator(_ExampleSex, _OtherSex))
-                    ],
-                )
+                _PatientMigrator(schema, other_schema, sex_migrator),
+                *(
+                    EntityMigrator[Item](item, other_items[uid])
+                    for uid, item in {
+                        **schema.samples,
+                        **schema.images,
+                        **schema.observations,
+                    }.items()
+                    if uid != schema.patient_schema_uid
+                ),
             ],
         )
         self._schema = schema
@@ -109,17 +163,25 @@ class _SexMigration(DeclarativeSchemaMigration):
         """Whether a slide is put on the image schema."""
         self.wrong_tag = False
         """Whether the attributes are put under tags the target does not have."""
+        self.unchanged: set[UUID] = set()
+        """The entities returned as the same on the target root."""
 
-    def migrate_project(self, project: Project) -> EntityMigrationResult:
+    def migrate_project(self, project: Project) -> EntityMigrationResult | None:
+        if project.uid in self.unchanged:
+            return None
         migrated = self._break(super().migrate_project(project))
         if self.project_schema_uid is not None:
             return dataclasses.replace(migrated, schema_uid=self.project_schema_uid)
         return migrated
 
-    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult:
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult | None:
+        if dataset.uid in self.unchanged:
+            return None
         return self._break(super().migrate_dataset(dataset))
 
-    def migrate_item(self, item: Item) -> EntityMigrationResult:
+    def migrate_item(self, item: Item) -> EntityMigrationResult | None:
+        if item.uid in self.unchanged:
+            return None
         migrated = self._break(super().migrate_item(item))
         if self.wrong_kind and item.schema_uid == self._schema.slide_schema_uid:
             return dataclasses.replace(
@@ -127,8 +189,9 @@ class _SexMigration(DeclarativeSchemaMigration):
             )
         return migrated
 
-    def _break(self, migrated: EntityMigrationResult) -> EntityMigrationResult:
+    def _break(self, migrated: EntityMigrationResult | None) -> EntityMigrationResult:
         """The migrated entity, changed as the test asks."""
+        assert migrated is not None
         attributes = {
             f"{tag}-wrong" if self.wrong_tag else tag: attribute
             for tag, attribute in migrated.attributes.items()
@@ -500,6 +563,50 @@ class TestProjectMigrationPlanner:
         # Act & Assert
         with pytest.raises(MigrationError, match="not an attribute"):
             plan([entities.male])
+
+    def test_an_entity_left_as_it_is_on_the_same_schema_is_left_out(
+        self,
+        plan: _Plan,
+        migration: _SexMigration,
+        entities: _Entities,
+    ):
+        """The project, the dataset, and the slide are the same on both roots."""
+        # Arrange
+        migration.unchanged = {
+            entities.project.uid,
+            entities.dataset.uid,
+            entities.slide.uid,
+        }
+
+        # Act
+        planned = plan(entities.all)
+
+        # Assert
+        assert [entity.source.uid for entity in planned.entities] == [
+            entities.male.uid,
+            entities.other.uid,
+            entities.without_sex.uid,
+            entities.case.uid,
+            entities.observation.uid,
+        ]
+        assert entities.slide.uid not in planned.attribute_issues
+
+    @pytest.mark.parametrize("name", ["male", "case"])
+    def test_an_entity_left_as_it_is_on_a_changed_schema_is_refused(
+        self,
+        plan: _Plan,
+        migration: _SexMigration,
+        entities: _Entities,
+        name: str,
+    ):
+        """The patient has a sex of other values, and the case a grade."""
+        # Arrange
+        entity = getattr(entities, name)
+        migration.unchanged = {entity.uid}
+
+        # Act & Assert
+        with pytest.raises(MigrationError, match=f"left {entity.identifier}"):
+            plan([entity])
 
     def test_a_search_item_is_moved_to_the_item_schema_of_its_kind(
         self,

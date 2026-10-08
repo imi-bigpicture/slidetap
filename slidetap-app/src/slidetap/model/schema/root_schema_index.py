@@ -29,7 +29,6 @@ from slidetap.model.schema.attribute_schema import (
     UnionAttributeSchema,
 )
 from slidetap.model.schema.dataset_schema import DatasetSchema
-from slidetap.model.schema.entity_schema import AnyEntitySchema
 from slidetap.model.schema.hierarchy_layout import HierarchyLayout
 from slidetap.model.schema.images_layout import ImagesLayout
 from slidetap.model.schema.item_schema import (
@@ -48,7 +47,7 @@ from slidetap.model.schema.review_layout import (
     OverviewPanelLayout,
 )
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model.schema.root_schema import AnyEntitySchema, RootSchema
 from slidetap.model.schema.root_schema_summary import RootSchemaSummary
 
 

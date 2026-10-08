@@ -17,14 +17,16 @@
 The second root is the example schema with the sex of the patient changed: its
 allowed values are "Male" and "Female" rather than "M", "F", "Other", and
 "Unknown", under another uid. The migration converts the sex, leaves one that
-has no counterpart to the curator, and moves every other attribute as it is.
+has no counterpart to the curator, and moves every other attribute as it is,
+of every item schema unless it is asked to leave the items of some as they
+are.
 
 Against a real SQLite database: what is checked is what is saved.
 """
 
 import dataclasses
 import datetime
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from enum import Enum
 from typing import TypeVar
 from uuid import UUID, uuid4
@@ -47,9 +49,10 @@ from slidetap.database import (
 )
 from slidetap.external_interfaces import MapperInjectorInterface, SchemaInterface
 from slidetap.external_interfaces.implementations.migration import (
-    DeclarativeSchemaMigration,
+    AttributeMigrators,
     EntityMigrator,
     EnumAttributeMigrator,
+    RootSchemaMigration,
     UnchangedAttributeMigrator,
 )
 from slidetap.model import (
@@ -125,31 +128,92 @@ class _OtherSex(Enum):
     FEMALE = "Female"
 
 
-class _SexMigration(DeclarativeSchemaMigration):
+class _PatientMigrator(EntityMigrator[Item]):
+    """Migrates the sex of the patient with its migrator, and moves the rest as
+    it is."""
+
+    def __init__(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        sex_migrator: EnumAttributeMigrator,
+    ):
+        super().__init__(
+            schema.patient, other_schema.samples[schema.patient_schema_uid]
+        )
+        self._sex_migrator = sex_migrator
+
+    def migrate(self, entity: Item) -> EntityMigrationResult:
+        attributes = self._move_all_except(entity.attributes, "sex")
+        sex = entity.attributes.get("sex")
+        if sex is not None:
+            attributes["sex"] = self._migrate(
+                sex, self._sex_migrator, self.target.attributes["sex"]
+            )
+        return EntityMigrationResult(
+            schema_uid=self.target.uid,
+            attributes=attributes,
+            private_attributes=self._move_all_except(
+                entity.private_attributes, private=True
+            ),
+        )
+
+
+class _SexMigration(RootSchemaMigration):
     """Moves projects from the example root to the second, migrating the sex
     of the patient with an enum migrator, which leaves a sex with no
     counterpart unresolved, for the curator to resolve.
+
+    It migrates the project, the dataset, and the items of every item schema,
+    or of the item schemas it is given, with the patient among them.
 
     What it does wrong, where a test asks it to, is what the migration service
     has to refuse.
     """
 
-    def __init__(self, schema: ExampleSchema, other_schema: RootSchema):
+    def __init__(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        item_schemas: Collection[UUID] | None = None,
+    ):
         sex = schema.patient.attributes["sex"]
+        sex_migrator = EnumAttributeMigrator(_ExampleSex, _OtherSex)
+        attribute_migrators = AttributeMigrators()
+        attribute_migrators.register(
+            sex,
+            sex_migrator,
+            other_schema.samples[schema.patient_schema_uid].attributes["sex"],
+        )
+        source_items = {**schema.samples, **schema.images, **schema.observations}
+        other_items = {
+            **other_schema.samples,
+            **other_schema.images,
+            **other_schema.observations,
+        }
         super().__init__(
             schema,
             other_schema,
+            attribute_migrators,
+            project_migrator=EntityMigrator[Project](
+                schema.project, other_schema.project
+            ),
+            dataset_migrator=EntityMigrator[Dataset](
+                schema.dataset, other_schema.dataset
+            ),
             item_migrators=[
-                EntityMigrator[Item](
-                    schema.patient,
-                    other_schema.samples[schema.patient_schema_uid],
-                    migrated_attributes=[
-                        (sex, EnumAttributeMigrator(_ExampleSex, _OtherSex))
-                    ],
-                )
+                _PatientMigrator(schema, other_schema, sex_migrator),
+                *(
+                    EntityMigrator[Item](item, other_items[uid])
+                    for uid, item in source_items.items()
+                    if uid != schema.patient_schema_uid
+                    and (item_schemas is None or uid in item_schemas)
+                ),
             ],
         )
         self._schema = schema
+        self.migrated: list[UUID] = []
+        """The items given to the migration, by uid."""
         self.wrong_kind = False
         """Whether a slide is put on the image schema."""
         self.wrong_tag = False
@@ -170,6 +234,7 @@ class _SexMigration(DeclarativeSchemaMigration):
         return self._break(super().migrate_dataset(dataset))
 
     def migrate_item(self, item: Item) -> EntityMigrationResult:
+        self.migrated.append(item.uid)
         migrated = self._break(super().migrate_item(item))
         if self.wrong_kind and item.schema_uid == self._schema.slide_schema_uid:
             return dataclasses.replace(
@@ -177,8 +242,9 @@ class _SexMigration(DeclarativeSchemaMigration):
             )
         return migrated
 
-    def _break(self, migrated: EntityMigrationResult) -> EntityMigrationResult:
+    def _break(self, migrated: EntityMigrationResult | None) -> EntityMigrationResult:
         """The migrated entity, changed as the test asks."""
+        assert migrated is not None
         attributes = self._without_dropped(migrated.attributes)
         private_attributes = self._without_dropped(migrated.private_attributes)
         for moved in (attributes, private_attributes):
@@ -537,6 +603,46 @@ class TestLoadingMigrations:
 
         # Assert
         assert schema_service.migration_of(schema.uid) is migration
+
+    def test_a_migration_leaving_out_a_changed_item_schema_is_refused(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """The patient, whose sex changed."""
+        # Arrange
+        migration = _SexMigration(schema, other_schema)
+        monkeypatch.setattr(
+            _SexMigration,
+            "migrated_item_schemas",
+            property(lambda _: {schema.slide_schema_uid}),
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="leaves out patient"):
+            schema_service_of(other_schema, schema, migrations={schema.uid: migration})
+
+    def test_a_migration_of_an_item_schema_not_of_its_root_is_refused(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        # Arrange
+        migration = _SexMigration(schema, other_schema)
+        unknown = uuid4()
+        monkeypatch.setattr(
+            _SexMigration,
+            "migrated_item_schemas",
+            property(lambda _: {schema.patient_schema_uid, unknown}),
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match=f"migrates {unknown}, which are not"):
+            schema_service_of(other_schema, schema, migrations={schema.uid: migration})
 
     def test_an_application_without_migrations_migrates_nothing(
         self,
@@ -960,6 +1066,58 @@ class TestMigratingAProject:
         assert staining.original_value == before.original_value
         observation = item_service.get(stored.observation.uid)
         assert observation.private_attributes["report"].original_value == "Benign"
+
+    def test_the_items_of_item_schemas_not_migrated_are_left_as_they_are(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+        attribute_service: AttributeService,
+        validation_service: ValidationService,
+        review_service: ReviewService,
+        item_service: ItemService,
+        stored: _StoredProject,
+    ):
+        """Not read, given to the migration, nor written: the row of the
+        staining keeps what was set on it outside the migration."""
+        # Arrange
+        migration = _SexMigration(schema, other_schema, {schema.patient_schema_uid})
+        schema_service = schema_service_of(
+            other_schema, schema, migrations={schema.uid: migration}
+        )
+        migration_service = MigrationService(
+            schema_service,
+            sqlite_database_service,
+            ProjectMigrationPlanner(schema_service),
+            ProjectMigrationExecutor(
+                sqlite_database_service,
+                attribute_service,
+                validation_service,
+                review_service,
+            ),
+        )
+        staining = stored.slide.attributes["staining"].uid
+        with sqlite_database_service.get_session() as session:
+            session.get_one(DatabaseAttribute, staining).display_value = "untouched"
+
+        # Act
+        self._migrate(sqlite_database_service, migration_service, stored)
+
+        # Assert
+        assert set(migration.migrated) == {
+            stored.patient.uid,
+            stored.other_patient.uid,
+        }
+        with sqlite_database_service.get_session() as session:
+            project = session.get_one(DatabaseProject, stored.project.uid)
+            assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
+            assert (
+                session.get_one(DatabaseAttribute, staining).display_value
+                == "untouched"
+            )
+        patient = item_service.get(stored.patient.uid)
+        assert patient.attributes["sex"].schema_uid == OTHER_SEX_SCHEMA_UID
 
     def test_the_locks_and_read_only_flags_of_attributes_are_kept(
         self,

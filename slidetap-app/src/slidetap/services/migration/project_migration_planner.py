@@ -173,9 +173,9 @@ class ProjectMigrationPlan:
     """The root the project is migrated to."""
 
     entities: list[EntityInMigration]
-    """The project, the dataset, and the items, in the order given, with every
-    attribute that the migration left invalid, and that was valid before,
-    unresolved."""
+    """The project, the dataset, and the items that the migration changes, in
+    the order given, with every attribute that the migration left invalid, and
+    that was valid before, unresolved."""
 
     search_items: list[SearchItemInMigration]
     """The search items, with their target item schemas."""
@@ -219,6 +219,9 @@ class ProjectMigrationPlanner:
         the search items with the item schemas it moves them to, and work out
         the attribute issues.
 
+        An entity the migration returns as the same on the target root is left
+        out of the plan, and so left as it is.
+
         Parameters
         ----------
         source_root_schema_uid: UUID
@@ -226,9 +229,11 @@ class ProjectMigrationPlanner:
         target_root_schema_uid: UUID
             The uid of the root the project is migrated to.
         entities: Iterable[Project | Dataset | Item]
-            The project, the dataset, and the items, on the source root.
+            The project, the dataset, and the items on the item schemas the
+            migration migrates, on the source root.
         search_items: Iterable[MetadataSearchItem]
-            The search items of the project, on the source root.
+            The search items of the project on the item schemas the migration
+            migrates, on the source root.
 
         Returns
         -------
@@ -252,19 +257,23 @@ class ProjectMigrationPlanner:
             raise NotAllowedActionError(
                 f"Root schema {source_root.display_name} has no migration."
             )
-        entities_in_migration = [
-            self._check_against_target_schema(
-                source_root,
-                target_root,
-                self._pair_with_target_schema(
+        entities_in_migration: list[EntityInMigration] = []
+        for source in entities:
+            migrated = self._migrate_entity_copy(migration, source)
+            if migrated is None:
+                self._refuse_unchanged_on_changed_schema(
+                    source_root, target_root, source
+                )
+                continue
+            entities_in_migration.append(
+                self._check_against_target_schema(
                     source_root,
                     target_root,
-                    source,
-                    self._migrate_entity_copy(migration, source),
-                ),
+                    self._pair_with_target_schema(
+                        source_root, target_root, source, migrated
+                    ),
+                )
             )
-            for source in entities
-        ]
         return ProjectMigrationPlan(
             target_root,
             entities_in_migration,
@@ -365,7 +374,7 @@ class ProjectMigrationPlanner:
     @staticmethod
     def _migrate_entity_copy(
         migration: SchemaMigration, source: Project | Dataset | Item
-    ) -> EntityMigrationResult:
+    ) -> EntityMigrationResult | None:
         """Run the migration for an entity, on a copy of it.
 
         Parameters
@@ -377,8 +386,9 @@ class ProjectMigrationPlanner:
 
         Returns
         -------
-        EntityMigrationResult
-            What the migration returned for the entity.
+        EntityMigrationResult | None
+            What the migration returned for the entity, None where it is the
+            same on the target root.
         """
         copy = source.model_copy(deep=True)
         if isinstance(copy, Project):
@@ -386,6 +396,44 @@ class ProjectMigrationPlanner:
         if isinstance(copy, Dataset):
             return migration.migrate_dataset(copy)
         return migration.migrate_item(copy)
+
+    @staticmethod
+    def _refuse_unchanged_on_changed_schema(
+        source_root: RootSchemaIndex,
+        target_root: RootSchemaIndex,
+        source: Project | Dataset | Item,
+    ) -> None:
+        """Refuse an entity returned as the same on the target root where its
+        schema is not the same there, under the same uid.
+
+        Parameters
+        ----------
+        source_root: RootSchemaIndex
+            The root the project is on.
+        target_root: RootSchemaIndex
+            The root the project is migrated to.
+        source: Project | Dataset | Item
+            The entity, on the source root.
+
+        Raises
+        ------
+        MigrationError
+            If the target root does not have the schema of the entity as it is.
+        """
+        source_schema = source_root.get_entity_schema(source.schema_uid)
+        if isinstance(source, Project):
+            target_schema: AnyEntitySchema | None = target_root.project
+        elif isinstance(source, Dataset):
+            target_schema = target_root.dataset
+        else:
+            target_schema = target_root.items.get(source.schema_uid)
+        if target_schema != source_schema:
+            name = source.identifier if isinstance(source, Item) else source.name
+            raise MigrationError(
+                f"The migration left {name} ({source.uid}) as it is, but its "
+                f"schema {source_schema.name} ({source_schema.uid}) is not the "
+                f"same in the target root."
+            )
 
     def _pair_with_target_schema(
         self,

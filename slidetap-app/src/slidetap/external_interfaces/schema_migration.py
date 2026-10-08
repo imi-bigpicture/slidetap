@@ -15,6 +15,8 @@
 """Interface for moving projects from one root schema to another."""
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Collection
+from uuid import UUID
 
 from slidetap.model import (
     AnyAttribute,
@@ -32,17 +34,34 @@ class SchemaMigration(metaclass=ABCMeta):
     root of new projects, one entity at a time, and gives the schemas of the
     target root that schemas of the source migrate to.
 
-    Each method that migrates an entity returns what it is on the target root.
-    What a migration cannot migrate by itself it returns as an
+    Each method that migrates an entity returns what it is on the target root,
+    or None where the entity is the same there, which it may only be where its
+    schema is the same in the target root, under the same uid. What a
+    migration cannot migrate by itself it returns as an
     `UnresolvedAttributeMigration`, for a curator to decide; it is then run
     again to complete the migration, and must return the same.
     Changes across entities are not supported.
 
-    `DeclarativeSchemaMigration` implements it from declared entity migrators.
+    Only the items on `migrated_item_schemas` are given to the migration; every
+    other item schema must be the same in the target root, and its items are
+    left as they are. The project and the dataset are always given.
+
+    `RootSchemaMigration` implements it from entity migrators.
     """
 
+    @property
     @abstractmethod
-    def migrate_project(self, project: Project) -> EntityMigrationResult:
+    def migrated_item_schemas(self) -> Collection[UUID]:
+        """The uids of the item schemas of the source root whose items the
+        migration migrates.
+
+        Every other item schema of the source root is checked to be the same,
+        under the same uid, in the target root when the migration is loaded.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def migrate_project(self, project: Project) -> EntityMigrationResult | None:
         """Migrate a project from its schema on the source root to the target root.
 
         Parameters
@@ -52,15 +71,16 @@ class SchemaMigration(metaclass=ABCMeta):
 
         Returns
         -------
-        EntityMigrationResult
+        EntityMigrationResult | None
             The project schema of the target root, the project's attributes on
             it, and an `UnresolvedAttributeMigration` for each attribute that
-            needs a curator's decision.
+            needs a curator's decision, or None where the project is the same
+            on the target root.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult:
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult | None:
         """Migrate a dataset from its schema on the source root to the target root.
 
         Parameters
@@ -70,29 +90,31 @@ class SchemaMigration(metaclass=ABCMeta):
 
         Returns
         -------
-        EntityMigrationResult
+        EntityMigrationResult | None
             The dataset schema of the target root, the dataset's attributes on
             it, and an `UnresolvedAttributeMigration` for each attribute that
-            needs a curator's decision.
+            needs a curator's decision, or None where the dataset is the same
+            on the target root.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def migrate_item(self, item: Item) -> EntityMigrationResult:
+    def migrate_item(self, item: Item) -> EntityMigrationResult | None:
         """Migrate an item from its schema on the source root to the target root.
 
         Parameters
         ----------
         item: Item
             The item: a sample, image, annotation, or observation, on an item
-            schema of the source root.
+            schema of the source root that is one of `migrated_item_schemas`.
 
         Returns
         -------
-        EntityMigrationResult
+        EntityMigrationResult | None
             The item schema of the target root, of the same kind, the item's
             attributes on it, and an `UnresolvedAttributeMigration` for each
-            attribute that needs a curator's decision.
+            attribute that needs a curator's decision, or None where the item
+            is the same on the target root.
         """
         raise NotImplementedError()
 
@@ -122,7 +144,8 @@ class SchemaMigration(metaclass=ABCMeta):
         Parameters
         ----------
         schema: ItemSchema
-            An item schema of the source root.
+            An item schema of the source root that is one of
+            `migrated_item_schemas`.
 
         Returns
         -------

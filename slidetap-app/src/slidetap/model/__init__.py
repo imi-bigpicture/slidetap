@@ -115,7 +115,6 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 from slidetap.model.schema.dataset_schema import DatasetSchema
-from slidetap.model.schema.entity_schema import AnyEntitySchema
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLayout,
     HierarchyLevelLayout,
@@ -159,7 +158,7 @@ from slidetap.model.schema.review_layout import (
     ReviewTabLayout,
 )
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model.schema.root_schema import AnyEntitySchema, RootSchema
 from slidetap.model.schema.root_schema_index import (
     RootSchemaIndex,
 )

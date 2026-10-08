@@ -23,12 +23,16 @@ from slidetap.model.schema.images_layout import ImagesLayout
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     ImageSchema,
+    ItemSchema,
     ObservationSchema,
     SampleSchema,
 )
 from slidetap.model.schema.overview_layout import OverviewLayout
 from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
+
+AnyEntitySchema = ProjectSchema | DatasetSchema | ItemSchema
+"""The schema of a project, a dataset, or an item, as a root holds them."""
 
 
 class RootSchema(FrozenBaseModel):

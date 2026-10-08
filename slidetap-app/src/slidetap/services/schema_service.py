@@ -450,14 +450,47 @@ class SchemaService:
         ------
         ValueError
             If a root is provided twice or defines one item schema uid twice,
-            an attribute schema uid has two definitions, a project in the
+            an attribute schema uid has two definitions, a migration leaves
+            out an item schema that changed or names one its root does not
+            have, a project in the
             database is on a root that is not provided, the projects on a
             root hold items or attributes on schemas the root does not have.
         """
         self._validate_roots()
         self._validate_attributes()
+        self._validate_migrations()
         self._validate_projects()
         self._validate_stored_schemas()
+
+    def _validate_migrations(self) -> None:
+        """Refuse a migration whose migrated item schemas are not item schemas
+        of its root, or that leaves out an item schema that is not the same,
+        under the same uid, in the root of new projects: its items, left as
+        they are, would be on a schema the root does not have."""
+        problems: list[str] = []
+        for root_uid, migration in self._migrations.items():
+            source = self.get_root(root_uid)
+            migrated = set(migration.migrated_item_schemas)
+            unknown = migrated - source.items.keys()
+            if unknown:
+                problems.append(
+                    f"the migration of {source.display_name} migrates "
+                    f"{', '.join(sorted(map(str, unknown)))}, which are not item "
+                    f"schemas of it"
+                )
+            changed = [
+                f"{item.name} ({uid})"
+                for uid, item in source.items.items()
+                if uid not in migrated and self._default_root.items.get(uid) != item
+            ]
+            if changed:
+                problems.append(
+                    f"the migration of {source.display_name} leaves out "
+                    f"{', '.join(changed)}, which are not the same in "
+                    f"{self._default_root.display_name}"
+                )
+        if problems:
+            raise ValueError(f"The migrations cannot be used: {'; '.join(problems)}.")
 
     def _validate_stored_schemas(self) -> None:
         """Refuse to start with projects holding items or attributes on schemas

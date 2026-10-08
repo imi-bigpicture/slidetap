@@ -14,17 +14,13 @@
 
 """Migrating a project, a dataset, or an item to its schema on another root."""
 
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Mapping
 from typing import Generic, TypeVar
-from uuid import UUID
 
-from slidetap.external_interfaces.implementations.migration.attribute_declarations import (  # noqa: E501
-    AttributeDeclarations,
-    AttributePair,
-    UndeclaredAttributesError,
-)
 from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
     AttributeMigrator,
+    MigratedAttribute,
+    UnchangedAttributeMigrator,
 )
 from slidetap.model import (
     AnyAttribute,
@@ -44,31 +40,14 @@ class EntityMigrator(Generic[T]):
     """Migrates a project, a dataset, or an item from its schema in the source
     root to its schema in the target root.
 
-    Every attribute whose tag is in both schemas is moved to the target
-    attribute of that tag, at any depth, with the attributes it holds. What
-    else becomes of an attribute is declared by its source attribute schema, at
-    any depth: migrated by an attribute migrator, such as an enum whose values
-    changed, renamed to another attribute of the same entity, or dropped. A
-    target attribute that no source attribute becomes is left without a value.
-
-    A migrator is refused when it is created if a declaration is not of the
-    schemas, or if it says nothing about a source attribute it cannot move as
-    it is: one whose tag is not in the target, or whose target is of another
-    kind or, for an enum, holds other values.
-
-    An attribute whose value in effect loses values to an attribute migrator,
-    at any depth, is returned unresolved, under its target tag, with what could
-    be migrated proposed.
+    By default every attribute is moved as it is to the target attribute of
+    its tag. A migrator of a schema that changed overrides `migrate()` and
+    writes out what becomes of each attribute, with the helpers here: move an
+    attribute as it is, move all but some, and migrate one with an attribute
+    migrator, leaving it unresolved where it lost values.
     """
 
-    def __init__(
-        self,
-        source: AnyEntitySchema,
-        target: AnyEntitySchema,
-        migrated_attributes: Sequence[tuple[AttributeSchema, AttributeMigrator]] = (),
-        renamed_attributes: Sequence[tuple[AttributeSchema, AttributeSchema]] = (),
-        dropped_attributes: Iterable[AttributeSchema] = (),
-    ):
+    def __init__(self, source: AnyEntitySchema, target: AnyEntitySchema):
         """Create a migrator between two schemas of the same kind.
 
         Parameters
@@ -77,45 +56,10 @@ class EntityMigrator(Generic[T]):
             The project, dataset, or item schema of the source root.
         target: AnyEntitySchema
             The schema of the target root it becomes.
-        migrated_attributes: Sequence[tuple[AttributeSchema, AttributeMigrator]] = ()
-            Source attribute schemas whose values changed, with the migrator of
-            their values.
-        renamed_attributes: Sequence[tuple[AttributeSchema, AttributeSchema]] = ()
-            Source attribute schemas, with the target attribute schema of another
-            tag in the same entity that each becomes.
-        dropped_attributes: Iterable[AttributeSchema] = ()
-            Source attribute schemas that are left out.
-
-        Raises
-        ------
-        ValueError
-            If an attribute schema is declared twice in a declaration, a
-            declared attribute schema is not of the schema it is declared for,
-            or the migrator says nothing about a source attribute it cannot
-            move as it is.
         """
         self._source = source
         self._target = target
-        declarations = AttributeDeclarations(
-            source, target, migrated_attributes, renamed_attributes, dropped_attributes
-        )
-        undeclared: list[str] = []
-        self._attributes = self._pair(
-            declarations, source.attributes, target.attributes, "", undeclared
-        )
-        self._private_attributes = self._pair(
-            declarations,
-            source.private_attributes,
-            target.private_attributes,
-            "!",
-            undeclared,
-        )
-        if undeclared:
-            raise ValueError(
-                f"The migrator of {source.name} says nothing about "
-                f"{', '.join(undeclared)}, which cannot be moved as it is to the "
-                f"target schema."
-            )
+        self._unchanged = UnchangedAttributeMigrator()
 
     @property
     def source(self) -> AnyEntitySchema:
@@ -127,8 +71,9 @@ class EntityMigrator(Generic[T]):
         """The schema of the target root."""
         return self._target
 
-    def migrate(self, entity: T) -> EntityMigrationResult:
-        """Migrate a project, dataset, or item to the target schema.
+    def migrate(self, entity: T) -> EntityMigrationResult | None:
+        """Migrate a project, dataset, or item to the target schema, moving
+        every attribute as it is to the target attribute of its tag.
 
         Parameters
         ----------
@@ -137,88 +82,136 @@ class EntityMigrator(Generic[T]):
 
         Returns
         -------
-        EntityMigrationResult
-            The target schema, the attributes on it by target tag, and the
-            attributes whose value in effect lost values as unresolved.
+        EntityMigrationResult | None
+            The target schema and the attributes on it by target tag, or None
+            where the entity is the same on the target schema, which a
+            migrator may return only where the schema did not change.
 
         Raises
         ------
         ValueError
-            If an attribute is held at a tag that is not of the source schema.
+            If an attribute is held at a tag the target schema does not have.
         """
         return EntityMigrationResult(
             schema_uid=self._target.uid,
-            attributes=self._migrate_attributes(entity.attributes, self._attributes),
-            private_attributes=self._migrate_attributes(
-                entity.private_attributes, self._private_attributes
+            attributes=self._move_all_except(entity.attributes),
+            private_attributes=self._move_all_except(
+                entity.private_attributes, private=True
             ),
         )
 
-    def attribute_migrators(
-        self,
-    ) -> Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]:
-        """Iterate the migrators of the attribute schemas of the source schema,
-        at any depth.
+    def _move(self, attribute: AnyAttribute, target: AttributeSchema) -> AnyAttribute:
+        """Move an attribute as it is to a target attribute schema, with what
+        it holds at any depth.
 
-        An attribute schema that is dropped, or held by an attribute with a
-        declared migrator, has none.
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute. Not changed.
+        target: AttributeSchema
+            The target attribute schema, holding the same values.
 
         Returns
         -------
-        Iterator[tuple[UUID, AttributeMigrator, AttributeSchema]]
-            The uid of each source attribute schema, its migrator, and the
-            target attribute schema it migrates to.
+        AnyAttribute
+            The attribute on the target attribute schema.
         """
-        for pair in (*self._attributes.values(), *self._private_attributes.values()):
-            if pair is not None:
-                yield from pair.attribute_migrators()
+        return self._unchanged.migrate(attribute, target).attribute
 
-    @staticmethod
-    def _pair(
-        declarations: AttributeDeclarations,
-        sources: Mapping[str, AttributeSchema],
-        targets: Mapping[str, AttributeSchema],
-        path_prefix: str,
-        undeclared: list[str],
-    ) -> dict[str, AttributePair | None]:
-        """Pair the attributes of the entity, adding the paths of those nothing
-        is declared about to `undeclared`."""
-        try:
-            return declarations.pair(sources, targets, path_prefix)
-        except UndeclaredAttributesError as error:
-            undeclared.extend(error.paths)
-            return {}
-
-    def _migrate_attributes(
+    def _move_all_except(
         self,
         attributes: Mapping[str, AnyAttribute],
-        pairs: Mapping[str, AttributePair | None],
+        *tags: str,
+        private: bool = False,
     ) -> dict[str, AnyAttribute | UnresolvedAttributeMigration]:
-        """Migrate the attributes of the entity to their tags in the target,
-        each that lost values as unresolved.
+        """Move attributes as they are to the target attributes of their tags,
+        leaving out some.
+
+        Parameters
+        ----------
+        attributes: Mapping[str, AnyAttribute]
+            The attributes of the entity, public or private, by tag.
+        *tags: str
+            The tags of the attributes to leave out.
+        private: bool = False
+            Whether the attributes are the private ones.
+
+        Returns
+        -------
+        dict[str, AnyAttribute | UnresolvedAttributeMigration]
+            The attributes moved, by tag.
 
         Raises
         ------
         ValueError
-            If an attribute is held at a tag that is not of the source schema.
+            If an attribute moved is held at a tag the target schema does not
+            have.
         """
-        migrated: dict[str, AnyAttribute | UnresolvedAttributeMigration] = {}
-        for source_tag, attribute in attributes.items():
-            if source_tag not in pairs:
-                raise ValueError(
-                    f"Attribute {attribute.uid} is held as {source_tag!r}, which is "
-                    f"not an attribute of the source schema of {self._source.name}."
-                )
-            pair = pairs[source_tag]
-            if pair is None:
+        targets = (
+            self._target.private_attributes if private else self._target.attributes
+        )
+        moved: dict[str, AnyAttribute | UnresolvedAttributeMigration] = {}
+        for tag, attribute in attributes.items():
+            if tag in tags:
                 continue
-            result = pair.migrate(attribute)
-            if result.lost:
-                migrated[pair.target_key] = UnresolvedAttributeMigration(
-                    original=attribute,
-                    proposed=result.attribute,
-                    problem=" ".join(dict.fromkeys(result.lost)),
+            target = targets.get(tag)
+            if target is None:
+                raise ValueError(
+                    f"Attribute {attribute.uid} is held as {tag!r}, which is not an "
+                    f"attribute of the target schema of {self._source.name}."
                 )
-            else:
-                migrated[pair.target_key] = result.attribute
-        return migrated
+            moved[tag] = self._move(attribute, target)
+        return moved
+
+    def _migrate(
+        self,
+        attribute: AnyAttribute,
+        migrator: AttributeMigrator,
+        target: AttributeSchema,
+    ) -> AnyAttribute | UnresolvedAttributeMigration:
+        """Migrate an attribute with an attribute migrator, unresolved where
+        its value in effect lost values.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute. Not changed.
+        migrator: AttributeMigrator
+            The migrator of its attribute schema, the one the migration
+            registers for it, so that mapping items migrate alike.
+        target: AttributeSchema
+            The target attribute schema.
+
+        Returns
+        -------
+        AnyAttribute | UnresolvedAttributeMigration
+            The migrated attribute, or it unresolved.
+        """
+        return self._unresolve_lost(attribute, migrator.migrate(attribute, target))
+
+    @staticmethod
+    def _unresolve_lost(
+        original: AnyAttribute, migrated: MigratedAttribute
+    ) -> AnyAttribute | UnresolvedAttributeMigration:
+        """Leave a migrated attribute unresolved where its value in effect lost
+        values, with what could be migrated proposed.
+
+        Parameters
+        ----------
+        original: AnyAttribute
+            The attribute before it was migrated.
+        migrated: MigratedAttribute
+            The attribute migrated, and what it lost.
+
+        Returns
+        -------
+        AnyAttribute | UnresolvedAttributeMigration
+            The migrated attribute where it lost nothing, else it unresolved.
+        """
+        if not migrated.lost:
+            return migrated.attribute
+        return UnresolvedAttributeMigration(
+            original=original,
+            proposed=migrated.attribute,
+            problem=" ".join(migrated.lost),
+        )
