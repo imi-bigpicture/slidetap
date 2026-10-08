@@ -12,35 +12,63 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""The migration of a project to another root schema, its attribute issues,
-and its dropped attributes."""
+"""The migration of a project to another root schema, and its attribute
+issues."""
 
 import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Text,
-    UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
-from slidetap.model import AnyAttribute, MigrationState, ProjectStatus
+from slidetap.model import AnyAttribute, MigrationStatus, ProjectStatus
 
 
 class DatabaseMigrationAttributeIssue(Base):
-    """A top-level attribute of the target schema of an object that the
-    migration could not convert or left invalid, and how the curator resolved
-    it."""
+    """A top-level attribute of an object that the migration could not
+    convert, left invalid, or dropped, and how the curator resolved it.
+
+    An issue of a value the migration could not convert has both a source and
+    a target attribute schema, one of an attribute the migration made invalid
+    has a target attribute schema and the source one where there was one, and
+    one of a dropped attribute has only a source attribute schema."""
 
     __tablename__ = "migration_attribute_issue"
     __table_args__ = (
-        UniqueConstraint("migration_uid", "object_uid", "target_attribute_schema_uid"),
+        CheckConstraint(
+            "source_attribute_schema_uid IS NOT NULL "
+            "OR target_attribute_schema_uid IS NOT NULL",
+            name="ck_migration_attribute_issue_attribute_schema",
+        ),
+        Index(
+            "uq_migration_attribute_issue_target",
+            "migration_uid",
+            "object_uid",
+            "target_attribute_schema_uid",
+            unique=True,
+            sqlite_where=text("target_attribute_schema_uid IS NOT NULL"),
+            postgresql_where=text("target_attribute_schema_uid IS NOT NULL"),
+        ),
+        Index(
+            "uq_migration_attribute_issue_dropped",
+            "migration_uid",
+            "object_uid",
+            "source_attribute_schema_uid",
+            unique=True,
+            sqlite_where=text("target_attribute_schema_uid IS NULL"),
+            postgresql_where=text("target_attribute_schema_uid IS NULL"),
+        ),
     )
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -59,8 +87,13 @@ class DatabaseMigrationAttributeIssue(Base):
     target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The schema of the target root the object is migrated to."""
 
-    target_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The attribute schema in the target root the issue is resolved on."""
+    source_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
+    """The attribute schema in the source root of the original, or None where
+    the object had no attribute."""
+
+    target_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
+    """The attribute schema in the target root the issue is resolved on, or
+    None for a dropped attribute."""
 
     original: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     """The attribute of the source object, or None where it had none."""
@@ -70,11 +103,12 @@ class DatabaseMigrationAttributeIssue(Base):
 
     problem: Mapped[str] = mapped_column(Text)
     """What needs the curator's decision: a value the migration could not
-    migrate, or an attribute the migration made invalid."""
+    migrate, an attribute the migration made invalid, or an attribute it
+    dropped."""
 
     resolved: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
-    """The value the issue is resolved with, None where left empty or not yet
-    resolved."""
+    """The value the issue is resolved with, None where left empty, accepted
+    as dropped, or not yet resolved."""
 
     resolved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
     """When the issue was resolved, None until it is."""
@@ -84,7 +118,8 @@ class DatabaseMigrationAttributeIssue(Base):
         object_uid: UUID,
         item_uid: UUID | None,
         target_object_schema_uid: UUID,
-        target_attribute_schema_uid: UUID,
+        source_attribute_schema_uid: UUID | None,
+        target_attribute_schema_uid: UUID | None,
         original: AnyAttribute | None,
         proposed: AnyAttribute | None,
         problem: str,
@@ -99,8 +134,11 @@ class DatabaseMigrationAttributeIssue(Base):
             The item, or None for the project or the dataset.
         target_object_schema_uid: UUID
             The target schema of the object.
-        target_attribute_schema_uid: UUID
-            The attribute schema of the target tag.
+        source_attribute_schema_uid: UUID | None
+            The attribute schema of the original, or None where there is none.
+        target_attribute_schema_uid: UUID | None
+            The attribute schema of the target tag, or None for a dropped
+            attribute.
         original: AnyAttribute | None
             The attribute of the source object, or None where it had none.
         proposed: AnyAttribute | None
@@ -113,6 +151,7 @@ class DatabaseMigrationAttributeIssue(Base):
             object_uid=object_uid,
             item_uid=item_uid,
             target_object_schema_uid=target_object_schema_uid,
+            source_attribute_schema_uid=source_attribute_schema_uid,
             target_attribute_schema_uid=target_attribute_schema_uid,
             original=original,
             proposed=proposed,
@@ -120,81 +159,29 @@ class DatabaseMigrationAttributeIssue(Base):
             resolved_at=None,
         )
 
+    @property
+    def dropped(self) -> bool:
+        """Whether the issue is of an attribute the migration dropped."""
+        return self.target_attribute_schema_uid is None
+
     def resolve(self, attribute: AnyAttribute | None) -> None:
-        """Resolve the attribute issue.
+        """Resolve the attribute issue, or accept a dropped attribute.
 
         Parameters
         ----------
         attribute: AnyAttribute | None
             The value, on the attribute schema of the attribute issue, or None
-            to leave the attribute empty.
+            to leave the attribute empty or accept it as dropped.
+
+        Raises
+        ------
+        ValueError
+            If a value is given for a dropped attribute.
         """
+        if self.dropped and attribute is not None:
+            raise ValueError("A dropped attribute is accepted, not given a value.")
         self.resolved = attribute
         self.resolved_at = datetime.datetime.now()
-
-
-class DatabaseMigrationDroppedAttribute(Base):
-    """An attribute with a value of an object that the migration left out, as
-    it has no target."""
-
-    __tablename__ = "migration_dropped_attribute"
-    __table_args__ = (
-        UniqueConstraint("migration_uid", "object_uid", "source_attribute_schema_uid"),
-    )
-
-    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    migration_uid: Mapped[UUID] = mapped_column(
-        ForeignKey("project_migration.uid", ondelete="CASCADE"), index=True
-    )
-    object_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The project, the dataset, or the item the attribute belongs to."""
-
-    item_uid: Mapped[UUID | None] = mapped_column(
-        Uuid, ForeignKey("item.uid", ondelete="CASCADE")
-    )
-    """The item, for the row to go with it, or None for the project or the
-    dataset."""
-
-    target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The schema of the target root the object is migrated to."""
-
-    source_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The attribute schema in the source root."""
-
-    original: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
-    """The attribute of the source object."""
-
-    def __init__(
-        self,
-        object_uid: UUID,
-        item_uid: UUID | None,
-        target_object_schema_uid: UUID,
-        source_attribute_schema_uid: UUID,
-        original: AnyAttribute,
-    ):
-        """Create a dropped attribute.
-
-        Parameters
-        ----------
-        object_uid: UUID
-            The project, the dataset, or the item.
-        item_uid: UUID | None
-            The item, or None for the project or the dataset.
-        target_object_schema_uid: UUID
-            The target schema of the object.
-        source_attribute_schema_uid: UUID
-            The source attribute schema of the attribute.
-        original: AnyAttribute
-            The attribute of the source object.
-        """
-        super().__init__(
-            uid=uuid4(),
-            object_uid=object_uid,
-            item_uid=item_uid,
-            target_object_schema_uid=target_object_schema_uid,
-            source_attribute_schema_uid=source_attribute_schema_uid,
-            original=original,
-        )
 
 
 class DatabaseProjectMigration(Base):
@@ -218,9 +205,11 @@ class DatabaseProjectMigration(Base):
     )
     """The status the project had, which it gets back."""
 
-    state: Mapped[MigrationState] = mapped_column(
-        Enum(MigrationState, native_enum=False, length=32)
+    status: Mapped[MigrationStatus] = mapped_column(
+        Enum(MigrationStatus, native_enum=False, length=32)
     )
+    """Where the migration is."""
+
     error: Mapped[str | None] = mapped_column(Text)
     """Why planning or completing failed."""
 
@@ -229,10 +218,6 @@ class DatabaseProjectMigration(Base):
 
     attribute_issues: Mapped[list[DatabaseMigrationAttributeIssue]] = relationship(
         "DatabaseMigrationAttributeIssue",
-        cascade="all, delete-orphan",
-    )
-    dropped_attributes: Mapped[list[DatabaseMigrationDroppedAttribute]] = relationship(
-        "DatabaseMigrationDroppedAttribute",
         cascade="all, delete-orphan",
     )
 
@@ -263,21 +248,21 @@ class DatabaseProjectMigration(Base):
             source_root_schema_uid=source_root_schema_uid,
             target_root_schema_uid=target_root_schema_uid,
             previous_project_status=previous_project_status,
-            state=MigrationState.PLANNING,
+            status=MigrationStatus.PLANNING,
             created=now,
             updated=now,
         )
 
-    def set_state(self, state: MigrationState, error: str | None = None) -> None:
-        """Set the state of the migration, and when it was updated.
+    def set_status(self, status: MigrationStatus, error: str | None = None) -> None:
+        """Set the status of the migration, and when it was updated.
 
         Parameters
         ----------
-        state: MigrationState
-            The state.
+        status: MigrationStatus
+            The status.
         error: str | None = None
             Why planning or completing failed, or None.
         """
-        self.state = state
+        self.status = status
         self.error = error
         self.updated = datetime.datetime.now()

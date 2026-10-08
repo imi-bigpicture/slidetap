@@ -31,7 +31,12 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+} from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
@@ -45,7 +50,7 @@ import {
 } from 'src/models/attribute'
 import {
   MigrationObjectKind,
-  MigrationState,
+  MigrationStatus,
   type MigrationAttributeIssue,
   type MigrationObject,
   type ProjectMigration,
@@ -85,10 +90,11 @@ function Migrate({ project }: MigrateProps): ReactElement {
     },
     enabled: migrating,
     // Planned and completed by tasks, which say when they are done by the
-    // state.
+    // status.
     refetchInterval: (query) => {
-      const state = query.state.data?.state
-      return state === MigrationState.PLANNING || state === MigrationState.COMPLETING
+      const status = query.state.data?.status
+      return status === MigrationStatus.PLANNING ||
+        status === MigrationStatus.COMPLETING
         ? 2000
         : false
     },
@@ -180,7 +186,7 @@ function StartMigration({ project }: MigrateProps): ReactElement {
   )
 }
 
-/** A conversion under way, by its state, with the target root as the schema. */
+/** A conversion under way, by its status, with the target root as the schema. */
 function MigrationInProgress({
   project,
   migration,
@@ -225,26 +231,26 @@ function MigrationInProgress({
         Converting to {migration.targetRootSchemaName}. Nothing can be changed in the
         project until the conversion is completed or reverted.
       </Typography>
-      {migration.state === MigrationState.PLANNING && (
+      {migration.status === MigrationStatus.PLANNING && (
         <>
           <Typography>Planning the conversion.</Typography>
           <LinearProgress />
         </>
       )}
-      {migration.state === MigrationState.COMPLETING && (
+      {migration.status === MigrationStatus.COMPLETING && (
         <>
           <Typography>Completing the conversion.</Typography>
           <LinearProgress />
         </>
       )}
-      {migration.state === MigrationState.FAILED && (
+      {migration.status === MigrationStatus.FAILED && (
         <Alert severity="error">
           The conversion failed, and the project is as it was before it:{' '}
           {migration.error ?? 'why is in the log of the server'}. Revert it to set the
           project back.
         </Alert>
       )}
-      {migration.state === MigrationState.CURATING && (
+      {migration.status === MigrationStatus.CURATING && (
         <>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography>
@@ -268,8 +274,8 @@ function MigrationInProgress({
           <CurateMigration project={project} migration={migration} />
         </>
       )}
-      {(migration.state === MigrationState.PLANNING ||
-        migration.state === MigrationState.FAILED) && (
+      {(migration.status === MigrationStatus.PLANNING ||
+        migration.status === MigrationStatus.FAILED) && (
         <Stack direction="row">{revertButton}</Stack>
       )}
       {revertMutation.isError && (
@@ -279,7 +285,7 @@ function MigrationInProgress({
   )
 }
 
-/** The objects with something to resolve or dropped, and the selected one's. */
+/** The objects with something to resolve or accept, and the selected one's. */
 function CurateMigration({
   project,
   migration,
@@ -361,15 +367,10 @@ function CurateObject({
       <Typography variant="h6">
         {object.identifier} ({object.targetSchemaDisplayName})
       </Typography>
-      {object.dropped.length > 0 && (
-        <Alert severity="info">
-          Dropped, with no counterpart:{' '}
-          {object.dropped
-            .map((dropped) => `${dropped.displayName} (${dropped.displayValue ?? ''})`)
-            .join(', ')}
-        </Alert>
-      )}
       {object.attributeIssues.map((issue) => {
+        if (issue.dropped) {
+          return <AcceptDropped key={issue.uid} project={project} issue={issue} />
+        }
         const schema = issueSchema(rootSchema, object, issue)
         return schema === undefined ? (
           <Alert key={issue.uid} severity="error">
@@ -388,6 +389,89 @@ function CurateObject({
   )
 }
 
+/** Resolving an attribute issue, refreshing the migration when it is. */
+function useResolveIssue(
+  project: Project,
+  issue: MigrationAttributeIssue,
+): UseMutationResult<
+  MigrationAttributeIssue,
+  Error,
+  Attribute<AttributeValueTypes> | null
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (attribute: Attribute<AttributeValueTypes> | null) =>
+      projectApi.resolveMigrationAttributeIssue(project.uid, issue.uid, attribute),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.project.migration(project.uid),
+      })
+    },
+  })
+}
+
+/** The name, status, original value, and problem of an attribute issue. */
+function IssueHeader({
+  issue,
+  status,
+}: {
+  issue: MigrationAttributeIssue
+  status: string
+}): ReactElement {
+  return (
+    <>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Typography variant="subtitle1">{issue.displayName}</Typography>
+        <Chip
+          size="small"
+          color={issue.resolvedAt !== null ? 'success' : 'default'}
+          label={status}
+        />
+      </Stack>
+      <Typography variant="body2">
+        Was: {issue.original?.displayValue ?? '—'}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {issue.problem}
+      </Typography>
+    </>
+  )
+}
+
+/** An attribute the conversion drops, which can only be accepted. */
+function AcceptDropped({
+  project,
+  issue,
+}: {
+  project: Project
+  issue: MigrationAttributeIssue
+}): ReactElement {
+  const resolveMutation = useResolveIssue(project, issue)
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack spacing={1}>
+          <IssueHeader
+            issue={issue}
+            status={issue.resolvedAt === null ? 'Dropped' : 'Accepted'}
+          />
+          {resolveMutation.isError && (
+            <Alert severity="error">{refusal(resolveMutation.error)}</Alert>
+          )}
+        </Stack>
+      </CardContent>
+      <CardActions>
+        <Button
+          disabled={resolveMutation.isPending || issue.resolvedAt !== null}
+          onClick={() => resolveMutation.mutate(null)}
+        >
+          Accept
+        </Button>
+      </CardActions>
+    </Card>
+  )
+}
+
 /** One attribute to resolve: the original value, why it was not converted, and
  * the editor of the target attribute, starting from what is resolved or else
  * what could be converted. */
@@ -400,45 +484,26 @@ function CurateIssue({
   issue: MigrationAttributeIssue
   schema: AttributeSchema
 }): ReactElement {
-  const queryClient = useQueryClient()
   const [draft, setDraft] = React.useState<Attribute<AttributeValueTypes>>(
     issue.resolved ??
       issue.proposed ??
       newAttribute(schema.uid, schema.attributeValueType, null, ''),
   )
-  const resolveMutation = useMutation({
-    mutationFn: (attribute: Attribute<AttributeValueTypes> | null) =>
-      projectApi.resolveMigrationAttributeIssue(project.uid, issue.uid, attribute),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.project.migration(project.uid),
-      })
-    },
-  })
+  const resolveMutation = useResolveIssue(project, issue)
   return (
     <Card variant="outlined">
       <CardContent>
         <Stack spacing={1}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography variant="subtitle1">{issue.displayName}</Typography>
-            <Chip
-              size="small"
-              color={issue.resolvedAt !== null ? 'success' : 'default'}
-              label={
-                issue.resolvedAt === null
-                  ? 'Unresolved'
-                  : issue.leftEmpty
-                    ? 'Left empty'
-                    : 'Set'
-              }
-            />
-          </Stack>
-          <Typography variant="body2">
-            Was: {issue.original?.displayValue ?? '—'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {issue.problem}
-          </Typography>
+          <IssueHeader
+            issue={issue}
+            status={
+              issue.resolvedAt === null
+                ? 'Unresolved'
+                : issue.leftEmpty
+                  ? 'Left empty'
+                  : 'Set'
+            }
+          />
           <DisplayAttribute
             attribute={draft}
             schema={schema}

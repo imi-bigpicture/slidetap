@@ -16,7 +16,7 @@ import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { ProjectStatus } from 'src/models/project_status'
 
 /** Where the migration of a project is. */
-export enum MigrationState {
+export enum MigrationStatus {
   PLANNING = 'planning',
   CURATING = 'curating',
   COMPLETING = 'completing',
@@ -29,39 +29,42 @@ export enum MigrationObjectKind {
   ITEM = 'item',
 }
 
-/** A top-level attribute of the target schema of an object that the
- * migration could not convert or left invalid, and how the curator resolved it. */
+/** A top-level attribute of an object that the migration could not convert,
+ * left invalid, or dropped, and how the curator resolved it. */
 export interface MigrationAttributeIssue {
   readonly uid: string
-  /** The tag in the target schema. */
+  /** The tag in the target schema, or in the source schema for a dropped
+   * attribute. */
   readonly tag: string
-  /** The attribute schema of the tag in the target root. */
-  readonly targetAttributeSchemaUid: string
+  /** The attribute schema of the original in the source root, null where the
+   * object had no attribute. */
+  readonly sourceAttributeSchemaUid: string | null
+  /** The attribute schema of the tag in the target root, null for a dropped
+   * attribute. */
+  readonly targetAttributeSchemaUid: string | null
+  /** Whether the migration dropped the attribute, which can only be accepted. */
+  readonly dropped: boolean
+  /** The display name of the target attribute, or of the source attribute for
+   * a dropped attribute. */
   readonly displayName: string
   /** The attribute of the source object, null where it had none. */
   readonly original: Attribute<AttributeValueTypes> | null
   /** What could be converted, to start from. */
   readonly proposed: Attribute<AttributeValueTypes> | null
   /** What needs the curator's decision: a value the migration could not
-   * migrate, or an attribute the migration made invalid. */
+   * migrate, an attribute the migration made invalid, or an attribute it
+   * dropped. */
   readonly problem: string
-  /** When the issue was resolved, null until it is. */
+  /** When the issue was resolved, or the dropped attribute accepted, null until
+   * it is. */
   readonly resolvedAt: string | null
   readonly leftEmpty: boolean
-  /** The value the issue is resolved with, null where left empty or not yet
-   * resolved. */
+  /** The value the issue is resolved with, null where left empty, accepted as
+   * dropped, or not yet resolved. */
   readonly resolved: Attribute<AttributeValueTypes> | null
 }
 
-/** An attribute with a value that the migration left out, as it has no
- * target. */
-export interface MigrationDroppedAttribute {
-  readonly tag: string
-  readonly displayName: string
-  readonly displayValue: string | null
-}
-
-/** A project, dataset, or item with attribute issues or dropped attributes. */
+/** A project, dataset, or item with attribute issues. */
 export interface MigrationObject {
   readonly uid: string
   readonly kind: MigrationObjectKind
@@ -70,8 +73,8 @@ export interface MigrationObject {
   /** The schema of the target root it is migrated to. */
   readonly targetSchemaUid: string
   readonly targetSchemaDisplayName: string
+  /** The attribute issues, the dropped attributes included. */
   readonly attributeIssues: MigrationAttributeIssue[]
-  readonly dropped: MigrationDroppedAttribute[]
 }
 
 /** The migration of a project to another root schema, with its plan. */
@@ -81,13 +84,15 @@ export interface ProjectMigration {
   readonly targetRootSchemaUid: string
   /** The name and version of the root migrated to. */
   readonly targetRootSchemaName: string
-  readonly previousStatus: ProjectStatus
-  readonly state: MigrationState
+  readonly previousProjectStatus: ProjectStatus
+  readonly status: MigrationStatus
   /** Why planning or completing failed. */
   readonly error: string | null
   readonly created: string
   readonly updated: string
   readonly objects: MigrationObject[]
+  /** How many attribute issues there are, the dropped attributes included. */
   readonly attributeIssues: number
+  /** How many attribute issues are resolved or accepted. */
   readonly resolved: number
 }

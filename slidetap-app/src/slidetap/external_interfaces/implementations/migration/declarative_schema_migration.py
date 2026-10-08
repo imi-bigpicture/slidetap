@@ -53,8 +53,8 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     def __init__(
         self,
-        source: RootSchema,
-        target: RootSchema,
+        source_schema: RootSchema,
+        target_schema: RootSchema,
         project_migrator: ObjectMigrator[Project] | None = None,
         dataset_migrator: ObjectMigrator[Dataset] | None = None,
         item_migrators: Iterable[ObjectMigrator[Item]] = (),
@@ -63,10 +63,10 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Parameters
         ----------
-        source: RootSchema
-            The root the projects are moved from.
-        target: RootSchema
-            The root the projects are moved to.
+        source_schema: RootSchema
+            The root schema the projects are moved from.
+        target_schema: RootSchema
+            The root schema the projects are moved to.
         project_migrator: ObjectMigrator[Project] | None = None
             The migrator of the project.
         dataset_migrator: ObjectMigrator[Dataset] | None = None
@@ -83,15 +83,15 @@ class DeclarativeSchemaMigration(SchemaMigration):
             plain migrator created here says nothing about an attribute it
             cannot move as it is.
         """
-        self._source = source
-        self._target = target
+        self._source_schema = source_schema
+        self._target_schema = target_schema
         self._project_migrator = (
-            ObjectMigrator[Project](source.project, target.project)
+            ObjectMigrator[Project](source_schema.project, target_schema.project)
             if project_migrator is None
             else project_migrator
         )
         self._dataset_migrator = (
-            ObjectMigrator[Dataset](source.dataset, target.dataset)
+            ObjectMigrator[Dataset](source_schema.dataset, target_schema.dataset)
             if dataset_migrator is None
             else dataset_migrator
         )
@@ -99,13 +99,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     @property
     def source(self) -> RootSchema:
-        """The root the projects are moved from."""
-        return self._source
+        """The root schema the projects are moved from."""
+        return self._source_schema
 
     @property
     def target(self) -> RootSchema:
-        """The root the projects are moved to."""
-        return self._target
+        """The root schema the projects are moved to."""
+        return self._target_schema
 
     @property
     def project_migrator(self) -> ObjectMigrator[Project]:
@@ -272,7 +272,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
         if migrator is None:
             raise ValueError(
                 f"{name} is of schema {schema_uid}, which is not an item schema of "
-                f"root {self._source.name}."
+                f"root {self._source_schema.name}."
             )
         return migrator
 
@@ -291,8 +291,8 @@ class DeclarativeSchemaMigration(SchemaMigration):
             neither a migrator nor an item schema of the same uid in the
             target.
         """
-        source_items = self._item_schemas(self._source)
-        target_items = self._item_schemas(self._target)
+        source_items = self._item_schemas(self._source_schema)
+        target_items = self._item_schemas(self._target_schema)
         by_source: dict[UUID, ObjectMigrator[Item]] = {}
         for migrator in declared:
             if migrator.source.uid in by_source:
@@ -311,15 +311,15 @@ class DeclarativeSchemaMigration(SchemaMigration):
             if target_item is None:
                 raise ValueError(
                     f"Item schema {source_item.name} ({uid}) of root "
-                    f"{self._source.name} has no migrator, and no item schema of "
-                    f"the same uid in root {self._target.name}."
+                    f"{self._source_schema.name} has no migrator, and no item schema "
+                    f"of the same uid in root {self._target_schema.name}."
                 )
             migrators[uid] = ObjectMigrator[Item](source_item, target_item)
         unknown = by_source.keys() - source_items.keys()
         if unknown:
             raise ValueError(
                 f"Migrators are given for {', '.join(map(str, unknown))}, which "
-                f"are not item schemas of root {self._source.name}."
+                f"are not item schemas of root {self._source_schema.name}."
             )
         return migrators
 

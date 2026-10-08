@@ -1,8 +1,9 @@
 """add project migration
 
 The migration of a project to another root schema, from it is created until
-it is completed or reverted, its attribute issues: what the migration could
-not convert, for the curator to resolve, and the attributes it dropped.
+it is completed or reverted, and its attribute issues: what the migration
+could not convert, for the curator to resolve, and the attributes it dropped,
+for the curator to accept.
 
 Revision ID: 4d2a7f91c3e8
 Revises: 2f8a6d4c9b17
@@ -31,7 +32,7 @@ def upgrade() -> None:
         sa.Column("source_root_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("target_root_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("previous_project_status", sa.String(length=32), nullable=False),
-        sa.Column("state", sa.String(length=32), nullable=False),
+        sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("created", sa.DateTime(), nullable=False),
         sa.Column("updated", sa.DateTime(), nullable=False),
@@ -46,7 +47,8 @@ def upgrade() -> None:
         sa.Column("object_uid", sa.Uuid(), nullable=False),
         sa.Column("item_uid", sa.Uuid(), nullable=True),
         sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
-        sa.Column("target_attribute_schema_uid", sa.Uuid(), nullable=False),
+        sa.Column("source_attribute_schema_uid", sa.Uuid(), nullable=True),
+        sa.Column("target_attribute_schema_uid", sa.Uuid(), nullable=True),
         sa.Column("original", sa.JSON(), nullable=True),
         sa.Column("proposed", sa.JSON(), nullable=True),
         sa.Column("problem", sa.Text(), nullable=False),
@@ -57,8 +59,10 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["item_uid"], ["item.uid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("uid"),
-        sa.UniqueConstraint(
-            "migration_uid", "object_uid", "target_attribute_schema_uid"
+        sa.CheckConstraint(
+            "source_attribute_schema_uid IS NOT NULL "
+            "OR target_attribute_schema_uid IS NOT NULL",
+            name="ck_migration_attribute_issue_attribute_schema",
         ),
     )
     op.create_index(
@@ -66,28 +70,22 @@ def upgrade() -> None:
         "migration_attribute_issue",
         ["migration_uid"],
     )
-    op.create_table(
-        "migration_dropped_attribute",
-        sa.Column("uid", sa.Uuid(), nullable=False),
-        sa.Column("migration_uid", sa.Uuid(), nullable=False),
-        sa.Column("object_uid", sa.Uuid(), nullable=False),
-        sa.Column("item_uid", sa.Uuid(), nullable=True),
-        sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
-        sa.Column("source_attribute_schema_uid", sa.Uuid(), nullable=False),
-        sa.Column("original", sa.JSON(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["migration_uid"], ["project_migration.uid"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(["item_uid"], ["item.uid"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("uid"),
-        sa.UniqueConstraint(
-            "migration_uid", "object_uid", "source_attribute_schema_uid"
-        ),
+    # An issue with a target is unique by it, a dropped attribute by its source.
+    op.create_index(
+        "uq_migration_attribute_issue_target",
+        "migration_attribute_issue",
+        ["migration_uid", "object_uid", "target_attribute_schema_uid"],
+        unique=True,
+        sqlite_where=sa.text("target_attribute_schema_uid IS NOT NULL"),
+        postgresql_where=sa.text("target_attribute_schema_uid IS NOT NULL"),
     )
     op.create_index(
-        "ix_migration_dropped_attribute_migration_uid",
-        "migration_dropped_attribute",
-        ["migration_uid"],
+        "uq_migration_attribute_issue_dropped",
+        "migration_attribute_issue",
+        ["migration_uid", "object_uid", "source_attribute_schema_uid"],
+        unique=True,
+        sqlite_where=sa.text("target_attribute_schema_uid IS NULL"),
+        postgresql_where=sa.text("target_attribute_schema_uid IS NULL"),
     )
 
 
@@ -107,10 +105,13 @@ def downgrade() -> None:
         "WHERE uid IN (SELECT project_uid FROM project_migration)"
     )
     op.drop_index(
-        "ix_migration_dropped_attribute_migration_uid",
-        table_name="migration_dropped_attribute",
+        "uq_migration_attribute_issue_dropped",
+        table_name="migration_attribute_issue",
     )
-    op.drop_table("migration_dropped_attribute")
+    op.drop_index(
+        "uq_migration_attribute_issue_target",
+        table_name="migration_attribute_issue",
+    )
     op.drop_index(
         "ix_migration_attribute_issue_migration_uid",
         table_name="migration_attribute_issue",

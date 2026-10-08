@@ -148,14 +148,14 @@ class Schemas:
             {Colour.GREEN: None, Colour.NAVY: TargetColour.BLUE},
         )
         return {
-            "migrated": [
+            "migrated_attributes": [
                 (self.sex, EnumAttributeMigrator(Sex, TargetSex)),
                 (self.colour, colours),
                 (self.list_colour, colours),
                 (self.shade, colours),
             ],
-            "renamed": [(self.old_name, self.new_name)],
-            "dropped": [self.gone],
+            "renamed_attributes": [(self.old_name, self.new_name)],
+            "dropped_attributes": [self.gone],
         }
 
     def root(self, being: SampleSchema) -> RootSchema:
@@ -405,7 +405,7 @@ class TestObjectMigrator:
             target,
             **{
                 **schemas.migrator_declarations(),
-                "renamed": [
+                "renamed_attributes": [
                     (schemas.old_name, schemas.new_name),
                     (schemas.note, remark),
                 ],
@@ -509,8 +509,8 @@ class TestObjectMigrator:
     def test_a_fixed_value_migrator_sets_its_value(self, schemas: Schemas):
         # Arrange
         migrator = schemas.migrator(
-            migrated=[
-                *schemas.migrator_declarations()["migrated"],
+            migrated_attributes=[
+                *schemas.migrator_declarations()["migrated_attributes"],
                 (schemas.kept, FixedValueAttributeMigrator("set")),
             ]
         )
@@ -565,7 +565,7 @@ class TestObjectMigrator:
         has no tag for."""
         # Act & Assert
         with pytest.raises(ValueError, match="says nothing about") as error:
-            schemas.migrator(migrated=[], dropped=[])
+            schemas.migrator(migrated_attributes=[], dropped_attributes=[])
         message = str(error.value)
         for path in ("sex", "details/colour", "colours[]", "tint<1>", "gone"):
             assert path in message
@@ -604,7 +604,7 @@ class TestObjectMigrator:
         # Act & Assert
         with pytest.raises(ValueError, match="says nothing about details/note"):
             schemas.migrator(
-                renamed=[
+                renamed_attributes=[
                     (schemas.old_name, schemas.new_name),
                     (schemas.note, schemas.added),
                 ]
@@ -621,11 +621,15 @@ class TestObjectMigrator:
         # Arrange
         foreign = {
             "migrated": {
-                "migrated": [(schemas.target_sex, FixedValueAttributeMigrator("M"))]
+                "migrated_attributes": [
+                    (schemas.target_sex, FixedValueAttributeMigrator("M"))
+                ]
             },
-            "renamed": {"renamed": [(schemas.new_name, schemas.new_name)]},
-            "renamed to": {"renamed": [(schemas.old_name, schemas.old_name)]},
-            "dropped": {"dropped": [schemas.gone, schemas.added]},
+            "renamed": {"renamed_attributes": [(schemas.new_name, schemas.new_name)]},
+            "renamed to": {
+                "renamed_attributes": [(schemas.old_name, schemas.old_name)]
+            },
+            "dropped": {"dropped_attributes": [schemas.gone, schemas.added]},
         }[declaration]
 
         # Act & Assert
@@ -635,7 +639,7 @@ class TestObjectMigrator:
     def test_an_attribute_declared_twice_is_refused(self, schemas: Schemas):
         # Act & Assert
         with pytest.raises(ValueError, match="gone .* as dropped more than once"):
-            schemas.migrator(dropped=[schemas.gone, schemas.gone])
+            schemas.migrator(dropped_attributes=[schemas.gone, schemas.gone])
 
 
 @pytest.mark.unittest

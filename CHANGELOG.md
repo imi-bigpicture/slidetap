@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A project is migrated in steps, with what the migration could not convert resolved by a curator before it is completed (database migration).
 - `MigratedObject.unresolved`, in `slidetap.model`, holds the `UnresolvedAttribute`s a migration could not convert, for the curator to resolve.
 - Planning a migration also makes an attribute issue of every top-level attribute the migration leaves invalid that was valid before.
+- An attribute with a value that a migration drops is an attribute issue, which the curator accepts before the migration can be submitted.
 - A resolved value keeps the row, lock, and read-only flag of the attribute it resolves.
 - Endpoints for the steps of migrating a project.
 - The actions of a project say whether its root has a migration, and why the project cannot be migrated.

@@ -31,7 +31,6 @@ from slidetap.database import (
     DatabaseMappingItem,
     DatabaseMetadataSearchItem,
     DatabaseMigrationAttributeIssue,
-    DatabaseMigrationDroppedAttribute,
     DatabaseProject,
     DatabaseProjectMigration,
     DatabaseUnmappedValue,
@@ -53,12 +52,11 @@ from slidetap.model import (
     MetadataSearchItem,
     MigratedObject,
     MigrationAttributeIssue,
-    MigrationDroppedAttribute,
     MigrationError,
     MigrationObject,
     MigrationObjectKind,
     MigrationResolution,
-    MigrationState,
+    MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
     ObservationSchema,
@@ -124,9 +122,11 @@ class MigrationService:
 
     Created, the project is locked as migrating, and the migration planned in
     a task: run for every object without saving, with what it could not
-    convert stored as attribute issues, and every top-level attribute that was
-    valid before and is not after. The curator resolves each attribute issue
-    and submits, which completes the migration in a task, or reverts.
+    convert stored as attribute issues, as is every top-level attribute that
+    was valid before and is not after, and every attribute with a value it
+    dropped. The curator resolves each attribute issue, accepts each dropped
+    attribute, and submits, which completes the migration in a task, or
+    reverts.
     Completing runs the migration again, puts the resolved values at their
     tags, and replaces the attributes of every object, in one transaction for
     the whole project, which is validated again on the target root.
@@ -207,8 +207,8 @@ class MigrationService:
 
     def plan(self, project_uid: UUID) -> None:
         """Run the migration of a project being planned without saving it, and
-        store what it could not convert as attribute issues, and what it
-        dropped.
+        store what it could not convert and what it dropped as attribute
+        issues.
 
         Nothing is done where the project has no migration being planned.
 
@@ -229,17 +229,21 @@ class MigrationService:
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
             migration = self._get_optional(session, project.uid)
-            if migration is None or migration.state != MigrationState.PLANNING:
+            if migration is None or migration.status != MigrationStatus.PLANNING:
                 self._logger.warning(
                     f"Project {project.uid} has no migration being planned."
                 )
                 return
             self._assert_can_migrate(session, project, started=True)
             objects, _ = self._run(session, project)
+            target_root = self._schema_service.get_root(
+                migration.target_root_schema_uid
+            )
             for object_ in objects:
-                migration.attribute_issues.extend(self._attribute_issues(object_))
-                migration.dropped_attributes.extend(self._dropped(object_))
-            migration.set_state(MigrationState.CURATING)
+                migration.attribute_issues.extend(
+                    self._attribute_issues(object_, target_root)
+                )
+            migration.set_status(MigrationStatus.CURATING)
             self._logger.info(
                 f"Migration of project {project.uid} planned, with "
                 f"{len(migration.attribute_issues)} attribute issues."
@@ -256,8 +260,7 @@ class MigrationService:
         Returns
         -------
         ProjectMigration
-            The migration, with its attribute issues and dropped attributes by
-            object.
+            The migration, with its attribute issues by object.
 
         Raises
         ------
@@ -277,7 +280,7 @@ class MigrationService:
         resolution: MigrationResolution,
     ) -> MigrationAttributeIssue:
         """Resolve an attribute issue: a value on its attribute schema, or left
-        empty.
+        empty. A dropped attribute is resolved by accepting it, without a value.
 
         Parameters
         ----------
@@ -286,7 +289,8 @@ class MigrationService:
         attribute_issue_uid: UUID
             The uid of the attribute issue.
         resolution: MigrationResolution
-            The value, or None to leave the attribute empty.
+            The value, or None to leave the attribute empty or accept it as
+            dropped.
 
         Returns
         -------
@@ -299,13 +303,14 @@ class MigrationService:
             If there is no such project, it has no migration, or the migration
             has no such attribute issue.
         NotAllowedActionError
-            If the migration is not being curated, or the value is not on the
-            attribute schema of the attribute issue.
+            If the migration is not being curated, the value is not on the
+            attribute schema of the attribute issue, or a value is given for a
+            dropped attribute.
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
             migration = self._get(session, project.uid)
-            self._assert_state(migration, MigrationState.CURATING)
+            self._assert_status(migration, MigrationStatus.CURATING)
             issue = next(
                 (
                     issue
@@ -319,17 +324,24 @@ class MigrationService:
                     f"The migration of project {project.uid} has no attribute "
                     f"issue {attribute_issue_uid}."
                 )
-            tag, schema = self._issue_attribute_schema(migration, issue)
-            if (
-                resolution.attribute is not None
-                and resolution.attribute.schema_uid != schema.uid
-            ):
-                raise NotAllowedActionError(
-                    f"The value of {tag!r} must be on attribute schema "
-                    f"{schema.uid}, not {resolution.attribute.schema_uid}."
-                )
+            if issue.dropped:
+                if resolution.attribute is not None:
+                    raise NotAllowedActionError(
+                        f"Attribute issue {issue.uid} is of a dropped attribute, "
+                        f"which is accepted without a value."
+                    )
+            else:
+                tag, schema = self._issue_attribute_schema(migration, issue)
+                if (
+                    resolution.attribute is not None
+                    and resolution.attribute.schema_uid != schema.uid
+                ):
+                    raise NotAllowedActionError(
+                        f"The value of {tag!r} must be on attribute schema "
+                        f"{schema.uid}, not {resolution.attribute.schema_uid}."
+                    )
             issue.resolve(resolution.attribute)
-            migration.set_state(MigrationState.CURATING)
+            migration.set_status(MigrationStatus.CURATING)
             session.flush()
             return self._attribute_issue_model(migration, issue)
 
@@ -352,12 +364,12 @@ class MigrationService:
             If there is no such project, or it has no migration.
         NotAllowedActionError
             If the migration is not being curated, or an attribute issue is
-            not resolved.
+            not resolved, or a dropped attribute not accepted.
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
             migration = self._get(session, project.uid)
-            self._assert_state(migration, MigrationState.CURATING)
+            self._assert_status(migration, MigrationStatus.CURATING)
             unresolved = sum(
                 1 for issue in migration.attribute_issues if issue.resolved_at is None
             )
@@ -366,7 +378,7 @@ class MigrationService:
                     f"The migration cannot be submitted: {unresolved} attribute "
                     f"issues are not resolved."
                 )
-            migration.set_state(MigrationState.COMPLETING)
+            migration.set_status(MigrationStatus.COMPLETING)
             session.flush()
             return self._model(session, project, migration)
 
@@ -389,8 +401,8 @@ class MigrationService:
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
             migration = self._get(session, project.uid)
-            if migration.state == MigrationState.COMPLETING:
-                migration.set_state(MigrationState.CURATING)
+            if migration.status == MigrationStatus.COMPLETING:
+                migration.set_status(MigrationStatus.CURATING)
 
     def complete(self, project_uid: UUID, session: Session | None = None) -> None:
         """Complete a submitted migration: run it again, put the resolved values
@@ -421,7 +433,7 @@ class MigrationService:
         with self._database_service.get_session(session) as session:
             project = self._lock_project(session, project_uid)
             migration = self._get_optional(session, project.uid)
-            if migration is None or migration.state != MigrationState.COMPLETING:
+            if migration is None or migration.status != MigrationStatus.COMPLETING:
                 self._logger.warning(
                     f"Project {project.uid} has no migration being completed."
                 )
@@ -434,8 +446,14 @@ class MigrationService:
                     self._issue_attribute_schema(migration, issue)[0],
                 ): issue
                 for issue in migration.attribute_issues
+                if not issue.dropped
             }
-            self._assert_as_planned(project, objects, issues.keys())
+            dropped = {
+                (issue.object_uid, issue.source_attribute_schema_uid)
+                for issue in migration.attribute_issues
+                if issue.dropped
+            }
+            self._assert_as_planned(project, objects, issues.keys(), dropped)
             dataset = self._database_service.get_dataset(session, project.dataset_uid)
             items: list[DatabaseItem] = []
             for object_ in objects:
@@ -509,11 +527,11 @@ class MigrationService:
                     DatabaseProjectMigration.project_uid == project_uid
                 )
             ).one_or_none()
-            if migration is not None and migration.state in (
-                MigrationState.PLANNING,
-                MigrationState.COMPLETING,
+            if migration is not None and migration.status in (
+                MigrationStatus.PLANNING,
+                MigrationStatus.COMPLETING,
             ):
-                migration.set_state(MigrationState.FAILED, error)
+                migration.set_status(MigrationStatus.FAILED, error)
 
     def _assert_can_migrate(
         self, session: Session, project: DatabaseProject, started: bool = False
@@ -618,36 +636,38 @@ class MigrationService:
         return migration
 
     @staticmethod
-    def _assert_state(
-        migration: DatabaseProjectMigration, state: MigrationState
+    def _assert_status(
+        migration: DatabaseProjectMigration, status: MigrationStatus
     ) -> None:
-        """Refuse a migration that is not in a state.
+        """Refuse a migration that does not have a status.
 
         Parameters
         ----------
         migration: DatabaseProjectMigration
             The migration.
-        state: MigrationState
-            The state it must be in.
+        status: MigrationStatus
+            The status it must have.
 
         Raises
         ------
         NotAllowedActionError
-            If the migration is in another state.
+            If the migration has another status.
         """
-        if migration.state != state:
+        if migration.status != status:
             raise NotAllowedActionError(
-                f"The migration is {migration.state.value}, not {state.value}."
+                f"The migration is {migration.status.value}, not {status.value}."
             )
 
-    @staticmethod
+    @classmethod
     def _assert_as_planned(
+        cls,
         project: DatabaseProject,
         objects: Iterable[ObjectInMigration],
-        planned: Iterable[tuple[UUID, str]],
+        planned_unresolved: Iterable[tuple[UUID, str]],
+        planned_dropped: Iterable[tuple[UUID, UUID | None]],
     ) -> None:
-        """Refuse a migration that no longer leaves unresolved what the plan
-        has attribute issues of.
+        """Refuse a migration that no longer leaves unresolved or drops what
+        the plan has attribute issues of.
 
         Parameters
         ----------
@@ -655,27 +675,40 @@ class MigrationService:
             The project.
         objects: Iterable[ObjectInMigration]
             The objects of the project, as the migration returned them now.
-        planned: Iterable[tuple[UUID, str]]
+        planned_unresolved: Iterable[tuple[UUID, str]]
             The uid of the object and the target tag of each attribute issue
-            of the plan.
+            of the plan with a target.
+        planned_dropped: Iterable[tuple[UUID, UUID | None]]
+            The uid of the object and the source attribute schema uid of each
+            dropped attribute of the plan.
 
         Raises
         ------
         MigrationError
-            If the attributes left unresolved are not those of the plan.
+            If the attributes left unresolved or dropped are not those of the
+            plan.
         """
-        unresolved = {
+        objects = list(objects)
+        now: set[tuple[UUID, str | UUID | None]] = {
             (object_.source.uid, tag)
             for object_ in objects
             for tag in object_.unresolved
         }
-        planned = set(planned)
-        if unresolved != planned:
+        now.update(
+            (object_.source.uid, attribute.schema_uid)
+            for object_ in objects
+            for attribute in cls._dropped(object_)
+        )
+        planned: set[tuple[UUID, str | UUID | None]] = {
+            *planned_unresolved,
+            *planned_dropped,
+        }
+        if now != planned:
             raise MigrationError(
                 f"The migration of project {project.name} no longer leaves "
-                f"unresolved what was planned: {len(unresolved - planned)} "
-                f"attributes are unresolved that are not in the plan, and "
-                f"{len(planned - unresolved)} in the plan are no longer. Revert "
+                f"unresolved or drops what was planned: {len(now - planned)} "
+                f"attributes are unresolved or dropped that are not in the plan, "
+                f"and {len(planned - now)} in the plan are no longer. Revert "
                 f"the migration and start it again."
             )
 
@@ -1131,20 +1164,23 @@ class MigrationService:
         return schema.attributes.get(tag) or schema.private_attributes.get(tag)
 
     def _attribute_issues(
-        self, object_: ObjectInMigration
+        self, object_: ObjectInMigration, target_root: RootSchemaIndex
     ) -> Iterable[DatabaseMigrationAttributeIssue]:
-        """Make the attribute issues of what an object left unresolved.
+        """Make the attribute issues of what an object left unresolved, and of
+        what it dropped.
 
         Parameters
         ----------
         object_: ObjectInMigration
             The object, checked.
+        target_root: RootSchemaIndex
+            The root the object is migrated to.
 
         Returns
         -------
         Iterable[DatabaseMigrationAttributeIssue]
-            An attribute issue for each unresolved attribute, with the original
-            given its display value.
+            An attribute issue for each unresolved attribute and each dropped
+            attribute, with the original given its display value.
 
         Raises
         ------
@@ -1166,17 +1202,33 @@ class MigrationService:
                 object_.source.uid,
                 object_.item_uid,
                 object_.target_schema.uid,
+                original.schema_uid if original is not None else None,
                 schema.uid,
                 original,
                 unresolved.proposed,
                 unresolved.reason,
             )
+        for attribute in self._dropped(object_):
+            original = attribute.model_copy(deep=True)
+            self._set_display_value(original)
+            _, display_name = self._source_attribute_names(original.schema_uid)
+            value = original.display_value
+            dropped = display_name if value is None else f"'{value}' of {display_name}"
+            yield DatabaseMigrationAttributeIssue(
+                object_.source.uid,
+                object_.item_uid,
+                object_.target_schema.uid,
+                original.schema_uid,
+                None,
+                original,
+                None,
+                f"{dropped} is dropped: it has no place in {target_root.display_name}.",
+            )
 
-    def _dropped(
-        self, object_: ObjectInMigration
-    ) -> Iterable[DatabaseMigrationDroppedAttribute]:
-        """Make the dropped attributes of an object: those with a value that
-        the migration neither converted nor left unresolved.
+    @staticmethod
+    def _dropped(object_: ObjectInMigration) -> list[AnyAttribute]:
+        """Get the dropped attributes of an object: those with a value that the
+        migration neither converted nor left unresolved.
 
         Parameters
         ----------
@@ -1185,8 +1237,8 @@ class MigrationService:
 
         Returns
         -------
-        Iterable[DatabaseMigrationDroppedAttribute]
-            A dropped attribute for each, given its display value.
+        list[AnyAttribute]
+            The dropped attributes of the source object.
         """
         kept = {
             attribute.uid
@@ -1200,21 +1252,14 @@ class MigrationService:
                 ),
             )
         }
-        for attribute in (
-            *object_.source.attributes.values(),
-            *object_.source.private_attributes.values(),
-        ):
-            if attribute.uid in kept or attribute.value is None:
-                continue
-            attribute = attribute.model_copy(deep=True)
-            self._set_display_value(attribute)
-            yield DatabaseMigrationDroppedAttribute(
-                object_.source.uid,
-                object_.item_uid,
-                object_.target_schema.uid,
-                attribute.schema_uid,
-                attribute,
+        return [
+            attribute
+            for attribute in (
+                *object_.source.attributes.values(),
+                *object_.source.private_attributes.values(),
             )
+            if attribute.uid not in kept and attribute.value is not None
+        ]
 
     @staticmethod
     def _with_resolutions(
@@ -1233,8 +1278,8 @@ class MigrationService:
         object_: ObjectInMigration
             The object, checked.
         issues: Mapping[tuple[UUID, str], DatabaseMigrationAttributeIssue]
-            The resolved attribute issues, by object uid and target tag, with
-            one for each unresolved attribute of the object.
+            The resolved attribute issues with a target, by object uid and
+            target tag, with one for each unresolved attribute of the object.
 
         Returns
         -------
@@ -1440,8 +1485,8 @@ class MigrationService:
         Returns
         -------
         ProjectMigration
-            The migration, with its attribute issues and dropped attributes by
-            object: the project, the dataset, then the items by identifier.
+            The migration, with its attribute issues by object: the project,
+            the dataset, then the items by identifier.
         """
         target_root = self._schema_service.get_root(migration.target_root_schema_uid)
         objects: dict[UUID, MigrationObject] = {}
@@ -1452,13 +1497,6 @@ class MigrationService:
                 issue.object_uid,
                 issue.target_object_schema_uid,
             ).attribute_issues.append(self._attribute_issue_model(migration, issue))
-        for dropped in migration.dropped_attributes:
-            self._object(
-                objects,
-                target_root,
-                dropped.object_uid,
-                dropped.target_object_schema_uid,
-            ).dropped.append(self._dropped_model(dropped))
         identifiers = self._identifiers(session, project, objects.values())
         kinds = list(MigrationObjectKind)
         ordered = sorted(
@@ -1473,8 +1511,8 @@ class MigrationService:
             source_root_schema_uid=migration.source_root_schema_uid,
             target_root_schema_uid=migration.target_root_schema_uid,
             target_root_schema_name=target_root.display_name,
-            previous_status=migration.previous_project_status,
-            state=migration.state,
+            previous_project_status=migration.previous_project_status,
+            status=migration.status,
             error=migration.error,
             created=migration.created,
             updated=migration.updated,
@@ -1628,7 +1666,7 @@ class MigrationService:
         migration: DatabaseProjectMigration
             The migration.
         issue: DatabaseMigrationAttributeIssue
-            An attribute issue of the migration.
+            An attribute issue of the migration with a target.
 
         Returns
         -------
@@ -1640,7 +1678,7 @@ class MigrationService:
         ------
         MigrationError
             If the target schema has no attribute of the attribute schema of
-            the attribute issue.
+            the attribute issue, or it has none.
         """
         target_root = self._schema_service.get_root(migration.target_root_schema_uid)
         target_schema = self._object_schema(target_root, issue.target_object_schema_uid)
@@ -1673,7 +1711,9 @@ class MigrationService:
         Returns
         -------
         MigrationAttributeIssue
-            The attribute issue, with its target tag and attribute schema.
+            The attribute issue, with its target tag and attribute schema, or
+            the tag and display name of its source attribute schema for a
+            dropped attribute.
 
         Raises
         ------
@@ -1681,17 +1721,29 @@ class MigrationService:
             If the target schema has no attribute of the attribute schema of
             the attribute issue.
         """
-        tag, schema = self._issue_attribute_schema(migration, issue)
+        if issue.dropped and issue.source_attribute_schema_uid is not None:
+            tag, display_name = self._source_attribute_names(
+                issue.source_attribute_schema_uid
+            )
+        else:
+            tag, schema = self._issue_attribute_schema(migration, issue)
+            display_name = schema.display_name
         return MigrationAttributeIssue(
             uid=issue.uid,
             tag=tag,
-            target_attribute_schema_uid=schema.uid,
-            display_name=schema.display_name,
+            source_attribute_schema_uid=issue.source_attribute_schema_uid,
+            target_attribute_schema_uid=issue.target_attribute_schema_uid,
+            dropped=issue.dropped,
+            display_name=display_name,
             original=issue.original,
             proposed=issue.proposed,
             problem=issue.problem,
             resolved_at=issue.resolved_at,
-            left_empty=issue.resolved_at is not None and issue.resolved is None,
+            left_empty=(
+                not issue.dropped
+                and issue.resolved_at is not None
+                and issue.resolved is None
+            ),
             resolved=issue.resolved,
         )
 
@@ -1707,31 +1759,23 @@ class MigrationService:
         with contextlib.suppress(KeyError, ValueError):
             self._attribute_service.set_display_value(attribute)
 
-    def _dropped_model(
-        self, dropped: DatabaseMigrationDroppedAttribute
-    ) -> MigrationDroppedAttribute:
-        """Make the model of a dropped attribute.
+    def _source_attribute_names(self, attribute_schema_uid: UUID) -> tuple[str, str]:
+        """Get the tag and display name of an attribute schema of the source
+        root.
 
         Parameters
         ----------
-        dropped: DatabaseMigrationDroppedAttribute
-            The dropped attribute.
+        attribute_schema_uid: UUID
+            The uid of the attribute schema.
 
         Returns
         -------
-        MigrationDroppedAttribute
-            The dropped attribute, with the tag and display name of its source
-            attribute schema, or its uid where no root has it.
+        tuple[str, str]
+            The tag and display name, or the uid for both where no root has
+            the attribute schema.
         """
         try:
-            schema = self._schema_service.get_any_attribute(
-                dropped.source_attribute_schema_uid
-            )
-            tag, display_name = schema.tag, schema.display_name
+            schema = self._schema_service.get_any_attribute(attribute_schema_uid)
         except (KeyError, ValueError):
-            tag = display_name = str(dropped.source_attribute_schema_uid)
-        return MigrationDroppedAttribute(
-            tag=tag,
-            display_name=display_name,
-            display_value=dropped.original.display_value,
-        )
+            return str(attribute_schema_uid), str(attribute_schema_uid)
+        return schema.tag, schema.display_name

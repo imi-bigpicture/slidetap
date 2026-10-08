@@ -70,9 +70,9 @@ class ObjectMigrator(Generic[T]):
         self,
         source: ObjectSchema,
         target: ObjectSchema,
-        migrated: Sequence[tuple[AttributeSchema, AttributeMigrator]] = (),
-        renamed: Sequence[tuple[AttributeSchema, AttributeSchema]] = (),
-        dropped: Iterable[AttributeSchema] = (),
+        migrated_attributes: Sequence[tuple[AttributeSchema, AttributeMigrator]] = (),
+        renamed_attributes: Sequence[tuple[AttributeSchema, AttributeSchema]] = (),
+        dropped_attributes: Iterable[AttributeSchema] = (),
     ):
         """Create a migrator between two schemas of the same kind.
 
@@ -82,13 +82,13 @@ class ObjectMigrator(Generic[T]):
             The project, dataset, or item schema of the source root.
         target: ObjectSchema
             The schema of the target root it becomes.
-        migrated: Sequence[tuple[AttributeSchema, AttributeMigrator]] = ()
+        migrated_attributes: Sequence[tuple[AttributeSchema, AttributeMigrator]] = ()
             Source attribute schemas whose values changed, with the migrator of
             their values.
-        renamed: Sequence[tuple[AttributeSchema, AttributeSchema]] = ()
+        renamed_attributes: Sequence[tuple[AttributeSchema, AttributeSchema]] = ()
             Source attribute schemas, with the target attribute schema of another
             tag in the same object that each becomes.
-        dropped: Iterable[AttributeSchema] = ()
+        dropped_attributes: Iterable[AttributeSchema] = ()
             Source attribute schemas that are left out.
 
         Raises
@@ -101,9 +101,15 @@ class ObjectMigrator(Generic[T]):
         """
         self._source = source
         self._target = target
-        migrated_by_uid = self._index("migrated", migrated, lambda pair: pair[0])
-        renamed_by_uid = self._index("renamed", renamed, lambda pair: pair[0])
-        dropped_by_uid = self._index("dropped", dropped, lambda schema: schema)
+        migrated_by_uid = self._index(
+            "migrated", migrated_attributes, lambda pair: pair[0]
+        )
+        renamed_by_uid = self._index(
+            "renamed", renamed_attributes, lambda pair: pair[0]
+        )
+        dropped_by_uid = self._index(
+            "dropped", dropped_attributes, lambda schema: schema
+        )
         self._refuse_foreign(
             [
                 ("migrated", [schema for schema, _ in migrated_by_uid.values()]),

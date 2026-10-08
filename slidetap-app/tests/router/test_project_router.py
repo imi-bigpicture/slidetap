@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 from slidetap.model import (
     MigrationAttributeIssue,
     MigrationResolution,
-    MigrationState,
+    MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
     Project,
@@ -47,14 +47,14 @@ from slidetap.web.services.login_service import LoginService
 RESOLVED_AT = datetime.datetime(2026, 1, 2)
 
 
-def _migration(project: Project, state: MigrationState) -> ProjectMigration:
+def _migration(project: Project, status: MigrationStatus) -> ProjectMigration:
     return ProjectMigration(
         project_uid=project.uid,
         source_root_schema_uid=project.root_schema_uid,
         target_root_schema_uid=uuid4(),
         target_root_schema_name="Target 2.0.0",
-        previous_status=ProjectStatus.IN_PROGRESS,
-        state=state,
+        previous_project_status=ProjectStatus.IN_PROGRESS,
+        status=status,
         created=datetime.datetime(2026, 1, 1),
         updated=datetime.datetime(2026, 1, 1),
     )
@@ -273,7 +273,7 @@ class TestSlideTapProjectRouter:
         project: Project,
     ):
         # Arrange
-        migration = _migration(project, MigrationState.CURATING)
+        migration = _migration(project, MigrationStatus.CURATING)
         decoy.when(migration_service.get(project.uid)).then_return(migration)
 
         # Act
@@ -282,6 +282,10 @@ class TestSlideTapProjectRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert ProjectMigration.model_validate(response.json()) == migration
+        assert response.json()["status"] == MigrationStatus.CURATING.value
+        assert response.json()["previousProjectStatus"] == (
+            ProjectStatus.IN_PROGRESS.value
+        )
 
     @pytest.mark.asyncio
     async def test_creating_a_migration_plans_it_in_a_task(
@@ -294,7 +298,7 @@ class TestSlideTapProjectRouter:
     ):
         # Arrange
         decoy.when(migration_service.create(project.uid)).then_return(
-            _migration(project, MigrationState.PLANNING)
+            _migration(project, MigrationStatus.PLANNING)
         )
 
         # Act
@@ -302,7 +306,7 @@ class TestSlideTapProjectRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert response.json()["state"] == MigrationState.PLANNING.value
+        assert response.json()["status"] == MigrationStatus.PLANNING.value
         decoy.verify(await scheduler.plan_migration(project.uid), times=1)
         decoy.verify(migration_service.revert(project.uid), times=0)
 
@@ -318,7 +322,7 @@ class TestSlideTapProjectRouter:
         """Nothing would ever plan it, and the project would stay migrating."""
         # Arrange
         decoy.when(migration_service.create(project.uid)).then_return(
-            _migration(project, MigrationState.PLANNING)
+            _migration(project, MigrationStatus.PLANNING)
         )
         decoy.when(await scheduler.plan_migration(project.uid)).then_raise(
             RuntimeError("no queue")
@@ -433,6 +437,47 @@ class TestSlideTapProjectRouter:
         assert response.status_code == HTTPStatus.OK
         assert response.json()["leftEmpty"] is True
 
+    def test_a_dropped_attribute_is_accepted(
+        self,
+        decoy: Decoy,
+        test_client: FlaskClient,
+        migration_service: MigrationService,
+        project: Project,
+    ):
+        # Arrange
+        issue_uid = uuid4()
+        attribute = StringAttribute(
+            uid=uuid4(), schema_uid=uuid4(), updated_value="value"
+        )
+        accepted = MigrationAttributeIssue(
+            uid=issue_uid,
+            tag="tag",
+            source_attribute_schema_uid=attribute.schema_uid,
+            dropped=True,
+            display_name="Tag",
+            original=attribute,
+            problem="'value' of Tag is dropped: it has no place in Target 2.0.0.",
+            resolved_at=RESOLVED_AT,
+        )
+        decoy.when(
+            migration_service.resolve(
+                project.uid, issue_uid, MigrationResolution(attribute=None)
+            )
+        ).then_return(accepted)
+
+        # Act
+        response = test_client.put(
+            f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
+            json={"attribute": None},
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert MigrationAttributeIssue.model_validate(response.json()) == accepted
+        assert response.json()["dropped"] is True
+        assert response.json()["targetAttributeSchemaUid"] is None
+        assert response.json()["sourceAttributeSchemaUid"] == str(attribute.schema_uid)
+
     @pytest.mark.parametrize("refused", [False, True])
     @pytest.mark.asyncio
     async def test_submitting_a_migration_completes_it_in_a_task(
@@ -449,7 +494,7 @@ class TestSlideTapProjectRouter:
         if refused:
             when.then_raise(NotAllowedActionError("not resolved"))
         else:
-            when.then_return(_migration(project, MigrationState.COMPLETING))
+            when.then_return(_migration(project, MigrationStatus.COMPLETING))
 
         # Act
         response = test_client.post(
@@ -462,7 +507,7 @@ class TestSlideTapProjectRouter:
             decoy.verify(await scheduler.complete_migration(project.uid), times=0)
         else:
             assert response.status_code == HTTPStatus.OK
-            assert response.json()["state"] == MigrationState.COMPLETING.value
+            assert response.json()["status"] == MigrationStatus.COMPLETING.value
             decoy.verify(await scheduler.complete_migration(project.uid), times=1)
 
     @pytest.mark.asyncio
@@ -476,7 +521,7 @@ class TestSlideTapProjectRouter:
     ):
         # Arrange
         decoy.when(migration_service.submit(project.uid)).then_return(
-            _migration(project, MigrationState.COMPLETING)
+            _migration(project, MigrationStatus.COMPLETING)
         )
         decoy.when(await scheduler.complete_migration(project.uid)).then_raise(
             RuntimeError("no queue")
