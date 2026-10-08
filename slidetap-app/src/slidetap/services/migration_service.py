@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -31,11 +31,10 @@ from slidetap.database import (
     DatabaseDataset,
     DatabaseItem,
     DatabaseMapper,
-    DatabaseMappingItem,
     DatabaseMetadataSearchItem,
+    DatabaseMigrationObject,
     DatabaseProject,
     DatabaseProjectMigration,
-    DatabaseUnmappedValue,
 )
 from slidetap.external_interfaces import SchemaMigration
 from slidetap.external_interfaces.implementations.migration import (
@@ -56,7 +55,6 @@ from slidetap.model import (
     MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
-    ObjectMigrationIssues,
     ObjectMigrationResult,
     ObservationSchema,
     Project,
@@ -95,6 +93,23 @@ class ObjectInMigration:
 
     target_private_attributes: Mapping[str, AnyAttribute | UnresolvedAttributeMigration]
     """Its private attributes on the target schema, as `target_attributes`."""
+
+    @property
+    def identifier(self) -> str:
+        """The name of the project or dataset, or the identifier of the item."""
+        if isinstance(self.source, Item):
+            return self.source.identifier
+        return self.source.name
+
+    @property
+    def order(self) -> tuple[int, str]:
+        """Where the object goes among those of a migration: the project, the
+        dataset, then the items by identifier."""
+        if isinstance(self.source, Project):
+            return 0, self.identifier
+        if isinstance(self.source, Dataset):
+            return 1, self.identifier
+        return 2, self.identifier
 
     def unresolved(
         self,
@@ -226,7 +241,9 @@ class MigrationService:
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
             self.assert_can_migrate(project, session)
-            stale = self._get_optional(session, project.uid)
+            stale = self._database_service.get_optional_project_migration(
+                session, project.uid
+            )
             if stale is not None:
                 session.delete(stale)
                 session.flush()
@@ -240,7 +257,7 @@ class MigrationService:
             project.status = ProjectStatus.MIGRATING
             session.flush()
             self._logger.info(f"Project {project.uid} set as migrating.")
-            return self._model(session, project, migration)
+            return migration.model
 
     def plan(self, project_uid: UUID) -> None:
         """Run the migration of a project being planned without saving it, and
@@ -265,25 +282,38 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            migration = self._get_optional(session, project.uid)
+            migration = self._database_service.get_optional_project_migration(
+                session, project.uid
+            )
             if migration is None or migration.status != MigrationStatus.PLANNING:
                 self._logger.warning(
                     f"Project {project.uid} has no migration being planned."
                 )
                 return
             self.assert_can_migrate(project, session, started=True)
-            objects, _ = self._run(session, project)
+            objects, _ = self._migrate_project_without_saving(session, project)
             target_root = self._schema_service.get_root(
                 migration.target_root_schema_uid
             )
-            for object_ in objects:
-                migration.attribute_issues.extend(
-                    self._attribute_issues(object_, target_root)
+            for object_ in sorted(objects, key=lambda object_: object_.order):
+                attribute_issues = list(
+                    self._create_attribute_issues(object_, target_root)
                 )
+                if attribute_issues:
+                    migration.objects.append(
+                        DatabaseMigrationObject(
+                            object_.source.uid,
+                            object_.target_schema.uid,
+                            object_.identifier,
+                            len(migration.objects),
+                            attribute_issues,
+                        )
+                    )
             migration.set_status(MigrationStatus.CURATING)
+            count = sum(len(object_.attribute_issues) for object_ in migration.objects)
             self._logger.info(
-                f"Migration of project {project.uid} planned, with "
-                f"{len(migration.attribute_issues)} attribute issues."
+                f"Migration of project {project.uid} planned, with {count} "
+                f"attribute issues."
             )
 
     def get(self, project_uid: UUID) -> ProjectMigration:
@@ -308,7 +338,7 @@ class MigrationService:
             project = self._database_service.get_optional_project(session, project_uid)
             if project is None:
                 raise NotFoundError(f"Project {project_uid} not found")
-            return self._model(session, project, self._get(session, project.uid))
+            return self._get_migration(session, project).model
 
     def resolve(
         self,
@@ -346,21 +376,23 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            migration = self._get(session, project.uid)
-            self._assert_status(migration, MigrationStatus.CURATING)
-            issue = next(
+            migration = self._get_migration(session, project)
+            self._assert_migration_status(migration, MigrationStatus.CURATING)
+            found = next(
                 (
-                    issue
-                    for issue in migration.attribute_issues
+                    (object_, issue)
+                    for object_ in migration.objects
+                    for issue in object_.attribute_issues
                     if issue.uid == attribute_issue_uid
                 ),
                 None,
             )
-            if issue is None:
+            if found is None:
                 raise NotFoundError(
                     f"The migration of project {project.uid} has no attribute "
                     f"issue {attribute_issue_uid}."
                 )
+            object_, issue = found
             if issue.dropped:
                 if attribute is not None:
                     raise NotAllowedActionError(
@@ -368,7 +400,9 @@ class MigrationService:
                         f"which is accepted without a value."
                     )
             else:
-                tag, schema = self._issue_attribute_schema(migration, issue)
+                tag, schema = self._get_issue_attribute_schema(
+                    migration, object_, issue
+                )
                 if attribute is not None and attribute.schema_uid != schema.uid:
                     raise NotAllowedActionError(
                         f"The value of {tag!r} must be on attribute schema "
@@ -402,10 +436,13 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            migration = self._get(session, project.uid)
-            self._assert_status(migration, MigrationStatus.CURATING)
+            migration = self._get_migration(session, project)
+            self._assert_migration_status(migration, MigrationStatus.CURATING)
             unresolved = sum(
-                1 for issue in migration.attribute_issues if issue.resolved_at is None
+                1
+                for object_ in migration.objects
+                for issue in object_.attribute_issues
+                if issue.resolved_at is None
             )
             if unresolved:
                 raise NotAllowedActionError(
@@ -414,7 +451,7 @@ class MigrationService:
                 )
             migration.set_status(MigrationStatus.COMPLETING)
             session.flush()
-            return self._model(session, project, migration)
+            return migration.model
 
     def resume_curating(self, project_uid: UUID) -> None:
         """Set a migration whose completion was not started back to being
@@ -434,7 +471,7 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            migration = self._get(session, project.uid)
+            migration = self._get_migration(session, project)
             if migration.status == MigrationStatus.COMPLETING:
                 migration.set_status(MigrationStatus.CURATING)
 
@@ -466,32 +503,40 @@ class MigrationService:
         """
         with self._database_service.get_session(session) as session:
             project = self._lock_project(session, project_uid)
-            migration = self._get_optional(session, project.uid)
+            migration = self._database_service.get_optional_project_migration(
+                session, project.uid
+            )
             if migration is None or migration.status != MigrationStatus.COMPLETING:
                 self._logger.warning(
                     f"Project {project.uid} has no migration being completed."
                 )
                 return
             self.assert_can_migrate(project, session, started=True)
-            objects, search_items = self._run(session, project)
+            objects, search_items = self._migrate_project_without_saving(
+                session, project
+            )
             issues = {
                 (
-                    issue.object_uid,
-                    self._issue_attribute_schema(migration, issue)[0],
+                    object_.object_uid,
+                    self._get_issue_attribute_schema(migration, object_, issue)[0],
                 ): issue
-                for issue in migration.attribute_issues
+                for object_ in migration.objects
+                for issue in object_.attribute_issues
                 if not issue.dropped
             }
             dropped = {
-                (issue.object_uid, issue.source_attribute_schema_uid)
-                for issue in migration.attribute_issues
+                (object_.object_uid, issue.source_attribute_schema_uid)
+                for object_ in migration.objects
+                for issue in object_.attribute_issues
                 if issue.dropped
             }
-            self._assert_as_planned(project, objects, issues.keys(), dropped)
+            self._refuse_changed_plan(project, objects, issues.keys(), dropped)
             dataset = self._database_service.get_dataset(session, project.dataset_uid)
             items: list[DatabaseItem] = []
             for object_ in objects:
-                row = self._write(session, self._with_resolutions(object_, issues))
+                row = self._write_object(
+                    session, self._apply_resolutions(object_, issues)
+                )
                 if isinstance(row, DatabaseItem):
                     items.append(row)
             for search_item in search_items:
@@ -503,7 +548,7 @@ class MigrationService:
             project.status = migration.previous_project_status
             session.delete(migration)
             session.flush()
-            self._validate(session, project, dataset, items)
+            self._validate_project(session, project, dataset, items)
             self._review_service.flag_invalid_review_units(dataset.uid, session=session)
             self._logger.info(
                 f"Project {project.uid} migrated to root schema "
@@ -534,7 +579,7 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            migration = self._get(session, project.uid)
+            migration = self._get_migration(session, project)
             if project.status == ProjectStatus.MIGRATING:
                 project.status = migration.previous_project_status
             session.delete(migration)
@@ -556,11 +601,9 @@ class MigrationService:
             Why the migration failed.
         """
         with self._database_service.get_session() as session:
-            migration = session.scalars(
-                select(DatabaseProjectMigration).where(
-                    DatabaseProjectMigration.project_uid == project_uid
-                )
-            ).one_or_none()
+            migration = self._database_service.get_optional_project_migration(
+                session, project_uid
+            )
             if migration is not None and migration.status in (
                 MigrationStatus.PLANNING,
                 MigrationStatus.COMPLETING,
@@ -793,43 +836,24 @@ class MigrationService:
         NotFoundError
             If there is no such project.
         """
-        project = session.get(DatabaseProject, project_uid, with_for_update=True)
+        project = self._database_service.get_optional_project_for_update(
+            session, project_uid
+        )
         if project is None:
             raise NotFoundError(f"Project {project_uid} not found")
         return project
 
-    def _get_optional(
-        self, session: Session, project_uid: UUID
-    ) -> DatabaseProjectMigration | None:
-        """Get the migration of a project, if it has one.
-
-        Parameters
-        ----------
-        session: Session
-            The session to get it in.
-        project_uid: UUID
-            The uid of the project.
-
-        Returns
-        -------
-        DatabaseProjectMigration | None
-            The migration, or None where the project has none.
-        """
-        return session.scalars(
-            select(DatabaseProjectMigration).where(
-                DatabaseProjectMigration.project_uid == project_uid
-            )
-        ).one_or_none()
-
-    def _get(self, session: Session, project_uid: UUID) -> DatabaseProjectMigration:
+    def _get_migration(
+        self, session: Session, project: DatabaseProject
+    ) -> DatabaseProjectMigration:
         """Get the migration of a project.
 
         Parameters
         ----------
         session: Session
             The session to get it in.
-        project_uid: UUID
-            The uid of the project.
+        project: DatabaseProject
+            The project.
 
         Returns
         -------
@@ -841,13 +865,15 @@ class MigrationService:
         NotFoundError
             If the project has no migration.
         """
-        migration = self._get_optional(session, project_uid)
-        if migration is None:
-            raise NotFoundError(f"Project {project_uid} has no migration.")
-        return migration
+        try:
+            return self._database_service.get_project_migration(session, project.uid)
+        except NoResultFound as exception:
+            raise NotFoundError(
+                f"Project {project.uid} has no migration."
+            ) from exception
 
     @staticmethod
-    def _assert_status(
+    def _assert_migration_status(
         migration: DatabaseProjectMigration, status: MigrationStatus
     ) -> None:
         """Refuse a migration that does not have a status.
@@ -870,7 +896,7 @@ class MigrationService:
             )
 
     @classmethod
-    def _assert_as_planned(
+    def _refuse_changed_plan(
         cls,
         project: DatabaseProject,
         objects: Iterable[ObjectInMigration],
@@ -908,7 +934,7 @@ class MigrationService:
         now.update(
             (object_.source.uid, attribute.schema_uid)
             for object_ in objects
-            for attribute in cls._dropped(object_)
+            for attribute in cls._get_dropped_attributes(object_)
         )
         planned: set[tuple[UUID, str | UUID | None]] = {
             *planned_unresolved,
@@ -923,7 +949,7 @@ class MigrationService:
                 f"the migration and start it again."
             )
 
-    def _run(
+    def _migrate_project_without_saving(
         self, session: Session, project: DatabaseProject
     ) -> tuple[list[ObjectInMigration], list[SearchItemInMigration]]:
         """Run the migration for every object of the project and for its search
@@ -951,7 +977,7 @@ class MigrationService:
         MigrationError
             If the migration returns what it may not.
         """
-        migration = self._migration_of(project)
+        migration = self._get_root_migration(project)
         source_root = self._schema_service.get_root(project.root_schema_uid)
         target_root = self._schema_service.default_root
         dataset = self._database_service.get_dataset(session, project.dataset_uid)
@@ -963,9 +989,12 @@ class MigrationService:
             )
         )
         objects = [
-            self._check(
-                self._in_migration(
-                    source, self._migrate(migration, source), source_root, target_root
+            self._check_against_target_schema(
+                self._pair_with_target_schema(
+                    source,
+                    self._migrate_object_copy(migration, source),
+                    source_root,
+                    target_root,
                 ),
                 source_root,
                 target_root,
@@ -974,16 +1003,14 @@ class MigrationService:
         ]
         search_items: list[SearchItemInMigration] = []
         for batch in project.batches:
-            for row in session.scalars(
-                select(DatabaseMetadataSearchItem).where(
-                    DatabaseMetadataSearchItem.batch_uid == batch.uid
-                )
+            for row in self._database_service.get_metadata_search_items_in_batch(
+                session, batch.uid
             ):
                 search_item = row.model
                 search_items.append(
                     SearchItemInMigration(
                         search_item,
-                        self._target_item_schema(
+                        self._get_target_item_schema(
                             source_root,
                             target_root,
                             f"search item {search_item.uid}",
@@ -997,7 +1024,7 @@ class MigrationService:
         return objects, search_items
 
     @staticmethod
-    def _migrate(
+    def _migrate_object_copy(
         migration: SchemaMigration, source: Project | Dataset | Item
     ) -> ObjectMigrationResult:
         """Run the migration for an object, on a copy of it.
@@ -1021,7 +1048,7 @@ class MigrationService:
             return migration.migrate_dataset(copy)
         return migration.migrate_item(copy)
 
-    def _migration_of(self, project: DatabaseProject) -> SchemaMigration:
+    def _get_root_migration(self, project: DatabaseProject) -> SchemaMigration:
         """Get the migration of the source root of a project.
 
         Parameters
@@ -1047,7 +1074,7 @@ class MigrationService:
             )
         return migration
 
-    def _in_migration(
+    def _pair_with_target_schema(
         self,
         source: Project | Dataset | Item,
         migrated: ObjectMigrationResult,
@@ -1093,7 +1120,7 @@ class MigrationService:
                     f"target root."
                 )
         else:
-            target_schema = self._target_item_schema(
+            target_schema = self._get_target_item_schema(
                 source_root,
                 target_root,
                 f"item {source.uid}",
@@ -1107,7 +1134,7 @@ class MigrationService:
             migrated.private_attributes,
         )
 
-    def _target_item_schema(
+    def _get_target_item_schema(
         self,
         source_root: RootSchemaIndex,
         target_root: RootSchemaIndex,
@@ -1154,7 +1181,7 @@ class MigrationService:
             )
         return target_schema
 
-    def _check(
+    def _check_against_target_schema(
         self,
         object_: ObjectInMigration,
         source_root: RootSchemaIndex,
@@ -1194,7 +1221,7 @@ class MigrationService:
             for tag, attribute in attributes.items():
                 if isinstance(attribute, UnresolvedAttributeMigration):
                     continue
-                self._check_attribute(uid, tag, attribute, schemas.get(tag))
+                self._refuse_attribute_off_schema(uid, tag, attribute, schemas.get(tag))
         for tag, unresolved, attribute_schema in object_.unresolved():
             if attribute_schema is None:
                 raise MigrationError(
@@ -1202,10 +1229,12 @@ class MigrationService:
                     f"is not an attribute of the target schema."
                 )
             if unresolved.proposed is not None:
-                self._check_attribute(uid, tag, unresolved.proposed, attribute_schema)
-        return self._with_invalidated(object_, source_root, target_root)
+                self._refuse_attribute_off_schema(
+                    uid, tag, unresolved.proposed, attribute_schema
+                )
+        return self._unresolve_invalidated_attributes(object_, source_root, target_root)
 
-    def _with_invalidated(
+    def _unresolve_invalidated_attributes(
         self,
         object_: ObjectInMigration,
         source_root: RootSchemaIndex,
@@ -1230,17 +1259,19 @@ class MigrationService:
         ObjectInMigration
             The object, with those attributes unresolved.
         """
-        source_schema = self._object_schema(source_root, object_.source.schema_uid)
+        source_schema = self._get_object_schema(source_root, object_.source.schema_uid)
         attributes = dict(object_.target_attributes)
         for tag, target_attribute_schema in object_.target_schema.attributes.items():
             attribute = attributes.get(tag)
             if isinstance(attribute, UnresolvedAttributeMigration):
                 continue
-            if self._is_valid(attribute, target_attribute_schema):
+            if self._is_attribute_valid(attribute, target_attribute_schema):
                 continue
-            source_tag, original = self._original(object_.source, attribute, tag)
+            source_tag, original = self._get_original_attribute(
+                object_.source, attribute, tag
+            )
             source_attribute_schema = source_schema.attributes.get(source_tag)
-            if source_attribute_schema is not None and not self._is_valid(
+            if source_attribute_schema is not None and not self._is_attribute_valid(
                 original, source_attribute_schema
             ):
                 continue
@@ -1256,7 +1287,7 @@ class MigrationService:
         return dataclasses.replace(object_, target_attributes=attributes)
 
     @staticmethod
-    def _original(
+    def _get_original_attribute(
         source: Project | Dataset | Item, attribute: AnyAttribute | None, tag: str
     ) -> tuple[str, AnyAttribute | None]:
         """Get the attribute of the source object a migrated attribute was.
@@ -1283,7 +1314,9 @@ class MigrationService:
         return tag, source.attributes.get(tag)
 
     @staticmethod
-    def _is_valid(attribute: AnyAttribute | None, schema: AttributeSchema) -> bool:
+    def _is_attribute_valid(
+        attribute: AnyAttribute | None, schema: AttributeSchema
+    ) -> bool:
         """Check if an attribute is valid on an attribute schema.
 
         Parameters
@@ -1306,7 +1339,7 @@ class MigrationService:
         )
 
     @staticmethod
-    def _check_attribute(
+    def _refuse_attribute_off_schema(
         object_uid: UUID,
         tag: str,
         attribute: AnyAttribute,
@@ -1345,7 +1378,7 @@ class MigrationService:
             )
         return schema
 
-    def _attribute_issues(
+    def _create_attribute_issues(
         self, object_: ObjectInMigration, target_root: RootSchemaIndex
     ) -> Iterable[DatabaseAttributeMigrationIssue]:
         """Make the attribute issues of what an object left unresolved, and of
@@ -1380,23 +1413,19 @@ class MigrationService:
                     f"unresolved, which is not an attribute of the target schema."
                 )
             yield DatabaseAttributeMigrationIssue(
-                object_.source.uid,
-                object_.target_schema.uid,
                 original.schema_uid if original is not None else None,
                 schema.uid,
                 original,
                 unresolved.proposed,
                 unresolved.problem,
             )
-        for attribute in self._dropped(object_):
+        for attribute in self._get_dropped_attributes(object_):
             original = attribute.model_copy(deep=True)
             self._set_display_value(original)
-            _, display_name = self._source_attribute_names(original.schema_uid)
+            display_name = self._get_source_attribute_display_name(original.schema_uid)
             value = original.display_value
             dropped = display_name if value is None else f"'{value}' of {display_name}"
             yield DatabaseAttributeMigrationIssue(
-                object_.source.uid,
-                object_.target_schema.uid,
                 original.schema_uid,
                 None,
                 original,
@@ -1405,7 +1434,7 @@ class MigrationService:
             )
 
     @staticmethod
-    def _migrated(
+    def _get_migrated_attributes(
         attributes: Mapping[str, AnyAttribute | UnresolvedAttributeMigration],
     ) -> dict[str, AnyAttribute]:
         """Get the migrated attributes of a mapping, leaving out the unresolved.
@@ -1427,7 +1456,7 @@ class MigrationService:
         }
 
     @classmethod
-    def _dropped(cls, object_: ObjectInMigration) -> list[AnyAttribute]:
+    def _get_dropped_attributes(cls, object_: ObjectInMigration) -> list[AnyAttribute]:
         """Get the dropped attributes of an object: those with a value that the
         migration neither converted nor left unresolved.
 
@@ -1444,8 +1473,10 @@ class MigrationService:
         kept = {
             attribute.uid
             for attribute in (
-                *cls._migrated(object_.target_attributes).values(),
-                *cls._migrated(object_.target_private_attributes).values(),
+                *cls._get_migrated_attributes(object_.target_attributes).values(),
+                *cls._get_migrated_attributes(
+                    object_.target_private_attributes
+                ).values(),
                 *(
                     unresolved.original
                     for _, unresolved, _ in object_.unresolved()
@@ -1463,7 +1494,7 @@ class MigrationService:
         ]
 
     @staticmethod
-    def _with_resolutions(
+    def _apply_resolutions(
         object_: ObjectInMigration,
         issues: Mapping[tuple[UUID, str], DatabaseAttributeMigrationIssue],
     ) -> ObjectInMigration:
@@ -1516,7 +1547,7 @@ class MigrationService:
             target_private_attributes=private_attributes,
         )
 
-    def _write(
+    def _write_object(
         self, session: Session, object_: ObjectInMigration
     ) -> DatabaseProject | DatabaseDataset | DatabaseItem:
         """Put an object on its target schema, and replace its attributes with
@@ -1544,7 +1575,7 @@ class MigrationService:
         MigrationError
             If an attribute is not on the attribute schema of its tag.
         """
-        row = self._row(session, object_.source)
+        row = self._get_object_row(session, object_.source)
         target_schema = object_.target_schema
         old_rows: list[DatabaseAttribute] = [
             *row.attributes,
@@ -1554,11 +1585,7 @@ class MigrationService:
         if old_rows:
             # Deleted with them by the database, but said here for a database
             # that does not enforce its foreign keys.
-            session.execute(
-                delete(DatabaseUnmappedValue).where(
-                    DatabaseUnmappedValue.root_attribute_uid.in_(list(flags))
-                )
-            )
+            self._database_service.delete_unmapped_values(session, list(flags))
         row.attributes = set()
         row.private_attributes = set()
         session.flush()
@@ -1566,20 +1593,20 @@ class MigrationService:
         row.attributes = self._add_attributes(
             session,
             row,
-            self._migrated(object_.target_attributes),
+            self._get_migrated_attributes(object_.target_attributes),
             target_schema.attributes,
             flags,
         )
         row.private_attributes = self._add_attributes(
             session,
             row,
-            self._migrated(object_.target_private_attributes),
+            self._get_migrated_attributes(object_.target_private_attributes),
             target_schema.private_attributes,
             flags,
         )
         return row
 
-    def _row(
+    def _get_object_row(
         self, session: Session, source: Project | Dataset | Item
     ) -> DatabaseProject | DatabaseDataset | DatabaseItem:
         """Get the row of an object.
@@ -1637,11 +1664,15 @@ class MigrationService:
         """
         rows: set[DatabaseAttribute] = set()
         for tag, attribute in attributes.items():
-            schema = self._check_attribute(row.uid, tag, attribute, schemas.get(tag))
+            schema = self._refuse_attribute_off_schema(
+                row.uid, tag, attribute, schemas.get(tag)
+            )
             # Mapping items a mapper move removed are referred to by nothing.
             attribute = UnchangedAttributeMigrator.without_mapping_items(
                 attribute,
-                lambda uid: session.get(DatabaseMappingItem, uid) is None,
+                lambda uid: (
+                    self._database_service.get_optional_mapping(session, uid) is None
+                ),
             )
             self._attribute_service.set_display_value(attribute)
             attribute_row = self._database_service.add_attribute(
@@ -1654,7 +1685,7 @@ class MigrationService:
             rows.add(attribute_row)
         return rows
 
-    def _validate(
+    def _validate_project(
         self,
         session: Session,
         project: DatabaseProject,
@@ -1679,66 +1710,8 @@ class MigrationService:
         for item in items:
             self._validation_service.validate_item(item, session)
 
-    def _model(
-        self,
-        session: Session,
-        project: DatabaseProject,
-        migration: DatabaseProjectMigration,
-    ) -> ProjectMigration:
-        """Make the model of a migration, with its attribute issues grouped by
-        object.
-
-        Parameters
-        ----------
-        session: Session
-            The session to read the identifiers of the objects in.
-        project: DatabaseProject
-            The project.
-        migration: DatabaseProjectMigration
-            The migration of the project.
-
-        Returns
-        -------
-        ProjectMigration
-            The migration, with its attribute issues by object: the project,
-            the dataset, then the items by identifier.
-        """
-        objects: dict[UUID, list[AttributeMigrationIssue]] = {}
-        for issue in migration.attribute_issues:
-            objects.setdefault(issue.object_uid, []).append(issue.model)
-        dataset = self._database_service.get_dataset(session, project.dataset_uid)
-        identifiers = {project.uid: project.name, dataset.uid: dataset.name}
-        item_uids = objects.keys() - identifiers.keys()
-        if item_uids:
-            identifiers.update(
-                session.execute(
-                    select(DatabaseItem.uid, DatabaseItem.identifier).where(
-                        DatabaseItem.uid.in_(item_uids)
-                    )
-                )
-                .tuples()
-                .all()
-            )
-        order = [project.uid, dataset.uid]
-        issues = sorted(
-            (
-                ObjectMigrationIssues(
-                    uid=uid,
-                    identifier=identifiers[uid],
-                    target_schema_uid=attribute_issues[0].target_object_schema_uid,
-                    attribute_issues=attribute_issues,
-                )
-                for uid, attribute_issues in objects.items()
-            ),
-            key=lambda object_: (
-                order.index(object_.uid) if object_.uid in order else len(order),
-                object_.identifier,
-            ),
-        )
-        return migration.model.model_copy(update={"issues": issues})
-
     @staticmethod
-    def _object_schema(root: RootSchemaIndex, schema_uid: UUID) -> AnyObjectSchema:
+    def _get_object_schema(root: RootSchemaIndex, schema_uid: UUID) -> AnyObjectSchema:
         """Get the project, dataset, or item schema of a uid in a root.
 
         Parameters
@@ -1764,9 +1737,10 @@ class MigrationService:
             return root.dataset
         return root.items[schema_uid]
 
-    def _issue_attribute_schema(
+    def _get_issue_attribute_schema(
         self,
         migration: DatabaseProjectMigration,
+        object_: DatabaseMigrationObject,
         issue: DatabaseAttributeMigrationIssue,
     ) -> tuple[str, AttributeSchema]:
         """Get the target tag and attribute schema of an attribute issue.
@@ -1775,8 +1749,10 @@ class MigrationService:
         ----------
         migration: DatabaseProjectMigration
             The migration.
+        object_: DatabaseMigrationObject
+            The object of the migration the attribute issue is of.
         issue: DatabaseAttributeMigrationIssue
-            An attribute issue of the migration with a target.
+            An attribute issue of the object with a target.
 
         Returns
         -------
@@ -1791,7 +1767,9 @@ class MigrationService:
             the attribute issue, or it has none.
         """
         target_root = self._schema_service.get_root(migration.target_root_schema_uid)
-        target_schema = self._object_schema(target_root, issue.target_object_schema_uid)
+        target_schema = self._get_object_schema(
+            target_root, object_.target_object_schema_uid
+        )
         for tag, attribute_schema in (
             *target_schema.attributes.items(),
             *target_schema.private_attributes.items(),
@@ -1816,9 +1794,8 @@ class MigrationService:
         with contextlib.suppress(KeyError, ValueError):
             self._attribute_service.set_display_value(attribute)
 
-    def _source_attribute_names(self, attribute_schema_uid: UUID) -> tuple[str, str]:
-        """Get the tag and display name of an attribute schema of the source
-        root.
+    def _get_source_attribute_display_name(self, attribute_schema_uid: UUID) -> str:
+        """Get the display name of an attribute schema of the source root.
 
         Parameters
         ----------
@@ -1827,12 +1804,12 @@ class MigrationService:
 
         Returns
         -------
-        tuple[str, str]
-            The tag and display name, or the uid for both where no root has
-            the attribute schema.
+        str
+            The display name, or the uid where no root has the attribute
+            schema.
         """
         try:
             schema = self._schema_service.get_any_attribute(attribute_schema_uid)
         except (KeyError, ValueError):
-            return str(attribute_schema_uid), str(attribute_schema_uid)
-        return schema.tag, schema.display_name
+            return str(attribute_schema_uid)
+        return schema.display_name

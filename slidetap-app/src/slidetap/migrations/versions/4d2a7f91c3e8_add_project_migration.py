@@ -1,9 +1,9 @@
 """add project migration
 
 The migration of a project to another root schema, from it is created until
-it is completed or reverted, and its attribute issues: what the migration
-could not convert, for the curator to resolve, and the attributes it dropped,
-for the curator to accept.
+it is completed or reverted, the objects with attribute issues, and their
+attribute issues: what the migration could not convert, for the curator to
+resolve, and the attributes it dropped, for the curator to accept.
 
 Revision ID: 4d2a7f91c3e8
 Revises: 2f8a6d4c9b17
@@ -41,11 +41,30 @@ def upgrade() -> None:
         sa.UniqueConstraint("project_uid"),
     )
     op.create_table(
-        "attribute_migration_issue",
+        "migration_object",
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
         sa.Column("object_uid", sa.Uuid(), nullable=False),
         sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
+        sa.Column("identifier", sa.Text(), nullable=False),
+        sa.Column("position", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["migration_uid"], ["project_migration.uid"], ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("uid"),
+        sa.UniqueConstraint(
+            "migration_uid", "object_uid", name="uq_migration_object_object"
+        ),
+    )
+    op.create_index(
+        "ix_migration_object_migration_uid",
+        "migration_object",
+        ["migration_uid"],
+    )
+    op.create_table(
+        "attribute_migration_issue",
+        sa.Column("uid", sa.Uuid(), nullable=False),
+        sa.Column("migration_object_uid", sa.Uuid(), nullable=False),
         sa.Column("source_attribute_schema_uid", sa.Uuid(), nullable=True),
         sa.Column("target_attribute_schema_uid", sa.Uuid(), nullable=True),
         sa.Column("original", sa.JSON(), nullable=True),
@@ -54,7 +73,7 @@ def upgrade() -> None:
         sa.Column("resolved", sa.JSON(), nullable=True),
         sa.Column("resolved_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["migration_uid"], ["project_migration.uid"], ondelete="CASCADE"
+            ["migration_object_uid"], ["migration_object.uid"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("uid"),
         sa.CheckConstraint(
@@ -64,15 +83,15 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_attribute_migration_issue_migration_uid",
+        "ix_attribute_migration_issue_migration_object_uid",
         "attribute_migration_issue",
-        ["migration_uid"],
+        ["migration_object_uid"],
     )
     # An issue with a target is unique by it, a dropped attribute by its source.
     op.create_index(
         "uq_attribute_migration_issue_target",
         "attribute_migration_issue",
-        ["migration_uid", "object_uid", "target_attribute_schema_uid"],
+        ["migration_object_uid", "target_attribute_schema_uid"],
         unique=True,
         sqlite_where=sa.text("target_attribute_schema_uid IS NOT NULL"),
         postgresql_where=sa.text("target_attribute_schema_uid IS NOT NULL"),
@@ -80,7 +99,7 @@ def upgrade() -> None:
     op.create_index(
         "uq_attribute_migration_issue_dropped",
         "attribute_migration_issue",
-        ["migration_uid", "object_uid", "source_attribute_schema_uid"],
+        ["migration_object_uid", "source_attribute_schema_uid"],
         unique=True,
         sqlite_where=sa.text("target_attribute_schema_uid IS NULL"),
         postgresql_where=sa.text("target_attribute_schema_uid IS NULL"),
@@ -111,8 +130,10 @@ def downgrade() -> None:
         table_name="attribute_migration_issue",
     )
     op.drop_index(
-        "ix_attribute_migration_issue_migration_uid",
+        "ix_attribute_migration_issue_migration_object_uid",
         table_name="attribute_migration_issue",
     )
     op.drop_table("attribute_migration_issue")
+    op.drop_index("ix_migration_object_migration_uid", table_name="migration_object")
+    op.drop_table("migration_object")
     op.drop_table("project_migration")

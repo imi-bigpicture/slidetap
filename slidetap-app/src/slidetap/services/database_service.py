@@ -84,6 +84,7 @@ from slidetap.database import (
     DatabaseObjectAttribute,
     DatabaseObservation,
     DatabaseProject,
+    DatabaseProjectMigration,
     DatabaseReviewIssue,
     DatabaseSample,
     DatabaseStringAttribute,
@@ -304,6 +305,78 @@ class DatabaseService:
             return session.get(DatabaseProject, project.uid)
         return project
 
+    def get_optional_project_for_update(
+        self,
+        session: Session,
+        project_uid: UUID,
+    ) -> DatabaseProject | None:
+        """Get a project with its row locked (SELECT FOR UPDATE).
+
+        Parameters
+        ----------
+        session: Session
+            The session to lock it in.
+        project_uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        DatabaseProject | None
+            The project, or None where there is no such project.
+        """
+        return session.get(DatabaseProject, project_uid, with_for_update=True)
+
+    def get_project_migration(
+        self,
+        session: Session,
+        project_uid: UUID,
+    ) -> DatabaseProjectMigration:
+        """Get the migration of a project.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get it in.
+        project_uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        DatabaseProjectMigration
+            The migration.
+
+        Raises
+        ------
+        NoResultFound
+            If the project has no migration.
+        """
+        return session.scalars(
+            select(DatabaseProjectMigration).filter_by(project_uid=project_uid)
+        ).one()
+
+    def get_optional_project_migration(
+        self,
+        session: Session,
+        project_uid: UUID,
+    ) -> DatabaseProjectMigration | None:
+        """Get the migration of a project, if it has one.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get it in.
+        project_uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        DatabaseProjectMigration | None
+            The migration, or None where the project has none.
+        """
+        return session.scalars(
+            select(DatabaseProjectMigration).filter_by(project_uid=project_uid)
+        ).one_or_none()
+
     def get_all_projects(
         self,
         session: Session,
@@ -380,6 +453,29 @@ class DatabaseService:
         elif isinstance(batch, Batch):
             return session.get(DatabaseBatch, batch.uid)
         return batch
+
+    def get_metadata_search_items_in_batch(
+        self,
+        session: Session,
+        batch_uid: UUID,
+    ) -> Iterable[DatabaseMetadataSearchItem]:
+        """Get the metadata search items of a batch.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get them in.
+        batch_uid: UUID
+            The uid of the batch.
+
+        Returns
+        -------
+        Iterable[DatabaseMetadataSearchItem]
+            The search items of the batch.
+        """
+        return session.scalars(
+            select(DatabaseMetadataSearchItem).filter_by(batch_uid=batch_uid)
+        )
 
     def get_attribute(
         self,
@@ -1910,6 +2006,26 @@ class DatabaseService:
             return
         for child in children:
             yield from cls.unmapped_under(child)
+
+    def delete_unmapped_values(
+        self,
+        session: Session,
+        root_attribute_uids: Sequence[UUID],
+    ) -> None:
+        """Delete the unmapped values recorded for top-level attributes.
+
+        Parameters
+        ----------
+        session: Session
+            The session to delete them in.
+        root_attribute_uids: Sequence[UUID]
+            The uids of the top-level attributes.
+        """
+        session.execute(
+            delete(DatabaseUnmappedValue).where(
+                DatabaseUnmappedValue.root_attribute_uid.in_(root_attribute_uids)
+            )
+        )
 
     def record_unmapped_values(
         self,

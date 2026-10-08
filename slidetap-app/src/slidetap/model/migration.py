@@ -98,12 +98,6 @@ class AttributeMigrationIssue(CamelCaseBaseModel):
     root for a dropped attribute."""
 
     uid: UUID
-    object_uid: UUID
-    """The project, the dataset, or the item the attribute belongs to."""
-
-    target_object_schema_uid: UUID
-    """The schema of the object in the target root."""
-
     target_attribute_schema_uid: UUID | None = None
     """The attribute schema in the target root that a resolved value is on,
     None for a dropped attribute."""

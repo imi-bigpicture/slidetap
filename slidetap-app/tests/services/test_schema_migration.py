@@ -629,14 +629,15 @@ class TestMigratingAProject:
             for object_ in planned.issues
             for issue in object_.attribute_issues
         ] == [None, None]
+        assert [object_.uid for object_ in planned.issues] == [
+            stored.observation.uid,
+            stored.other_patient.uid,
+        ]
         objects = {object_.uid: object_ for object_ in planned.issues}
-        assert objects.keys() == {stored.other_patient.uid, stored.observation.uid}
         other_patient = objects[stored.other_patient.uid]
         assert other_patient.identifier == "patient-2"
         assert other_patient.target_schema_uid == schema.patient_schema_uid
         [issue] = other_patient.attribute_issues
-        assert issue.object_uid == stored.other_patient.uid
-        assert issue.target_object_schema_uid == schema.patient_schema_uid
         assert issue.target_attribute_schema_uid == OTHER_SEX_SCHEMA_UID
         assert issue.original.original_value == "Other"
         assert issue.original.display_value is not None
@@ -647,7 +648,6 @@ class TestMigratingAProject:
         assert issue.resolved_at is None
         [dropped] = objects[stored.observation.uid].attribute_issues
         report = schema.observation.private_attributes["report"]
-        assert dropped.object_uid == stored.observation.uid
         assert dropped.target_attribute_schema_uid is None
         assert dropped.original is not None
         assert dropped.original.schema_uid == report.uid

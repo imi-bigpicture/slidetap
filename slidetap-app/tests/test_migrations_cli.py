@@ -407,12 +407,19 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         sa.column("created", sa.DateTime()),
         sa.column("updated", sa.DateTime()),
     )
-    issue = sa.table(
-        "attribute_migration_issue",
+    migration_object = sa.table(
+        "migration_object",
         sa.column("uid", sa.Uuid()),
         sa.column("migration_uid", sa.Uuid()),
         sa.column("object_uid", sa.Uuid()),
         sa.column("target_object_schema_uid", sa.Uuid()),
+        sa.column("identifier", sa.String()),
+        sa.column("position", sa.Integer()),
+    )
+    issue = sa.table(
+        "attribute_migration_issue",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_object_uid", sa.Uuid()),
         sa.column("source_attribute_schema_uid", sa.Uuid()),
         sa.column("target_attribute_schema_uid", sa.Uuid()),
         sa.column("original", sa.JSON()),
@@ -453,14 +460,26 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
             }
         ],
     )
+    migration_object_uid = uuid4()
+    session.execute(
+        sa.insert(migration_object),
+        [
+            {
+                "uid": migration_object_uid,
+                "migration_uid": migration_uid,
+                "object_uid": uids["MIGRATING"],
+                "target_object_schema_uid": uuid4(),
+                "identifier": "MIGRATING",
+                "position": 0,
+            }
+        ],
+    )
     session.execute(
         sa.insert(issue),
         [
             {
                 "uid": uuid4(),
-                "migration_uid": migration_uid,
-                "object_uid": uids["MIGRATING"],
-                "target_object_schema_uid": uuid4(),
+                "migration_object_uid": migration_object_uid,
                 "source_attribute_schema_uid": uuid4(),
                 "target_attribute_schema_uid": uuid4(),
                 "original": {"attributeValueType": "enum"},
@@ -468,9 +487,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
             },
             {
                 "uid": uuid4(),
-                "migration_uid": migration_uid,
-                "object_uid": uids["MIGRATING"],
-                "target_object_schema_uid": uuid4(),
+                "migration_object_uid": migration_object_uid,
                 "source_attribute_schema_uid": uuid4(),
                 "target_attribute_schema_uid": None,
                 "original": {"attributeValueType": "string"},
@@ -490,15 +507,26 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
     } == {"MIGRATING": "COMPLETED", "IN_PROGRESS": "IN_PROGRESS"}
     tables = sa.inspect(session.connection()).get_table_names()
     assert "project_migration" not in tables
+    assert "migration_object" not in tables
     assert "attribute_migration_issue" not in tables
     command.upgrade(config(), "head")
     assert_up_to_date(session)
 
 
-def test_an_attribute_issue_of_the_project_is_unique(session: Session):
-    """An attribute issue of a project is unique by the object it is of and
-    its target attribute schema, or, for a dropped attribute, its source
-    attribute schema; an issue has one of them."""
+MIGRATION_OBJECT = sa.table(
+    "migration_object",
+    sa.column("uid", sa.Uuid()),
+    sa.column("migration_uid", sa.Uuid()),
+    sa.column("object_uid", sa.Uuid()),
+    sa.column("target_object_schema_uid", sa.Uuid()),
+    sa.column("identifier", sa.String()),
+    sa.column("position", sa.Integer()),
+)
+
+
+@pytest.fixture
+def migration_uid(session: Session) -> UUID:
+    """The uid of the migration of a project, in a database at head."""
     command.upgrade(config(), "head")
     project = sa.table(
         "project",
@@ -522,16 +550,6 @@ def test_an_attribute_issue_of_the_project_is_unique(session: Session):
         sa.column("status", sa.String()),
         sa.column("created", sa.DateTime()),
         sa.column("updated", sa.DateTime()),
-    )
-    issue = sa.table(
-        "attribute_migration_issue",
-        sa.column("uid", sa.Uuid()),
-        sa.column("migration_uid", sa.Uuid()),
-        sa.column("object_uid", sa.Uuid()),
-        sa.column("target_object_schema_uid", sa.Uuid()),
-        sa.column("source_attribute_schema_uid", sa.Uuid()),
-        sa.column("target_attribute_schema_uid", sa.Uuid()),
-        sa.column("problem", sa.String()),
     )
     project_uid = uuid4()
     created = datetime.datetime(2026, 1, 1)
@@ -567,7 +585,60 @@ def test_an_attribute_issue_of_the_project_is_unique(session: Session):
             }
         ],
     )
-    target_object_schema_uid = uuid4()
+    session.commit()
+    return migration_uid
+
+
+def test_an_object_is_in_a_migration_once(session: Session, migration_uid: UUID):
+    object_uid = uuid4()
+
+    def row(position: int) -> dict:
+        return {
+            "uid": uuid4(),
+            "migration_uid": migration_uid,
+            "object_uid": object_uid,
+            "target_object_schema_uid": uuid4(),
+            "identifier": "item",
+            "position": position,
+        }
+
+    session.execute(sa.insert(MIGRATION_OBJECT), [row(0)])
+    session.commit()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        session.execute(sa.insert(MIGRATION_OBJECT), [row(1)])
+        session.commit()
+    session.rollback()
+
+
+def test_an_attribute_issue_of_an_object_is_unique(
+    session: Session, migration_uid: UUID
+):
+    """An attribute issue of an object is unique by its target attribute
+    schema, or, for a dropped attribute, its source attribute schema; an issue
+    has one of them."""
+    issue = sa.table(
+        "attribute_migration_issue",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_object_uid", sa.Uuid()),
+        sa.column("source_attribute_schema_uid", sa.Uuid()),
+        sa.column("target_attribute_schema_uid", sa.Uuid()),
+        sa.column("problem", sa.String()),
+    )
+    migration_object_uid = uuid4()
+    session.execute(
+        sa.insert(MIGRATION_OBJECT),
+        [
+            {
+                "uid": migration_object_uid,
+                "migration_uid": migration_uid,
+                "object_uid": uuid4(),
+                "target_object_schema_uid": uuid4(),
+                "identifier": "project",
+                "position": 0,
+            }
+        ],
+    )
     source_attribute_schema_uid = uuid4()
     target_attribute_schema_uid = uuid4()
 
@@ -577,9 +648,7 @@ def test_an_attribute_issue_of_the_project_is_unique(session: Session):
     ) -> dict:
         return {
             "uid": uuid4(),
-            "migration_uid": migration_uid,
-            "object_uid": project_uid,
-            "target_object_schema_uid": target_object_schema_uid,
+            "migration_object_uid": migration_object_uid,
             "source_attribute_schema_uid": source,
             "target_attribute_schema_uid": target,
             "problem": "no counterpart",

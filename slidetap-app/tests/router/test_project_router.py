@@ -371,8 +371,6 @@ class TestSlideTapProjectRouter:
         )
         resolved = AttributeMigrationIssue(
             uid=issue_uid,
-            object_uid=project.uid,
-            target_object_schema_uid=project.schema_uid,
             target_attribute_schema_uid=attribute.schema_uid,
             original=attribute,
             problem="problem",
@@ -417,8 +415,6 @@ class TestSlideTapProjectRouter:
         decoy.when(migration_service.resolve(project.uid, issue_uid, None)).then_return(
             AttributeMigrationIssue(
                 uid=issue_uid,
-                object_uid=project.uid,
-                target_object_schema_uid=project.schema_uid,
                 target_attribute_schema_uid=attribute.schema_uid,
                 original=attribute,
                 problem="problem",
@@ -451,8 +447,6 @@ class TestSlideTapProjectRouter:
         )
         accepted = AttributeMigrationIssue(
             uid=issue_uid,
-            object_uid=project.uid,
-            target_object_schema_uid=project.schema_uid,
             original=attribute,
             problem="'value' of Tag is dropped: it has no place in Target 2.0.0.",
             resolved_at=RESOLVED_AT,

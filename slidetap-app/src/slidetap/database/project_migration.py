@@ -12,8 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""The migration of a project to another root schema, and its attribute
-issues."""
+"""The migration of a project to another root schema, the objects with
+attribute issues, and their attribute issues."""
 
 import datetime
 from uuid import UUID, uuid4
@@ -24,7 +24,9 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
     Text,
+    UniqueConstraint,
     Uuid,
     text,
 )
@@ -36,6 +38,7 @@ from slidetap.model import (
     AnyAttribute,
     AttributeMigrationIssue,
     MigrationStatus,
+    ObjectMigrationIssues,
     ProjectMigration,
     ProjectStatus,
 )
@@ -61,8 +64,7 @@ class DatabaseAttributeMigrationIssue(Base):
         # One issue per target attribute of an object.
         Index(
             "uq_attribute_migration_issue_target",
-            "migration_uid",
-            "object_uid",
+            "migration_object_uid",
             "target_attribute_schema_uid",
             unique=True,
             sqlite_where=text("target_attribute_schema_uid IS NOT NULL"),
@@ -71,8 +73,7 @@ class DatabaseAttributeMigrationIssue(Base):
         # One issue per dropped source attribute of an object.
         Index(
             "uq_attribute_migration_issue_dropped",
-            "migration_uid",
-            "object_uid",
+            "migration_object_uid",
             "source_attribute_schema_uid",
             unique=True,
             sqlite_where=text("target_attribute_schema_uid IS NULL"),
@@ -81,14 +82,10 @@ class DatabaseAttributeMigrationIssue(Base):
     )
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    migration_uid: Mapped[UUID] = mapped_column(
-        ForeignKey("project_migration.uid", ondelete="CASCADE"), index=True
+    migration_object_uid: Mapped[UUID] = mapped_column(
+        ForeignKey("migration_object.uid", ondelete="CASCADE"), index=True
     )
-    object_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The project, the dataset, or the item the attribute belongs to."""
-
-    target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The schema of the object in the target root."""
+    """The object the attribute belongs to."""
 
     source_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
     """The schema in the source root of the original attribute, or None where
@@ -119,8 +116,6 @@ class DatabaseAttributeMigrationIssue(Base):
 
     def __init__(
         self,
-        object_uid: UUID,
-        target_object_schema_uid: UUID,
         source_attribute_schema_uid: UUID | None,
         target_attribute_schema_uid: UUID | None,
         original: AnyAttribute | None,
@@ -131,10 +126,6 @@ class DatabaseAttributeMigrationIssue(Base):
 
         Parameters
         ----------
-        object_uid: UUID
-            The project, the dataset, or the item.
-        target_object_schema_uid: UUID
-            The target schema of the object.
         source_attribute_schema_uid: UUID | None
             The attribute schema of the original, or None where there is none.
         target_attribute_schema_uid: UUID | None
@@ -149,8 +140,6 @@ class DatabaseAttributeMigrationIssue(Base):
         """
         super().__init__(
             uid=uuid4(),
-            object_uid=object_uid,
-            target_object_schema_uid=target_object_schema_uid,
             source_attribute_schema_uid=source_attribute_schema_uid,
             target_attribute_schema_uid=target_attribute_schema_uid,
             original=original,
@@ -188,14 +177,96 @@ class DatabaseAttributeMigrationIssue(Base):
         """Make the model of the attribute issue."""
         return AttributeMigrationIssue(
             uid=self.uid,
-            object_uid=self.object_uid,
-            target_object_schema_uid=self.target_object_schema_uid,
             target_attribute_schema_uid=self.target_attribute_schema_uid,
             original=self.original,
             proposed=self.proposed,
             problem=self.problem,
             resolved=self.resolved,
             resolved_at=self.resolved_at,
+        )
+
+
+class DatabaseMigrationObject(Base):
+    """A project, dataset, or item of a migration that has attribute issues."""
+
+    __tablename__ = "migration_object"
+    __table_args__ = (
+        # An object is in a migration once.
+        UniqueConstraint(
+            "migration_uid", "object_uid", name="uq_migration_object_object"
+        ),
+    )
+
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    migration_uid: Mapped[UUID] = mapped_column(
+        ForeignKey("project_migration.uid", ondelete="CASCADE"), index=True
+    )
+    object_uid: Mapped[UUID] = mapped_column(Uuid)
+    """The project, the dataset, or the item."""
+
+    target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    """The schema of the object in the target root."""
+
+    identifier: Mapped[str] = mapped_column(Text)
+    """The name of the project or dataset, or the identifier of the item, when
+    the migration was planned. The project is locked while migrating, so it
+    does not change."""
+
+    position: Mapped[int] = mapped_column(Integer)
+    """Where the object is among those of the migration: the project, the
+    dataset, then the items by identifier."""
+
+    attribute_issues: Mapped[list[DatabaseAttributeMigrationIssue]] = relationship(
+        "DatabaseAttributeMigrationIssue",
+        cascade="all, delete-orphan",
+        order_by=(
+            DatabaseAttributeMigrationIssue.target_attribute_schema_uid.is_(None),
+            DatabaseAttributeMigrationIssue.problem,
+        ),
+    )
+    """The attribute issues of the object, those with a target first, then the
+    dropped attributes."""
+
+    def __init__(
+        self,
+        object_uid: UUID,
+        target_object_schema_uid: UUID,
+        identifier: str,
+        position: int,
+        attribute_issues: list[DatabaseAttributeMigrationIssue],
+    ):
+        """Create an object of a migration with its attribute issues.
+
+        Parameters
+        ----------
+        object_uid: UUID
+            The project, the dataset, or the item.
+        target_object_schema_uid: UUID
+            The target schema of the object.
+        identifier: str
+            The name of the project or dataset, or the identifier of the item.
+        position: int
+            Where the object is among those of the migration.
+        attribute_issues: list[DatabaseAttributeMigrationIssue]
+            The attribute issues of the object.
+        """
+        super().__init__(
+            uid=uuid4(),
+            object_uid=object_uid,
+            target_object_schema_uid=target_object_schema_uid,
+            identifier=identifier,
+            position=position,
+            attribute_issues=attribute_issues,
+        )
+
+    @property
+    def model(self) -> ObjectMigrationIssues:
+        """Make the model of the object, with its attribute issues."""
+        return ObjectMigrationIssues(
+            uid=self.object_uid,
+            identifier=self.identifier,
+            target_schema_uid=self.target_object_schema_uid,
+            attribute_issues=[issue.model for issue in self.attribute_issues],
         )
 
 
@@ -231,10 +302,12 @@ class DatabaseProjectMigration(Base):
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
     updated: Mapped[datetime.datetime] = mapped_column(DateTime)
 
-    attribute_issues: Mapped[list[DatabaseAttributeMigrationIssue]] = relationship(
-        "DatabaseAttributeMigrationIssue",
+    objects: Mapped[list[DatabaseMigrationObject]] = relationship(
+        "DatabaseMigrationObject",
         cascade="all, delete-orphan",
+        order_by=DatabaseMigrationObject.position,
     )
+    """The objects with attribute issues, in their order."""
 
     def __init__(
         self,
@@ -284,8 +357,8 @@ class DatabaseProjectMigration(Base):
 
     @property
     def model(self) -> ProjectMigration:
-        """Make the model of the migration, without its issues, which are
-        grouped by object with the identifier of each object."""
+        """Make the model of the migration, with the attribute issues of each
+        object."""
         return ProjectMigration(
             project_uid=self.project_uid,
             source_root_schema_uid=self.source_root_schema_uid,
@@ -295,4 +368,5 @@ class DatabaseProjectMigration(Base):
             error=self.error,
             created=self.created,
             updated=self.updated,
+            issues=[object_.model for object_ in self.objects],
         )

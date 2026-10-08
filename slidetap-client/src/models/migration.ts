@@ -29,10 +29,6 @@ export enum MigrationStatus {
  * the original in the source root for a dropped attribute. */
 export interface AttributeMigrationIssue {
   readonly uid: string
-  /** The project, dataset, or item the attribute belongs to. */
-  readonly objectUid: string
-  /** The schema of the object in the target root. */
-  readonly targetObjectSchemaUid: string
   /** The attribute schema in the target root, null for a dropped attribute. */
   readonly targetAttributeSchemaUid: string | null
   /** The attribute of the source object, null where it had none. */
