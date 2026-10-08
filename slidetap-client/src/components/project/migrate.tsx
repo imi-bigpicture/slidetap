@@ -49,7 +49,6 @@ import {
   type AttributeValueTypes,
 } from 'src/models/attribute'
 import {
-  MigrationObjectKind,
   MigrationStatus,
   type AttributeMigrationIssue,
   type ObjectMigrationIssues,
@@ -58,9 +57,11 @@ import {
 import type { Project } from 'src/models/project'
 import { ProjectStatus } from 'src/models/project_status'
 import type { AttributeSchema } from 'src/models/schema/attribute_schema'
+import type { ProjectSchema } from 'src/models/schema/project_schema'
 import { rootDisplayName, type RootSchema } from 'src/models/schema/root_schema'
 import { ApiError } from 'src/services/api/api_methods'
 import projectApi from 'src/services/api/project_api'
+import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 
 interface MigrateProps {
@@ -195,6 +196,7 @@ function MigrationInProgress({
   migration: ProjectMigration
 }): ReactElement {
   const queryClient = useQueryClient()
+  const targetRoot = useSchemaContext()
   const migrationKey = queryKeys.project.migration(project.uid)
   const done = (): void => {
     void queryClient.invalidateQueries({ queryKey: migrationKey })
@@ -230,7 +232,7 @@ function MigrationInProgress({
   return (
     <Stack spacing={1}>
       <Typography>
-        Converting to {migration.targetRootSchemaName}. Nothing can be changed in the
+        Converting to {rootDisplayName(targetRoot)}. Nothing can be changed in the
         project until the conversion is completed or reverted.
       </Typography>
       {migration.status === MigrationStatus.PLANNING && (
@@ -301,6 +303,20 @@ function CurateMigration({
     )?.uid ?? migration.issues[0]?.uid,
   )
   const selected = migration.issues.find((object) => object.uid === selectedUid)
+  const targetRoot = useSchemaContext()
+  // The schemas of dropped attributes are in the root the project is on.
+  const sourceRootQuery = useQuery({
+    queryKey: queryKeys.schema.root(migration.sourceRootSchemaUid),
+    queryFn: async () => {
+      return await schemaApi.getRootSchema(migration.sourceRootSchemaUid)
+    },
+  })
+  if (sourceRootQuery.isError) {
+    return <Alert severity="error">{refusal(sourceRootQuery.error)}</Alert>
+  }
+  if (sourceRootQuery.data === undefined) {
+    return <LinearProgress />
+  }
   if (migration.issues.length === 0) {
     return <Typography>Everything is converted: nothing is left to resolve.</Typography>
   }
@@ -320,7 +336,7 @@ function CurateMigration({
               >
                 <ListItemText
                   primary={object.identifier}
-                  secondary={`${object.targetSchemaDisplayName}: ${resolved} of ${object.attributeIssues.length} resolved`}
+                  secondary={`${objectSchema(targetRoot, object.targetSchemaUid)?.displayName ?? ''}: ${resolved} of ${object.attributeIssues.length} resolved`}
                 />
               </ListItemButton>
             )
@@ -329,54 +345,90 @@ function CurateMigration({
       </Grid>
       <Grid size={{ xs: 9 }}>
         {selected !== undefined && (
-          <CurateObject key={selected.uid} project={project} object={selected} />
+          <CurateObject
+            key={selected.uid}
+            project={project}
+            object={selected}
+            sourceRoot={sourceRootQuery.data}
+          />
         )}
       </Grid>
     </Grid>
   )
 }
 
-/** The target attribute schema of an attribute issue of an object. */
-function issueSchema(
-  rootSchema: RootSchema,
-  object: ObjectMigrationIssues,
-  issue: AttributeMigrationIssue,
+/** A project, dataset, or item schema, as far as an attribute issue needs it. */
+type ObjectSchema = Pick<
+  ProjectSchema,
+  'uid' | 'displayName' | 'attributes' | 'privateAttributes'
+>
+
+/** The project, dataset, and item schemas of a root. */
+function objectSchemas(root: RootSchema): ObjectSchema[] {
+  return [
+    root.project,
+    root.dataset,
+    ...Object.values(root.samples),
+    ...Object.values(root.images),
+    ...Object.values(root.observations),
+    ...Object.values(root.annotations),
+  ]
+}
+
+/** Find the project, dataset, or item schema of a uid in a root. */
+function objectSchema(root: RootSchema, uid: string): ObjectSchema | undefined {
+  return objectSchemas(root).find((schema) => schema.uid === uid)
+}
+
+/** Find the top-level attribute schema of a uid in an object schema. */
+function attributeSchema(
+  schema: ObjectSchema | undefined,
+  uid: string | undefined,
 ): AttributeSchema | undefined {
-  const schema =
-    object.kind === MigrationObjectKind.PROJECT
-      ? rootSchema.project
-      : object.kind === MigrationObjectKind.DATASET
-        ? rootSchema.dataset
-        : {
-            ...rootSchema.samples,
-            ...rootSchema.images,
-            ...rootSchema.observations,
-            ...rootSchema.annotations,
-          }[object.targetSchemaUid]
-  return schema?.attributes[issue.tag] ?? schema?.privateAttributes[issue.tag]
+  if (schema === undefined) {
+    return undefined
+  }
+  return [
+    ...Object.values(schema.attributes),
+    ...Object.values(schema.privateAttributes),
+  ].find((attribute) => attribute.uid === uid)
 }
 
 function CurateObject({
   project,
   object,
+  sourceRoot,
 }: {
   project: Project
   object: ObjectMigrationIssues
+  sourceRoot: RootSchema
 }): ReactElement {
-  const rootSchema = useSchemaContext()
+  const targetSchema = objectSchema(useSchemaContext(), object.targetSchemaUid)
   return (
     <Stack spacing={1}>
       <Typography variant="h6">
-        {object.identifier} ({object.targetSchemaDisplayName})
+        {object.identifier} ({targetSchema?.displayName})
       </Typography>
       {object.attributeIssues.map((issue) => {
         if (issue.targetAttributeSchemaUid === null) {
-          return <AcceptDropped key={issue.uid} project={project} issue={issue} />
+          const sourceUid = issue.original?.schemaUid
+          const source = objectSchemas(sourceRoot)
+            .map((schema) => attributeSchema(schema, sourceUid))
+            .find((schema) => schema !== undefined)
+          return (
+            <AcceptDropped
+              key={issue.uid}
+              project={project}
+              issue={issue}
+              displayName={source?.displayName ?? sourceUid ?? ''}
+            />
+          )
         }
-        const schema = issueSchema(rootSchema, object, issue)
+        const schema = attributeSchema(targetSchema, issue.targetAttributeSchemaUid)
         return schema === undefined ? (
           <Alert key={issue.uid} severity="error">
-            {issue.tag} is not an attribute of {object.targetSchemaDisplayName}.
+            Attribute schema {issue.targetAttributeSchemaUid} is not an attribute of{' '}
+            {targetSchema?.displayName ?? object.targetSchemaUid}.
           </Alert>
         ) : (
           <CurateIssue
@@ -415,15 +467,17 @@ function useResolveIssue(
 /** The name, status, original value, and problem of an attribute issue. */
 function IssueHeader({
   issue,
+  displayName,
   status,
 }: {
   issue: AttributeMigrationIssue
+  displayName: string
   status: string
 }): ReactElement {
   return (
     <>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Typography variant="subtitle1">{issue.displayName}</Typography>
+        <Typography variant="subtitle1">{displayName}</Typography>
         <Chip
           size="small"
           color={issue.resolvedAt !== null ? 'success' : 'default'}
@@ -444,9 +498,11 @@ function IssueHeader({
 function AcceptDropped({
   project,
   issue,
+  displayName,
 }: {
   project: Project
   issue: AttributeMigrationIssue
+  displayName: string
 }): ReactElement {
   const resolveMutation = useResolveIssue(project, issue)
   return (
@@ -455,6 +511,7 @@ function AcceptDropped({
         <Stack spacing={1}>
           <IssueHeader
             issue={issue}
+            displayName={displayName}
             status={issue.resolvedAt === null ? 'Dropped' : 'Accepted'}
           />
           {resolveMutation.isError && (
@@ -498,6 +555,7 @@ function CurateIssue({
         <Stack spacing={1}>
           <IssueHeader
             issue={issue}
+            displayName={schema.displayName}
             status={
               issue.resolvedAt === null
                 ? 'Unresolved'

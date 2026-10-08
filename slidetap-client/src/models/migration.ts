@@ -23,25 +23,18 @@ export enum MigrationStatus {
   FAILED = 'failed',
 }
 
-export enum MigrationObjectKind {
-  PROJECT = 'project',
-  DATASET = 'dataset',
-  ITEM = 'item',
-}
-
 /** A top-level attribute of an object that the migration could not convert,
- * left invalid, or dropped, and how the curator resolved it. */
+ * left invalid, or dropped, and how the curator resolved it. Its tag and
+ * display name are in the attribute schema in the target root, or in that of
+ * the original in the source root for a dropped attribute. */
 export interface AttributeMigrationIssue {
   readonly uid: string
-  /** The tag in the target schema, or in the source schema for a dropped
-   * attribute. */
-  readonly tag: string
-  /** The attribute schema of the tag in the target root, null for a dropped
-   * attribute. */
+  /** The project, dataset, or item the attribute belongs to. */
+  readonly objectUid: string
+  /** The schema of the object in the target root. */
+  readonly targetObjectSchemaUid: string
+  /** The attribute schema in the target root, null for a dropped attribute. */
   readonly targetAttributeSchemaUid: string | null
-  /** The display name of the target attribute, or of the source attribute for
-   * a dropped attribute. */
-  readonly displayName: string
   /** The attribute of the source object, null where it had none. */
   readonly original: Attribute<AttributeValueTypes> | null
   /** What could be converted, to start from. */
@@ -61,12 +54,10 @@ export interface AttributeMigrationIssue {
 /** A project, dataset, or item with attribute issues. */
 export interface ObjectMigrationIssues {
   readonly uid: string
-  readonly kind: MigrationObjectKind
   /** The name of the project or dataset, the identifier of an item. */
   readonly identifier: string
   /** The schema of the target root it is migrated to. */
   readonly targetSchemaUid: string
-  readonly targetSchemaDisplayName: string
   /** The attribute issues, the dropped attributes included. */
   readonly attributeIssues: AttributeMigrationIssue[]
 }
@@ -76,8 +67,6 @@ export interface ProjectMigration {
   readonly projectUid: string
   readonly sourceRootSchemaUid: string
   readonly targetRootSchemaUid: string
-  /** The name and version of the root migrated to. */
-  readonly targetRootSchemaName: string
   readonly previousProjectStatus: ProjectStatus
   readonly status: MigrationStatus
   /** Why planning or completing failed. */

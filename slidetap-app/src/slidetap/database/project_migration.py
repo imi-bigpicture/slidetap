@@ -32,7 +32,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
-from slidetap.model import AnyAttribute, MigrationStatus, ProjectStatus
+from slidetap.model import (
+    AnyAttribute,
+    AttributeMigrationIssue,
+    MigrationStatus,
+    ProjectMigration,
+    ProjectStatus,
+)
 
 
 class DatabaseAttributeMigrationIssue(Base):
@@ -177,6 +183,21 @@ class DatabaseAttributeMigrationIssue(Base):
         self.resolved = attribute
         self.resolved_at = datetime.datetime.now()
 
+    @property
+    def model(self) -> AttributeMigrationIssue:
+        """Make the model of the attribute issue."""
+        return AttributeMigrationIssue(
+            uid=self.uid,
+            object_uid=self.object_uid,
+            target_object_schema_uid=self.target_object_schema_uid,
+            target_attribute_schema_uid=self.target_attribute_schema_uid,
+            original=self.original,
+            proposed=self.proposed,
+            problem=self.problem,
+            resolved=self.resolved,
+            resolved_at=self.resolved_at,
+        )
+
 
 class DatabaseProjectMigration(Base):
     """The migration of a project, from it is created until it is completed
@@ -260,3 +281,18 @@ class DatabaseProjectMigration(Base):
         self.status = status
         self.error = error
         self.updated = datetime.datetime.now()
+
+    @property
+    def model(self) -> ProjectMigration:
+        """Make the model of the migration, without its issues, which are
+        grouped by object with the identifier of each object."""
+        return ProjectMigration(
+            project_uid=self.project_uid,
+            source_root_schema_uid=self.source_root_schema_uid,
+            target_root_schema_uid=self.target_root_schema_uid,
+            previous_project_status=self.previous_project_status,
+            status=self.status,
+            error=self.error,
+            created=self.created,
+            updated=self.updated,
+        )

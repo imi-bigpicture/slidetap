@@ -28,7 +28,7 @@ from slidetap.model.project_status import ProjectStatus
 
 
 @dataclass(frozen=True)
-class UnresolvedAttribute:
+class UnresolvedAttributeMigration:
     """An attribute a migration could not convert by itself, for the curator
     to decide."""
 
@@ -58,14 +58,14 @@ class ObjectMigrationResult:
     """The project, dataset, or item schema of the target root, of the same
     kind as the one it was on."""
 
-    attributes: Mapping[str, AnyAttribute | UnresolvedAttribute] = field(
+    attributes: Mapping[str, AnyAttribute | UnresolvedAttributeMigration] = field(
         default_factory=dict
     )
     """The attributes by tag on the target schema, each migrated, or
     unresolved for the curator to resolve. An attribute left out is dropped."""
 
-    private_attributes: Mapping[str, AnyAttribute | UnresolvedAttribute] = field(
-        default_factory=dict
+    private_attributes: Mapping[str, AnyAttribute | UnresolvedAttributeMigration] = (
+        field(default_factory=dict)
     )
     """The private attributes, as `attributes`."""
 
@@ -89,35 +89,24 @@ class MigrationStatus(Enum):
     can only be reverted."""
 
 
-class MigrationObjectKind(Enum):
-    """What kind of object of a project an object with migration issues is."""
-
-    PROJECT = "project"
-    """The project."""
-
-    DATASET = "dataset"
-    """The dataset of the project."""
-
-    ITEM = "item"
-    """An item of the dataset."""
-
-
 class AttributeMigrationIssue(CamelCaseBaseModel):
     """A top-level attribute of an object that the migration could not
-    convert, left invalid, or dropped, and how the curator resolved it."""
+    convert, left invalid, or dropped, and how the curator resolved it.
+
+    The tag and display name of the attribute are in the schemas: the
+    attribute schema in the target root, or that of the original in the source
+    root for a dropped attribute."""
 
     uid: UUID
-    tag: str
-    """The tag in the target schema, or in the source schema for a dropped
-    attribute."""
+    object_uid: UUID
+    """The project, the dataset, or the item the attribute belongs to."""
+
+    target_object_schema_uid: UUID
+    """The schema of the object in the target root."""
 
     target_attribute_schema_uid: UUID | None = None
-    """The attribute schema of the tag in the target root, which a resolved
-    value is on, None for a dropped attribute."""
-
-    display_name: str
-    """The display name of the target attribute, or of the source attribute
-    for a dropped attribute."""
+    """The attribute schema in the target root that a resolved value is on,
+    None for a dropped attribute."""
 
     original: AnyAttribute | None = None
     """The attribute of the source object, None where it had none."""
@@ -130,30 +119,24 @@ class AttributeMigrationIssue(CamelCaseBaseModel):
     value the migration could not migrate, an attribute the migration made
     invalid, or an attribute the migration dropped."""
 
-    resolved_at: datetime | None = None
-    """When the issue was resolved, or the dropped attribute accepted, None
-    until it is."""
-
     resolved: AnyAttribute | None = None
     """The value the issue is resolved with, None where left empty, accepted
     as dropped, or not yet resolved."""
+
+    resolved_at: datetime | None = None
+    """When the issue was resolved, or the dropped attribute accepted, None
+    until it is."""
 
 
 class ObjectMigrationIssues(CamelCaseBaseModel):
     """A project, dataset, or item with attribute issues to resolve."""
 
     uid: UUID
-    kind: MigrationObjectKind
-    """Whether it is the project, the dataset, or an item."""
-
     identifier: str
     """The name of the project or dataset, the identifier of an item."""
 
     target_schema_uid: UUID
     """The schema of the object in the target root."""
-
-    target_schema_display_name: str
-    """The display name of the target schema."""
 
     attribute_issues: list[AttributeMigrationIssue] = Field(default_factory=list)
     """The attribute issues of the object, the dropped attributes included."""
@@ -168,9 +151,6 @@ class ProjectMigration(CamelCaseBaseModel):
 
     target_root_schema_uid: UUID
     """The root the project is migrated to."""
-
-    target_root_schema_name: str
-    """The name and version of the target root."""
 
     previous_project_status: ProjectStatus
     """The status the project had, which it gets back when the migration is

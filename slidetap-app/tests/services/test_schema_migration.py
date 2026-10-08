@@ -68,7 +68,6 @@ from slidetap.model import (
     MapperGroup,
     MetadataImportStatus,
     MigrationError,
-    MigrationObjectKind,
     MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
@@ -84,7 +83,7 @@ from slidetap.model import (
     Sample,
     StringAttribute,
     StringAttributeSchema,
-    UnresolvedAttribute,
+    UnresolvedAttributeMigration,
 )
 from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
@@ -178,13 +177,13 @@ class _SexMigration(DeclarativeSchemaMigration):
         for moved in (attributes, private_attributes):
             for tag in self.unresolved_tags & moved.keys():
                 attribute = moved[tag]
-                assert not isinstance(attribute, UnresolvedAttribute)
-                moved[tag] = UnresolvedAttribute(attribute, attribute, "Asked")
+                assert not isinstance(attribute, UnresolvedAttributeMigration)
+                moved[tag] = UnresolvedAttributeMigration(attribute, attribute, "Asked")
         if self.wrong_tag:
             attributes = {f"{tag}-wrong": value for tag, value in attributes.items()}
         for moved in (attributes, private_attributes):
             for tag, value in list(moved.items()):
-                if not isinstance(value, UnresolvedAttribute):
+                if not isinstance(value, UnresolvedAttributeMigration):
                     continue
                 if self.wrong_unresolved == "tag":
                     moved[f"{tag}-wrong"] = moved.pop(tag)
@@ -192,7 +191,7 @@ class _SexMigration(DeclarativeSchemaMigration):
                     moved[tag] = dataclasses.replace(value, proposed=value.original)
         if self.wrong_unresolved == "private":
             for tag, value in list(attributes.items()):
-                if isinstance(value, UnresolvedAttribute):
+                if isinstance(value, UnresolvedAttributeMigration):
                     private_attributes[tag] = attributes.pop(tag)
         return ObjectMigrationResult(
             schema_uid=migrated.schema_uid,
@@ -639,11 +638,11 @@ class TestMigratingAProject:
         objects = {object_.uid: object_ for object_ in planned.issues}
         assert objects.keys() == {stored.other_patient.uid, stored.observation.uid}
         other_patient = objects[stored.other_patient.uid]
-        assert other_patient.kind == MigrationObjectKind.ITEM
         assert other_patient.identifier == "patient-2"
         assert other_patient.target_schema_uid == schema.patient_schema_uid
         [issue] = other_patient.attribute_issues
-        assert issue.tag == "sex"
+        assert issue.object_uid == stored.other_patient.uid
+        assert issue.target_object_schema_uid == schema.patient_schema_uid
         assert issue.target_attribute_schema_uid == OTHER_SEX_SCHEMA_UID
         assert issue.original.original_value == "Other"
         assert issue.original.display_value is not None
@@ -653,14 +652,16 @@ class TestMigratingAProject:
         assert "Other" in issue.problem
         assert issue.resolved_at is None
         [dropped] = objects[stored.observation.uid].attribute_issues
-        assert dropped.tag == "report"
+        report = schema.observation.private_attributes["report"]
+        assert dropped.object_uid == stored.observation.uid
         assert dropped.target_attribute_schema_uid is None
         assert dropped.original is not None
+        assert dropped.original.schema_uid == report.uid
         assert dropped.original.display_value is not None
         assert dropped.proposed is None
         assert dropped.problem == (
-            f"'{dropped.original.display_value}' of {dropped.display_name} is "
-            f"dropped: it has no place in {planned.target_root_schema_name}."
+            f"'{dropped.original.display_value}' of {report.display_name} is "
+            f"dropped: it has no place in {ExampleSchema().name} 2."
         )
         assert dropped.resolved_at is None
         # Nothing of the project is changed.
@@ -870,7 +871,7 @@ class TestMigratingAProject:
         migration.unresolved_tags = {"report"}
 
         def resolve(issue: AttributeMigrationIssue) -> AnyAttribute | None:
-            if issue.tag != "report":
+            if issue.target_attribute_schema_uid == OTHER_SEX_SCHEMA_UID:
                 return self._sex(issue, "Male")
             assert issue.proposed is not None
             return issue.proposed.model_copy(update={"updated_value": "Malignant"})
@@ -1588,13 +1589,14 @@ class TestMigratingIntoNewRequirements:
     @staticmethod
     def _issues(
         migration_service: MigrationService, stored: _StoredProject
-    ) -> dict[tuple[str, str], AttributeMigrationIssue]:
-        """The issues of the planned migration, by identifier and tag."""
+    ) -> dict[tuple[str, UUID | None], AttributeMigrationIssue]:
+        """The issues of the planned migration, by identifier and target
+        attribute schema."""
         migration_service.create(stored.project.uid)
         migration_service.plan(stored.project.uid)
         planned = migration_service.get(stored.project.uid)
         return {
-            (object_.identifier, issue.tag): issue
+            (object_.identifier, issue.target_attribute_schema_uid): issue
             for object_ in planned.issues
             for issue in object_.attribute_issues
         }
@@ -1608,7 +1610,7 @@ class TestMigratingIntoNewRequirements:
         issues = self._issues(migration_service, stored)
 
         # Assert
-        grade = issues[("case-1", "grade")]
+        grade = issues[("case-1", GRADE_SCHEMA_UID)]
         assert grade.target_attribute_schema_uid == GRADE_SCHEMA_UID
         assert grade.original is None
         assert grade.proposed is None
@@ -1625,7 +1627,10 @@ class TestMigratingIntoNewRequirements:
         issues = self._issues(migration_service, stored)
 
         # Assert
-        assert set(issues) == {("case-1", "grade"), ("patient-2", "sex")}
+        assert set(issues) == {
+            ("case-1", GRADE_SCHEMA_UID),
+            ("patient-2", OTHER_SEX_SCHEMA_UID),
+        }
 
     def test_a_newly_required_attribute_is_resolved(
         self,
@@ -1636,11 +1641,11 @@ class TestMigratingIntoNewRequirements:
     ):
         # Arrange
         issues = self._issues(migration_service, stored)
-        resolutions: dict[tuple[str, str], AnyAttribute | None] = {
-            ("case-1", "grade"): StringAttribute(
+        resolutions: dict[tuple[str, UUID | None], AnyAttribute | None] = {
+            ("case-1", GRADE_SCHEMA_UID): StringAttribute(
                 uid=UUID(int=0), schema_uid=GRADE_SCHEMA_UID, updated_value="High"
             ),
-            ("patient-2", "sex"): None,
+            ("patient-2", OTHER_SEX_SCHEMA_UID): None,
         }
         for key, issue in issues.items():
             migration_service.resolve(

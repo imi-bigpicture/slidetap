@@ -52,7 +52,6 @@ def _migration(project: Project, status: MigrationStatus) -> ProjectMigration:
         project_uid=project.uid,
         source_root_schema_uid=project.root_schema_uid,
         target_root_schema_uid=uuid4(),
-        target_root_schema_name="Target 2.0.0",
         previous_project_status=ProjectStatus.IN_PROGRESS,
         status=status,
         created=datetime.datetime(2026, 1, 1),
@@ -372,9 +371,9 @@ class TestSlideTapProjectRouter:
         )
         resolved = AttributeMigrationIssue(
             uid=issue_uid,
-            tag="tag",
+            object_uid=project.uid,
+            target_object_schema_uid=project.schema_uid,
             target_attribute_schema_uid=attribute.schema_uid,
-            display_name="Tag",
             original=attribute,
             problem="problem",
             resolved_at=RESOLVED_AT,
@@ -418,9 +417,9 @@ class TestSlideTapProjectRouter:
         decoy.when(migration_service.resolve(project.uid, issue_uid, None)).then_return(
             AttributeMigrationIssue(
                 uid=issue_uid,
-                tag="tag",
+                object_uid=project.uid,
+                target_object_schema_uid=project.schema_uid,
                 target_attribute_schema_uid=attribute.schema_uid,
-                display_name="Tag",
                 original=attribute,
                 problem="problem",
                 resolved_at=RESOLVED_AT,
@@ -452,8 +451,8 @@ class TestSlideTapProjectRouter:
         )
         accepted = AttributeMigrationIssue(
             uid=issue_uid,
-            tag="tag",
-            display_name="Tag",
+            object_uid=project.uid,
+            target_object_schema_uid=project.schema_uid,
             original=attribute,
             problem="'value' of Tag is dropped: it has no place in Target 2.0.0.",
             resolved_at=RESOLVED_AT,

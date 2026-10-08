@@ -33,9 +33,9 @@ class SchemaMigration(metaclass=ABCMeta):
     target root that schemas of the source migrate to.
 
     Each method that migrates an object returns what it is on the target root.
-    What a migration cannot migrate by itself it returns as unresolved, for a
-    curator to decide; it is then run again to complete the migration, and must
-    return the same.
+    What a migration cannot migrate by itself it returns as an
+    `UnresolvedAttributeMigration`, for a curator to decide; it is then run
+    again to complete the migration, and must return the same.
     Changes across objects are not supported.
 
     `DeclarativeSchemaMigration` implements it from declared object migrators.
@@ -54,7 +54,8 @@ class SchemaMigration(metaclass=ABCMeta):
         -------
         ObjectMigrationResult
             The project schema of the target root, the project's attributes on
-            it, and the attributes that need a curator's decision as unresolved.
+            it, and an `UnresolvedAttributeMigration` for each attribute that
+            needs a curator's decision.
         """
         raise NotImplementedError()
 
@@ -71,7 +72,8 @@ class SchemaMigration(metaclass=ABCMeta):
         -------
         ObjectMigrationResult
             The dataset schema of the target root, the dataset's attributes on
-            it, and the attributes that need a curator's decision as unresolved.
+            it, and an `UnresolvedAttributeMigration` for each attribute that
+            needs a curator's decision.
         """
         raise NotImplementedError()
 
@@ -89,8 +91,8 @@ class SchemaMigration(metaclass=ABCMeta):
         -------
         ObjectMigrationResult
             The item schema of the target root, of the same kind, the item's
-            attributes on it, and the attributes that need a curator's decision
-            as unresolved.
+            attributes on it, and an `UnresolvedAttributeMigration` for each
+            attribute that needs a curator's decision.
         """
         raise NotImplementedError()
 

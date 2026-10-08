@@ -32,7 +32,7 @@ from slidetap.model import (
     Item,
     ObjectMigrationResult,
     Project,
-    UnresolvedAttribute,
+    UnresolvedAttributeMigration,
 )
 
 T = TypeVar("T", bound=Project | Dataset | Item)
@@ -197,7 +197,7 @@ class ObjectMigrator(Generic[T]):
         self,
         attributes: Mapping[str, AnyAttribute],
         pairs: Mapping[str, AttributePair | None],
-    ) -> dict[str, AnyAttribute | UnresolvedAttribute]:
+    ) -> dict[str, AnyAttribute | UnresolvedAttributeMigration]:
         """Migrate the attributes of the object to their tags in the target,
         each that lost values as unresolved.
 
@@ -206,7 +206,7 @@ class ObjectMigrator(Generic[T]):
         ValueError
             If an attribute is held at a tag that is not of the source schema.
         """
-        migrated: dict[str, AnyAttribute | UnresolvedAttribute] = {}
+        migrated: dict[str, AnyAttribute | UnresolvedAttributeMigration] = {}
         for source_tag, attribute in attributes.items():
             if source_tag not in pairs:
                 raise ValueError(
@@ -218,7 +218,7 @@ class ObjectMigrator(Generic[T]):
                 continue
             result = pair.migrate(attribute)
             if result.lost:
-                migrated[pair.target_key] = UnresolvedAttribute(
+                migrated[pair.target_key] = UnresolvedAttributeMigration(
                     original=attribute,
                     proposed=result.attribute,
                     problem=" ".join(dict.fromkeys(result.lost)),

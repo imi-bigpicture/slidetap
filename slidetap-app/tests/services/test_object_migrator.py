@@ -55,7 +55,7 @@ from slidetap.model import (
     StringAttributeSchema,
     UnionAttribute,
     UnionAttributeSchema,
-    UnresolvedAttribute,
+    UnresolvedAttributeMigration,
 )
 
 
@@ -306,7 +306,9 @@ def schemas() -> Schemas:
 @pytest.mark.unittest
 class TestObjectMigrator:
     @staticmethod
-    def _unresolved(migrated: ObjectMigrationResult) -> dict[str, UnresolvedAttribute]:
+    def _unresolved(
+        migrated: ObjectMigrationResult,
+    ) -> dict[str, UnresolvedAttributeMigration]:
         """Get the unresolved attributes of a result, public and private, by tag."""
         return {
             tag: attribute
@@ -314,7 +316,7 @@ class TestObjectMigrator:
                 *migrated.attributes.items(),
                 *migrated.private_attributes.items(),
             )
-            if isinstance(attribute, UnresolvedAttribute)
+            if isinstance(attribute, UnresolvedAttributeMigration)
         }
 
     def test_attributes_are_moved_renamed_dropped_and_migrated(self, schemas: Schemas):
