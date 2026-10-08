@@ -15,10 +15,10 @@
 """Migrating an attribute to the attribute schema of another root."""
 
 from abc import ABCMeta, abstractmethod
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from slidetap.model import (
@@ -27,13 +27,21 @@ from slidetap.model import (
     Attribute,
     AttributeSchema,
     AttributeValueType,
+    DatasetSchema,
     EnumAttribute,
     EnumAttributeSchema,
+    ItemSchema,
     ListAttributeSchema,
     ObjectAttributeSchema,
+    ProjectSchema,
     RejectedValues,
     UnionAttributeSchema,
 )
+
+ObjectSchema = ProjectSchema | DatasetSchema | ItemSchema
+"""The schema of what is migrated: a project, a dataset, or an item."""
+
+DeclarationType = TypeVar("DeclarationType")
 
 
 @dataclass(frozen=True)
@@ -532,9 +540,9 @@ class UndeclaredAttributesError(ValueError):
 
 
 class AttributeDeclarations:
-    """What is declared about the attribute schemas of a source, by their uid:
-    the migrator of those whose values changed, the target attribute schema of
-    those renamed, and those dropped.
+    """What is declared about the attribute schemas of a source object schema,
+    by their uid: the migrator of those whose values changed, the target
+    attribute schema of those renamed, and those dropped.
 
     Pairs source attribute schemas with target attribute schemas, building the
     migrator of each pair: the declared one, a `NestedAttributeMigrator` for an
@@ -543,26 +551,56 @@ class AttributeDeclarations:
 
     def __init__(
         self,
-        migrated: Mapping[UUID, AttributeMigrator],
-        renamed: Mapping[UUID, AttributeSchema],
-        dropped: Collection[UUID],
+        source: ObjectSchema,
+        target: ObjectSchema,
+        migrated: Iterable[tuple[AttributeSchema, AttributeMigrator]] = (),
+        renamed: Iterable[tuple[AttributeSchema, AttributeSchema]] = (),
+        dropped: Iterable[AttributeSchema] = (),
     ):
-        """Create the declarations about the attribute schemas of a source.
+        """Create the declarations about the attribute schemas of a source
+        object schema.
 
         Parameters
         ----------
-        migrated: Mapping[UUID, AttributeMigrator]
-            The migrator of each source attribute schema whose values changed,
-            by its uid.
-        renamed: Mapping[UUID, AttributeSchema]
-            The target attribute schema each renamed source attribute schema
-            becomes, by its uid.
-        dropped: Collection[UUID]
-            The uids of the source attribute schemas that are left out.
+        source: ObjectSchema
+            The project, dataset, or item schema of the source root.
+        target: ObjectSchema
+            The schema of the target root it becomes.
+        migrated: Iterable[tuple[AttributeSchema, AttributeMigrator]] = ()
+            Source attribute schemas whose values changed, with the migrator of
+            their values.
+        renamed: Iterable[tuple[AttributeSchema, AttributeSchema]] = ()
+            Source attribute schemas, with the target attribute schema of another
+            tag in the same object that each becomes.
+        dropped: Iterable[AttributeSchema] = ()
+            Source attribute schemas that are left out.
+
+        Raises
+        ------
+        ValueError
+            If an attribute schema is declared twice in a declaration, or a
+            declared attribute schema is not of the schema it is declared for.
         """
-        self._migrated = migrated
-        self._renamed = renamed
-        self._dropped = dropped
+        self._source = source
+        self._target = target
+        migrated_by_uid = self._index("migrated", migrated, lambda pair: pair[0])
+        renamed_by_uid = self._index("renamed", renamed, lambda pair: pair[0])
+        dropped_by_uid = self._index("dropped", dropped, lambda schema: schema)
+        self._refuse_foreign(
+            [
+                ("migrated", [schema for schema, _ in migrated_by_uid.values()]),
+                ("renamed", [schema for schema, _ in renamed_by_uid.values()]),
+                ("dropped", list(dropped_by_uid.values())),
+            ],
+            [("renamed to", [schema for _, schema in renamed_by_uid.values()])],
+        )
+        self._migrated = {
+            uid: migrator for uid, (_, migrator) in migrated_by_uid.items()
+        }
+        self._renamed = {
+            uid: renamed_to for uid, (_, renamed_to) in renamed_by_uid.items()
+        }
+        self._dropped = dropped_by_uid.keys()
         self._unchanged = UnchangedAttributeMigrator()
 
     def pair(
@@ -667,6 +705,78 @@ class AttributeDeclarations:
             and isinstance(target, EnumAttributeSchema)
             and set(source.allowed_values) != set(target.allowed_values)
         )
+
+    def _index(
+        self,
+        declaration: str,
+        declared: Iterable[DeclarationType],
+        schema_of: Callable[[DeclarationType], AttributeSchema],
+    ) -> dict[UUID, DeclarationType]:
+        """Index declarations by the uid of the attribute schema each is of.
+
+        Raises
+        ------
+        ValueError
+            If an attribute schema is declared twice.
+        """
+        indexed: dict[UUID, DeclarationType] = {}
+        twice: list[str] = []
+        for entry in declared:
+            schema = schema_of(entry)
+            if schema.uid in indexed:
+                twice.append(f"{schema.tag} ({schema.uid})")
+            indexed[schema.uid] = entry
+        if twice:
+            raise ValueError(
+                f"The migrator of {self._source.name} declares "
+                f"{', '.join(twice)} as {declaration} more than once."
+            )
+        return indexed
+
+    def _refuse_foreign(
+        self,
+        of_source: Sequence[tuple[str, Sequence[AttributeSchema]]],
+        of_target: Sequence[tuple[str, Sequence[AttributeSchema]]],
+    ) -> None:
+        """Refuse declarations, by name, of attribute schemas that are not of the
+        source or target schema they are declared for.
+
+        Raises
+        ------
+        ValueError
+            If a declared attribute schema is not of the schema it is declared
+            for.
+        """
+        sources = self._attribute_schemas(self._source)
+        targets = self._attribute_schemas(self._target)
+        foreign = [
+            f"{schema.tag} ({schema.uid}) as {declaration}"
+            for declarations, of in ((of_source, sources), (of_target, targets))
+            for declaration, schemas in declarations
+            for schema in schemas
+            if schema.uid not in of
+        ]
+        if foreign:
+            raise ValueError(
+                f"The migrator of {self._source.name} declares "
+                f"{', '.join(foreign)}, which are not attribute schemas of the "
+                f"source or target schema they are declared for."
+            )
+
+    @staticmethod
+    def _attribute_schemas(schema: ObjectSchema) -> set[UUID]:
+        """Collect the uids of the attribute schemas of an object schema, at
+        any depth."""
+        uids: set[UUID] = set()
+        pending: list[AttributeSchema] = [
+            *schema.attributes.values(),
+            *schema.private_attributes.values(),
+        ]
+        while pending:
+            attribute = pending.pop()
+            uids.add(attribute.uid)
+            pending.extend(NestedAttributeMigrator.held(attribute).values())
+        return uids
 
 
 class NestedAttributeMigrator(AttributeMigrator):

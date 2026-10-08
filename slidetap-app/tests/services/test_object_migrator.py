@@ -43,7 +43,6 @@ from slidetap.model import (
     Item,
     ListAttribute,
     ListAttributeSchema,
-    MetadataSearchItem,
     ObjectAttribute,
     ObjectAttributeSchema,
     ProjectSchema,
@@ -726,19 +725,16 @@ class TestDeclarativeSchemaMigration:
             update={"attributes": {"kept": schemas.kept}, "private_attributes": {}}
         )
         root = schemas.root(unchanged)
+        kept = schemas.string(schemas.kept, "kept")
 
         # Act
         migration = DeclarativeSchemaMigration(root, root)
 
         # Assert
-        [migrator] = migration.item_migrators
-        found = migrator.attribute_migrator_of(schemas.kept.uid)
-        assert found is not None
-        assert isinstance(found[0], UnchangedAttributeMigrator)
-        search_item = MetadataSearchItem(
-            uid=uuid4(), batch_uid=uuid4(), identifier="being", schema_uid=unchanged.uid
-        )
-        assert migration.migrate_search_item(search_item) == unchanged.uid
+        migrated = migration.migrate_item(schemas.being(kept=kept))
+        assert migrated.schema_uid == unchanged.uid
+        assert migrated.attributes == {"kept": kept}
+        assert migration.migrate_item_schema(unchanged) == unchanged
 
     def test_a_plain_migrator_of_a_changed_item_schema_is_refused(
         self, schemas: Schemas
@@ -780,6 +776,21 @@ class TestDeclarativeSchemaMigration:
         assert migrated.attributes["sex"].value == "Female"
         with pytest.raises(ValueError, match="not an item schema"):
             migration.migrate_item(being.model_copy(update={"schema_uid": uuid4()}))
+
+    def test_an_item_schema_gives_the_target_item_schema_of_its_migrator(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        migration = self._migration(schemas)
+        unknown = schemas.source.model_copy(update={"uid": uuid4()})
+
+        # Act
+        target = migration.migrate_item_schema(schemas.source)
+
+        # Assert
+        assert target == schemas.target
+        with pytest.raises(ValueError, match="not an item schema"):
+            migration.migrate_item_schema(unknown)
 
     @pytest.mark.parametrize(
         ("attribute_name", "value", "expected"),

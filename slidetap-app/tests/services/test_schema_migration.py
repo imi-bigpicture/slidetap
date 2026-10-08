@@ -60,11 +60,11 @@ from slidetap.model import (
     Dataset,
     EnumAttribute,
     Item,
+    ItemSchema,
     ListAttribute,
     Mapper,
     MapperGroup,
     MetadataImportStatus,
-    MetadataSearchItem,
     MigratedObject,
     MigrationAttributeIssue,
     MigrationError,
@@ -1016,12 +1016,14 @@ class TestMigratingAProject:
         """Also those of a search that failed, which left no item."""
 
         # Arrange
-        def block_to_specimen(search_item: MetadataSearchItem) -> UUID:
-            if search_item.schema_uid == schema.block_schema_uid:
-                return schema.specimen_schema_uid
-            return search_item.schema_uid
+        migrate_item_schema = migration.migrate_item_schema
 
-        monkeypatch.setattr(migration, "migrate_search_item", block_to_specimen)
+        def block_to_specimen(item_schema: ItemSchema) -> ItemSchema:
+            if item_schema.uid == schema.block_schema_uid:
+                item_schema = schema.samples[schema.specimen_schema_uid]
+            return migrate_item_schema(item_schema)
+
+        monkeypatch.setattr(migration, "migrate_item_schema", block_to_specimen)
         failed_uid, found_uid = self._add_search_items(
             sqlite_database_service, stored, schema
         )
@@ -1049,8 +1051,12 @@ class TestMigratingAProject:
     ):
         """When the migration is planned."""
         # Arrange
-        target = uuid4() if wrong == "no item schema" else schema.image_schema_uid
-        monkeypatch.setattr(migration, "migrate_search_item", lambda _: target)
+        target = (
+            schema.samples[schema.block_schema_uid].model_copy(update={"uid": uuid4()})
+            if wrong == "no item schema"
+            else schema.images[schema.image_schema_uid]
+        )
+        monkeypatch.setattr(migration, "migrate_item_schema", lambda _: target)
         self._add_search_items(sqlite_database_service, stored, schema)
         migration_service.create(stored.project.uid)
 

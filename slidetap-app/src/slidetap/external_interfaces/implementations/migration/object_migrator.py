@@ -14,7 +14,7 @@
 
 """Migrating a project, a dataset, or an item to its schema on another root."""
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Generic, TypeVar
 from uuid import UUID
 
@@ -22,27 +22,20 @@ from slidetap.external_interfaces.implementations.migration.attribute_migrator i
     AttributeDeclarations,
     AttributeMigrator,
     AttributePair,
-    NestedAttributeMigrator,
+    ObjectSchema,
     UndeclaredAttributesError,
 )
 from slidetap.model import (
     AnyAttribute,
     AttributeSchema,
     Dataset,
-    DatasetSchema,
     Item,
-    ItemSchema,
     MigratedObject,
     Project,
-    ProjectSchema,
     UnresolvedAttribute,
 )
 
-ObjectSchema = ProjectSchema | DatasetSchema | ItemSchema
-"""The schema of what is migrated: a project, a dataset, or an item."""
-
 T = TypeVar("T", bound=Project | Dataset | Item)
-DeclarationType = TypeVar("DeclarationType")
 
 
 class ObjectMigrator(Generic[T]):
@@ -101,27 +94,8 @@ class ObjectMigrator(Generic[T]):
         """
         self._source = source
         self._target = target
-        migrated_by_uid = self._index(
-            "migrated", migrated_attributes, lambda pair: pair[0]
-        )
-        renamed_by_uid = self._index(
-            "renamed", renamed_attributes, lambda pair: pair[0]
-        )
-        dropped_by_uid = self._index(
-            "dropped", dropped_attributes, lambda schema: schema
-        )
-        self._refuse_foreign(
-            [
-                ("migrated", [schema for schema, _ in migrated_by_uid.values()]),
-                ("renamed", [schema for schema, _ in renamed_by_uid.values()]),
-                ("dropped", list(dropped_by_uid.values())),
-            ],
-            [("renamed to", [schema for _, schema in renamed_by_uid.values()])],
-        )
         declarations = AttributeDeclarations(
-            {uid: migrator for uid, (_, migrator) in migrated_by_uid.items()},
-            {uid: renamed_to for uid, (_, renamed_to) in renamed_by_uid.items()},
-            dropped_by_uid.keys(),
+            source, target, migrated_attributes, renamed_attributes, dropped_attributes
         )
         undeclared: list[str] = []
         self._attributes = self._pair(
@@ -259,75 +233,3 @@ class ObjectMigrator(Generic[T]):
             else:
                 migrated[pair.target_key] = result.attribute
         return migrated
-
-    def _index(
-        self,
-        declaration: str,
-        declared: Iterable[DeclarationType],
-        schema_of: Callable[[DeclarationType], AttributeSchema],
-    ) -> dict[UUID, DeclarationType]:
-        """Index declarations by the uid of the attribute schema each is of.
-
-        Raises
-        ------
-        ValueError
-            If an attribute schema is declared twice.
-        """
-        indexed: dict[UUID, DeclarationType] = {}
-        twice: list[str] = []
-        for entry in declared:
-            schema = schema_of(entry)
-            if schema.uid in indexed:
-                twice.append(f"{schema.tag} ({schema.uid})")
-            indexed[schema.uid] = entry
-        if twice:
-            raise ValueError(
-                f"The migrator of {self._source.name} declares "
-                f"{', '.join(twice)} as {declaration} more than once."
-            )
-        return indexed
-
-    def _refuse_foreign(
-        self,
-        of_source: Sequence[tuple[str, Sequence[AttributeSchema]]],
-        of_target: Sequence[tuple[str, Sequence[AttributeSchema]]],
-    ) -> None:
-        """Refuse declarations, by name, of attribute schemas that are not of the
-        source or target schema they are declared for.
-
-        Raises
-        ------
-        ValueError
-            If a declared attribute schema is not of the schema it is declared
-            for.
-        """
-        sources = self._attribute_schemas(self._source)
-        targets = self._attribute_schemas(self._target)
-        foreign = [
-            f"{schema.tag} ({schema.uid}) as {declaration}"
-            for declarations, of in ((of_source, sources), (of_target, targets))
-            for declaration, schemas in declarations
-            for schema in schemas
-            if schema.uid not in of
-        ]
-        if foreign:
-            raise ValueError(
-                f"The migrator of {self._source.name} declares "
-                f"{', '.join(foreign)}, which are not attribute schemas of the "
-                f"source or target schema they are declared for."
-            )
-
-    @staticmethod
-    def _attribute_schemas(schema: ObjectSchema) -> set[UUID]:
-        """Collect the uids of the attribute schemas of an object schema, at
-        any depth."""
-        uids: set[UUID] = set()
-        pending: list[AttributeSchema] = [
-            *schema.attributes.values(),
-            *schema.private_attributes.values(),
-        ]
-        while pending:
-            attribute = pending.pop()
-            uids.add(attribute.uid)
-            pending.extend(NestedAttributeMigrator.held(attribute).values())
-        return uids

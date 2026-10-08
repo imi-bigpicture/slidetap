@@ -777,7 +777,9 @@ class MigrationService:
                             target_root,
                             f"search item {search_item.uid}",
                             search_item.schema_uid,
-                            migration.migrate_search_item(search_item),
+                            migration.migrate_item_schema(
+                                source_root.get_item(search_item.schema_uid)
+                            ).uid,
                         ),
                     )
                 )

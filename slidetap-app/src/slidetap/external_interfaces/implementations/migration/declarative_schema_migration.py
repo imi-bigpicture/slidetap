@@ -14,8 +14,8 @@
 
 """A schema migration of object migrators."""
 
-from collections.abc import Iterable, Sequence
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, cast
 from uuid import UUID
 
 from slidetap.external_interfaces.implementations.migration.object_migrator import (
@@ -28,7 +28,6 @@ from slidetap.model import (
     Dataset,
     Item,
     ItemSchema,
-    MetadataSearchItem,
     MigratedObject,
     Project,
     RootSchema,
@@ -49,6 +48,8 @@ class DeclarativeSchemaMigration(SchemaMigration):
     hold it, at any depth, so that the mapping items of a mapper moved to the
     target root are migrated as the attributes of the objects are, and
     `migrate_attribute_schema` gives the target schema of that migrator.
+    `migrate_item_schema` gives the target item schema of the migrator of an
+    item schema.
     """
 
     def __init__(
@@ -96,37 +97,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
             else dataset_migrator
         )
         self._item_migrators = self._create_item_migrators(item_migrators)
-
-    @property
-    def source(self) -> RootSchema:
-        """The root schema the projects are moved from."""
-        return self._source_schema
-
-    @property
-    def target(self) -> RootSchema:
-        """The root schema the projects are moved to."""
-        return self._target_schema
-
-    @property
-    def project_migrator(self) -> ObjectMigrator[Project]:
-        """The migrator of the project."""
-        return self._project_migrator
-
-    @property
-    def dataset_migrator(self) -> ObjectMigrator[Dataset]:
-        """The migrator of the dataset."""
-        return self._dataset_migrator
-
-    @property
-    def item_migrators(self) -> Sequence[ObjectMigrator[Item]]:
-        """The migrators of the items, one for each item schema of the
-        source."""
-        return list(self._item_migrators.values())
-
-    @property
-    def migrators(self) -> list[ObjectMigrator[Any]]:
-        """Every migrator: of the project, the dataset, and the items."""
-        return [
+        self._migrators: list[ObjectMigrator[Any]] = [
             self._project_migrator,
             self._dataset_migrator,
             *self._item_migrators.values(),
@@ -186,30 +157,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
         ValueError
             If the item is not on an item schema of the source root.
         """
-        return self._item_migrator(f"Item {item.uid}", item.schema_uid).migrate(item)
-
-    def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
-        """Give the target item schema of the migrator of the item schema of
-        the search item.
-
-        Parameters
-        ----------
-        search_item: MetadataSearchItem
-            The search item, on an item schema of the source root.
-
-        Returns
-        -------
-        UUID
-            The uid of the target item schema.
-
-        Raises
-        ------
-        ValueError
-            If the search item is not on an item schema of the source root.
-        """
-        return self._item_migrator(
-            f"Search item {search_item.uid}", search_item.schema_uid
-        ).target.uid
+        migrator = self._item_migrators.get(item.schema_uid)
+        if migrator is None:
+            raise ValueError(
+                f"Item {item.uid} is of schema {item.schema_uid}, which is not an "
+                f"item schema of root {self._source_schema.name}."
+            )
+        return migrator.migrate(item)
 
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
         """Migrate the attribute of a mapping item with the attribute migrator
@@ -229,12 +183,38 @@ class DeclarativeSchemaMigration(SchemaMigration):
             The attribute on the target attribute schema, or None where no
             object migrator has a migrator of its schema.
         """
-        for migrator in self.migrators:
+        for migrator in self._migrators:
             found = migrator.attribute_migrator_of(attribute.schema_uid)
             if found is not None:
                 attribute_migrator, target = found
                 return attribute_migrator.migrate(attribute, target).attribute
         return None
+
+    def migrate_item_schema(self, schema: ItemSchema) -> ItemSchema:
+        """Give the target item schema of the migrator of a source item schema.
+
+        Parameters
+        ----------
+        schema: ItemSchema
+            An item schema of the source root.
+
+        Returns
+        -------
+        ItemSchema
+            The target item schema of the migrator.
+
+        Raises
+        ------
+        ValueError
+            If the schema is not an item schema of the source root.
+        """
+        migrator = self._item_migrators.get(schema.uid)
+        if migrator is None:
+            raise ValueError(
+                f"Item schema {schema.name} ({schema.uid}) is not an item schema "
+                f"of root {self._source_schema.name}."
+            )
+        return cast(ItemSchema, migrator.target)
 
     def migrate_attribute_schema(
         self, schema: AttributeSchema
@@ -253,28 +233,11 @@ class DeclarativeSchemaMigration(SchemaMigration):
             The target attribute schema, or None where no object migrator has a
             migrator of the schema.
         """
-        for migrator in self.migrators:
+        for migrator in self._migrators:
             found = migrator.attribute_migrator_of(schema.uid)
             if found is not None:
                 return found[1]
         return None
-
-    def _item_migrator(self, name: str, schema_uid: UUID) -> ObjectMigrator[Item]:
-        """Return the migrator of an item schema of the source root, for an
-        item or a search item as named.
-
-        Raises
-        ------
-        ValueError
-            If the schema is not an item schema of the source root.
-        """
-        migrator = self._item_migrators.get(schema_uid)
-        if migrator is None:
-            raise ValueError(
-                f"{name} is of schema {schema_uid}, which is not an item schema of "
-                f"root {self._source_schema.name}."
-            )
-        return migrator
 
     def _create_item_migrators(
         self, declared: Iterable[ObjectMigrator[Item]]

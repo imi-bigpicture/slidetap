@@ -15,26 +15,27 @@
 """Interface for moving projects from one root schema to another."""
 
 from abc import ABCMeta, abstractmethod
-from uuid import UUID
 
 from slidetap.model import (
     AnyAttribute,
     AttributeSchema,
     Dataset,
     Item,
-    MetadataSearchItem,
+    ItemSchema,
     MigratedObject,
     Project,
 )
 
 
 class SchemaMigration(metaclass=ABCMeta):
-    """Migrates projects, datasets, items, and search items from a previous root
-    schema to the root of new projects, one object at a time.
+    """Migrates projects, datasets, and items from a previous root schema to the
+    root of new projects, one object at a time, and gives the schemas of the
+    target root that schemas of the source migrate to.
 
-    Each method returns what the object is on the target root. What a migration
-    cannot migrate by itself it returns as unresolved, for a curator to decide;
-    it is then run again to complete the migration, and must return the same.
+    Each method that migrates an object returns what it is on the target root.
+    What a migration cannot migrate by itself it returns as unresolved, for a
+    curator to decide; it is then run again to complete the migration, and must
+    return the same.
     Changes across objects are not supported.
 
     `DeclarativeSchemaMigration` implements it from declared object migrators.
@@ -94,27 +95,6 @@ class SchemaMigration(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
-        """Give the item schema of the target root for a search item on an item
-        schema of the source root.
-
-        A search item records what a search of a batch found, or failed to
-        find, by identifier and item schema, also where no item was imported.
-
-        Parameters
-        ----------
-        search_item: MetadataSearchItem
-            The search item, on an item schema of the source root.
-
-        Returns
-        -------
-        UUID
-            The uid of the item schema of the target root, of the same kind as
-            the one the search item is on.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
         """Migrate an attribute of a mapping item to the target root.
 
@@ -129,6 +109,23 @@ class SchemaMigration(metaclass=ABCMeta):
         AnyAttribute | None
             The attribute on the attribute schema of the target root it moves
             to, or None where it has none.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def migrate_item_schema(self, schema: ItemSchema) -> ItemSchema:
+        """Give the item schema of the target root that a source item schema
+        migrates to.
+
+        Parameters
+        ----------
+        schema: ItemSchema
+            An item schema of the source root.
+
+        Returns
+        -------
+        ItemSchema
+            The item schema of the target root, of the same kind.
         """
         raise NotImplementedError()
 
