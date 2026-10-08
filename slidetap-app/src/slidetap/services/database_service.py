@@ -19,6 +19,7 @@ import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
+    ClassVar,
     NamedTuple,
     Optional,
     TypeVar,
@@ -134,7 +135,6 @@ from slidetap.model import (
     RejectedValues,
     ReviewIssueSource,
     ReviewStatus,
-    RootSchemaSupport,
     Sample,
     SampleSchema,
     StringAttribute,
@@ -211,6 +211,32 @@ to overrun this is not a wording anyone will write a mapping key for.
 class DatabaseService:
     QUEUED_REASONS = 5
     """How many of a unit's open issues the queue is given the reasons for."""
+
+    STORED_BATCH_STATUSES: ClassVar[frozenset[BatchStatus]] = frozenset(
+        {BatchStatus.LOCKED, BatchStatus.COMPLETED}
+    )
+    """Batch statuses where the images are stored, or locked to be: a locked
+    batch holds what goes into its bundle, and is reopened to be changed."""
+
+    BUSY_BATCH_STATUSES: ClassVar[frozenset[BatchStatus]] = frozenset(
+        {
+            BatchStatus.METADATA_SEARCHING,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+            BatchStatus.IMAGE_POST_PROCESSING,
+            BatchStatus.IMAGE_STORING,
+        }
+    )
+    """Batch statuses where a task may be writing to the items."""
+
+    IN_FLIGHT_IMAGE_STATUSES: ClassVar[frozenset[ImageStatus]] = frozenset(
+        {
+            ImageStatus.DOWNLOADING,
+            ImageStatus.PRE_PROCESSING,
+            ImageStatus.POST_PROCESSING,
+            ImageStatus.STORING,
+        }
+    )
+    """Image statuses where a task is working on the image."""
 
     def __init__(self, config: DatabaseConfig):
         self._engine = create_engine(self._sqlalchemy_uri(config.uri))
@@ -2686,7 +2712,7 @@ class DatabaseService:
                     or_(
                         batches.where(
                             DatabaseBatch.status.in_(
-                                list(RootSchemaSupport.STORED_BATCH_STATUSES)
+                                list(DatabaseService.STORED_BATCH_STATUSES)
                             )
                         ).exists(),
                         select(DatabaseImage.uid)
@@ -2727,7 +2753,7 @@ class DatabaseService:
                     or_(
                         batches.where(
                             DatabaseBatch.status.in_(
-                                list(RootSchemaSupport.BUSY_BATCH_STATUSES)
+                                list(DatabaseService.BUSY_BATCH_STATUSES)
                             )
                         ).exists(),
                         select(DatabaseMetadataSearchItem.uid)
@@ -2741,7 +2767,7 @@ class DatabaseService:
                         .where(
                             DatabaseImage.batch_uid.in_(batches),
                             DatabaseImage.status.in_(
-                                list(RootSchemaSupport.IN_FLIGHT_IMAGE_STATUSES)
+                                list(DatabaseService.IN_FLIGHT_IMAGE_STATUSES)
                             ),
                         )
                         .exists(),

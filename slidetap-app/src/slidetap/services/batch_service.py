@@ -82,9 +82,7 @@ class BatchService:
                 session,
                 batch.project_uid,
             )
-            self._schema_service.support_of(
-                database_project, session
-            ).assert_can_change()
+            self._schema_service.assert_can_change(database_project, session)
             database_batch = self._database_service.add_batch(session, batch)
             database_project.batches.add(database_batch)
             if batch.is_default:
@@ -106,9 +104,9 @@ class BatchService:
             If the project cannot be changed, with why.
         """
         with self._database_service.get_session(session) as session:
-            self._schema_service.support_of(
+            self._schema_service.assert_can_change(
                 self._database_service.get_batch(session, uid), session
-            ).assert_can_change()
+            )
 
     def get_optional(self, uid: UUID, session: Session | None = None) -> Batch | None:
         with self._database_service.get_session(session) as session:
@@ -135,7 +133,7 @@ class BatchService:
             )
             if existing_batch is None:
                 return None
-            self._schema_service.support_of(existing_batch, session).assert_can_change()
+            self._schema_service.assert_can_change(existing_batch, session)
             existing_batch.name = batch.name
             return existing_batch.model
 
@@ -625,7 +623,7 @@ class BatchService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            self._schema_service.support_of(batch, session).assert_can_change()
+            self._schema_service.assert_can_change(batch, session)
             if not batch.image_post_processing_complete:
                 error = (
                     f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE.name} "
@@ -663,7 +661,7 @@ class BatchService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            self._schema_service.support_of(batch, session).assert_can_change()
+            self._schema_service.assert_can_change(batch, session)
             if batch.status != BatchStatus.LOCKED:
                 error = (
                     f"Can only reopen a {BatchStatus.LOCKED.name} batch, "
@@ -725,7 +723,7 @@ class BatchService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            self._schema_service.support_of(batch, session).assert_can_change()
+            self._schema_service.assert_can_change(batch, session)
             if batch.project.default_batch_uid == batch.uid:
                 raise NotAllowedActionError("The default batch cannot be deleted.")
             if batch.project.deleting:

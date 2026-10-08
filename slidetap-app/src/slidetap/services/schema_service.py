@@ -17,6 +17,7 @@
 from collections.abc import Mapping
 from functools import cached_property
 from itertools import chain
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -35,10 +36,21 @@ from slidetap.model import (
     AttributeSchema,
     NotFoundError,
     Project,
+    ProjectNotEditableError,
+    ProjectStatus,
     RootSchemaIndex,
-    RootSchemaSupport,
 )
 from slidetap.services.database_service import DatabaseService
+
+ChangeSubject = (
+    Project
+    | DatabaseProject
+    | DatabaseDataset
+    | DatabaseBatch
+    | DatabaseItem
+    | DatabaseAttribute
+)
+"""What belongs to a project, for asking whether the project can be changed."""
 
 
 class SchemaService:
@@ -52,6 +64,16 @@ class SchemaService:
     only. Attribute schemas are looked up across roots, as an attribute schema
     uid means one definition wherever it is used.
     """
+
+    INACTIVE_STATUSES: ClassVar[Mapping[ProjectStatus, str]] = {
+        ProjectStatus.DELETED: "the project is deleted",
+        ProjectStatus.MIGRATING: "the project is being migrated",
+    }
+    """The statuses where nothing is done with a project, and why."""
+
+    VIEW_ONLY_REFUSAL: ClassVar[str] = "{root} is view only"
+    """Why a project on a previous root cannot be changed, for the display
+    name of the root."""
 
     def __init__(
         self,
@@ -172,52 +194,129 @@ class SchemaService:
             raise ValueError(f"Dataset {dataset} has no project.")
         return self.get_root(root_schema_uid)
 
-    def support_of(
-        self,
-        subject: Project
-        | DatabaseProject
-        | DatabaseDataset
-        | DatabaseBatch
-        | DatabaseItem,
-        session: Session | None = None,
-    ) -> RootSchemaSupport:
-        """What can be done with the project something belongs to: by its
-        root and its state.
+    def project_of(
+        self, subject: ChangeSubject, session: Session | None = None
+    ) -> Project | DatabaseProject | None:
+        """Get the project something belongs to.
 
-        The session is the one to look up in what the subject does not hold
-        yet, such as the dataset of an item just added.
+        Parameters
+        ----------
+        subject: ChangeSubject
+            The project, or a dataset, batch, item, or attribute row of one.
+        session: Session | None = None
+            The session to look up in what the subject does not hold yet, such
+            as the dataset of an item just added or the owner of an attribute.
+
+        Returns
+        -------
+        Project | DatabaseProject | None
+            The project, or None for an attribute row that belongs to no item,
+            project, or dataset.
 
         Raises
         ------
         ValueError
             If the subject is a dataset, or of a dataset, without a project.
         """
-        project = self._project_of(subject, session)
-        root = self.get_root(project.root_schema_uid)
-        return RootSchemaSupport(
-            root.uid,
-            root.display_name,
-            editable=root.is_default,
-            status=project.status,
-            exported=project.exported is not None,
-            has_migration=project.root_schema_uid in self._migrations,
-        )
-
-    def support_of_attribute(
-        self, attribute: DatabaseAttribute, session: Session | None = None
-    ) -> RootSchemaSupport | None:
-        """What can be done with the project an attribute row belongs to, None
-        for one that belongs to no item, project, or dataset.
-
-        Looks its owner up in the session given: for one attribute, as many of
-        a project are better given its root schema support.
-        """
+        if not isinstance(subject, DatabaseAttribute):
+            return self._project_of(subject, session)
         with self._database_service.get_session(session) as session:
-            return self._support_of_owner(attribute, session)
+            owner = self._owner_of(subject, session)
+            if owner is None:
+                return None
+            return self._project_of(owner, session)
 
-    def _support_of_owner(
-        self, attribute: DatabaseAttribute, session: Session
-    ) -> RootSchemaSupport | None:
+    def change_refusal(
+        self, subject: ChangeSubject, session: Session | None = None
+    ) -> str | None:
+        """Tell why the project something belongs to cannot be changed.
+
+        A change is everything but viewing the project, the results of
+        validating it, and deleting it: editing, search, images, pseudonyms,
+        preview, and export. Only the projects on the root of new projects can
+        be changed, and not while deleted or being migrated.
+
+        Parameters
+        ----------
+        subject: ChangeSubject
+            The project, or a dataset, batch, item, or attribute row of one.
+        session: Session | None = None
+            The session to look up in what the subject does not hold yet.
+
+        Returns
+        -------
+        str | None
+            Why the project cannot be changed, or None where it can, or where
+            an attribute row belongs to no project.
+
+        Raises
+        ------
+        ValueError
+            If the subject is a dataset, or of a dataset, without a project.
+        """
+        project = self.project_of(subject, session)
+        if project is None:
+            return None
+        return self._change_refusal_of(project)
+
+    def can_change(
+        self, subject: ChangeSubject, session: Session | None = None
+    ) -> bool:
+        """Tell whether the project something belongs to can be changed, see
+        `change_refusal`.
+
+        Parameters
+        ----------
+        subject: ChangeSubject
+            The project, or a dataset, batch, item, or attribute row of one.
+        session: Session | None = None
+            The session to look up in what the subject does not hold yet.
+
+        Returns
+        -------
+        bool
+            Whether the project can be changed.
+        """
+        return self.change_refusal(subject, session) is None
+
+    def assert_can_change(
+        self, subject: ChangeSubject, session: Session | None = None
+    ) -> None:
+        """Refuse a change to a project that cannot be changed, see
+        `change_refusal`.
+
+        Parameters
+        ----------
+        subject: ChangeSubject
+            The project, or a dataset, batch, item, or attribute row of one.
+        session: Session | None = None
+            The session to look up in what the subject does not hold yet.
+
+        Raises
+        ------
+        ProjectNotEditableError
+            If the project cannot be changed, with why.
+        """
+        project = self.project_of(subject, session)
+        if project is None:
+            return
+        reason = self._change_refusal_of(project)
+        if reason is not None:
+            raise ProjectNotEditableError(project.root_schema_uid, reason)
+
+    def _change_refusal_of(self, project: Project | DatabaseProject) -> str | None:
+        inactive = self.INACTIVE_STATUSES.get(project.status)
+        if inactive is not None:
+            return inactive
+        root = self.get_root(project.root_schema_uid)
+        if not root.is_default:
+            return self.VIEW_ONLY_REFUSAL.format(root=root.display_name)
+        return None
+
+    @staticmethod
+    def _owner_of(
+        attribute: DatabaseAttribute, session: Session
+    ) -> DatabaseProject | DatabaseDataset | DatabaseItem | None:
         item_uid = attribute.attribute_item_uid or attribute.private_attribute_item_uid
         project_uid = (
             attribute.attribute_project_uid or attribute.private_attribute_project_uid
@@ -226,14 +325,12 @@ class SchemaService:
             attribute.attribute_dataset_uid or attribute.private_attribute_dataset_uid
         )
         if item_uid is not None:
-            owner = session.get(DatabaseItem, item_uid)
-        elif project_uid is not None:
-            owner = session.get(DatabaseProject, project_uid)
-        elif dataset_uid is not None:
-            owner = session.get(DatabaseDataset, dataset_uid)
-        else:
-            return None
-        return self.support_of(owner, session) if owner is not None else None
+            return session.get(DatabaseItem, item_uid)
+        if project_uid is not None:
+            return session.get(DatabaseProject, project_uid)
+        if dataset_uid is not None:
+            return session.get(DatabaseDataset, dataset_uid)
+        return None
 
     def _project_of(
         self,

@@ -30,13 +30,13 @@ from slidetap.model import (
     Project,
     ProjectActions,
     ProjectStatus,
-    RootSchemaSupport,
 )
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
+from slidetap.services.migration_service import MigrationService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
@@ -52,6 +52,7 @@ class ProjectService:
         mapper_service: MapperService,
         database_service: DatabaseService,
         storage_service: StorageService,
+        migration_service: MigrationService,
     ):
         self._attribute_service = attribute_service
         self._batch_service = batch_service
@@ -60,6 +61,7 @@ class ProjectService:
         self._mapper_service = mapper_service
         self._database_service = database_service
         self._storage_service = storage_service
+        self._migration_service = migration_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(
@@ -187,7 +189,7 @@ class ProjectService:
         """
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
-            self._schema_service.support_of(project, session).assert_can_change()
+            self._schema_service.assert_can_change(project, session)
             project.seed = None
             self._logger.info(f"Cleared the importer seed of project {project.uid}.")
             session.commit()
@@ -202,9 +204,18 @@ class ProjectService:
             return [project.model for project in projects]
 
     def get_actions(self, uid: UUID) -> ProjectActions:
-        """What the project can be offered: what the application can do with
-        the projects on its root, less what the project's state rules out, and
-        whether it can be migrated, as its root schema support says.
+        """Tell what a project is offered.
+
+        Parameters
+        ----------
+        uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        ProjectActions
+            Whether the project can be changed, whether its root has a
+            migration, and, where it has, why the project cannot be migrated.
 
         Raises
         ------
@@ -215,12 +226,17 @@ class ProjectService:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 raise NotFoundError(f"Project {uid} not found")
-            support = self._schema_service.support_of(project, session)
-            if not support.has_migration:
-                return support.actions(None, None)
-            return support.actions(
-                DatabaseService.has_stored_batches(session, project),
-                DatabaseService.has_busy_batches(session, project),
+            has_migration = (
+                self._schema_service.migration_of(project.root_schema_uid) is not None
+            )
+            return ProjectActions(
+                edit=self._schema_service.can_change(project, session),
+                has_migration=has_migration,
+                migrate_refusal=(
+                    self._migration_service.migrate_refusal(project, session)
+                    if has_migration
+                    else None
+                ),
             )
 
     def update(self, project: Project) -> Project | None:
@@ -230,9 +246,7 @@ class ProjectService:
             )
             if database_project is None:
                 return None
-            self._schema_service.support_of(
-                database_project, session
-            ).assert_can_change()
+            self._schema_service.assert_can_change(database_project, session)
             database_project.name = project.name
             mapper_groups = [
                 self._database_service.get_mapper_group(session, group)
@@ -304,7 +318,7 @@ class ProjectService:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
             # Not while a migration may be writing to it.
-            RootSchemaSupport.assert_can_delete(project.status)
+            self._assert_can_delete(project)
             if project.exporting:
                 raise NotAllowedActionError(
                     f"Cannot delete project {project.uid} while it is "
@@ -402,6 +416,25 @@ class ProjectService:
                     f"Cannot export project {project.uid}: {selected - stored} "
                     f"selected {image_schema.name} image(s) are not stored."
                 )
+
+    @staticmethod
+    def _assert_can_delete(project: DatabaseProject) -> None:
+        """Refuse deleting a project a migration may be writing to.
+
+        Parameters
+        ----------
+        project: DatabaseProject
+            The project.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project is being migrated.
+        """
+        if project.status == ProjectStatus.MIGRATING:
+            raise NotAllowedActionError(
+                "The project cannot be deleted: the project is being migrated."
+            )
 
     def set_as_in_progress(
         self,

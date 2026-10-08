@@ -178,6 +178,18 @@ class DatabaseProject(Base):
         """Return True if project have status 'EXPORT_COMPLETE'."""
         return self.status == ProjectStatus.EXPORT_COMPLETE
 
+    @property
+    def was_exported(self) -> bool:
+        """Return True if the project was ever exported, or is being exported.
+
+        An export that completed is recorded in `exported`, whatever the status
+        is now.
+        """
+        return self.exported is not None or self.status in (
+            ProjectStatus.EXPORTING,
+            ProjectStatus.EXPORT_COMPLETE,
+        )
+
     @hybrid_property
     def failed(self) -> bool:
         """Return True if project have status 'FAILED'."""

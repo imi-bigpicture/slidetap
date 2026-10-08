@@ -42,6 +42,14 @@ class Project(CamelCaseBaseModel):
     """When an export of the project last completed, None where none has. An
     exported project keeps the schema it was exported with."""
 
+    @property
+    def was_exported(self) -> bool:
+        """Return True if the project was ever exported, or is being exported."""
+        return self.exported is not None or self.status in (
+            ProjectStatus.EXPORTING,
+            ProjectStatus.EXPORT_COMPLETE,
+        )
+
     storage_folder: str | None = None
     """Folder the project is stored in, claimed the first time it is stored to.
 

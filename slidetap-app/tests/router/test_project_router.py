@@ -440,7 +440,7 @@ class TestSlideTapProjectRouter:
     def test_a_dropped_attribute_is_accepted(
         self,
         decoy: Decoy,
-        test_client: FlaskClient,
+        test_client: TestClient,
         migration_service: MigrationService,
         project: Project,
     ):

@@ -258,7 +258,7 @@ class TestSchemaServiceRoots:
         assert list(schema_service.roots) == [ExampleSchema().uid]
         assert schema_service.default_root.schema == ExampleSchema()
         assert schema_service.default_root.is_default
-        assert schema_service.support_of(
+        assert schema_service.can_change(
             Project(
                 uid=uuid4(),
                 name="project",
@@ -267,7 +267,7 @@ class TestSchemaServiceRoots:
                 dataset_uid=uuid4(),
                 created=datetime.datetime(2026, 1, 1),
             )
-        ).can_change
+        )
 
 
 @pytest.mark.unittest
@@ -291,20 +291,21 @@ class TestEditableRoots:
         )
 
         # Act
-        support = schema_service.support_of(other)
+        refusal = schema_service.change_refusal(other)
 
         # Assert
         assert not schema_service.get_root(other_schema.uid).is_default
-        assert support.change_refusal == (
+        assert refusal == (
             f"{schema_service.get_root(other_schema.uid).display_name} is view only"
         )
+        assert not schema_service.can_change(other)
         with pytest.raises(ProjectNotEditableError, match="view only"):
-            support.assert_can_change()
+            schema_service.assert_can_change(other)
 
     def test_a_deleted_project_can_do_nothing(
         self, schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
     ):
-        """Refused as its actions say, whatever its root can do."""
+        """Refused, whatever its root can do."""
         # Arrange
         schema_service = schema_service_of(schema)
         project = Project(
@@ -316,9 +317,9 @@ class TestEditableRoots:
             dataset_uid=uuid4(),
             created=datetime.datetime(2026, 1, 1),
         )
-        support = schema_service.support_of(project)
 
         # Act & Assert
-        assert not any(support.actions(False, False).model_dump().values())
+        assert schema_service.change_refusal(project) == "the project is deleted"
+        assert not schema_service.can_change(project)
         with pytest.raises(ProjectNotEditableError, match="deleted"):
-            support.assert_can_change()
+            schema_service.assert_can_change(project)

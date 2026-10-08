@@ -23,7 +23,7 @@ from decoy.matchers import Anything
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseBatch, DatabaseImage
-from slidetap.model import Batch, ImageStatus, ProjectStatus, RootSchemaSupport
+from slidetap.model import Batch, ImageStatus
 from slidetap.services import (
     BatchService,
     DatabaseService,
@@ -71,18 +71,10 @@ def image_pipeline_service(
     database_service: DatabaseService,
 ) -> ImagePipelineService:
     schema_service = decoy.mock(cls=SchemaService)
-    decoy.when(schema_service.support_of(matchers.Anything())).then_return(
-        RootSchemaSupport(
-            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-        )
-    )
+    decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
     decoy.when(
-        schema_service.support_of(matchers.Anything(), matchers.Anything())
-    ).then_return(
-        RootSchemaSupport(
-            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-        )
-    )
+        schema_service.can_change(matchers.Anything(), matchers.Anything())
+    ).then_return(True)
     return ImagePipelineService(
         scheduler=scheduler,
         batch_service=decoy.mock(cls=BatchService),

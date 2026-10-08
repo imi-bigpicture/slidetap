@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root schemas have an optional `version` and a `family_uid`, and are shown by name and version.
 - Schema endpoints `/schemas/roots` and `/schemas/root/{uid}`, and a `rootSchemaUid` parameter for what is looked up within a root.
 - Endpoint `/projects/project/{uid}/actions` saying what a project can be offered.
-- `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
+- `SchemaService.change_refusal` and `assert_can_change` decide whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
 - Mappers stored without a family are given it by `slidetap-mappers set-up`, and one whose attribute no provided root has is adopted by name.
 - `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
 - `slidetap-mappers set-up` sets up the stored mappers with the container from `create_container()` in the `container` module of the package named by `SLIDETAP_TASK_APP`.

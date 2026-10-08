@@ -76,9 +76,7 @@ class DatasetService:
             )
             if database_dataset is None:
                 return None
-            self._schema_service.support_of(
-                database_dataset, session
-            ).assert_can_change()
+            self._schema_service.assert_can_change(database_dataset, session)
             database_dataset.name = dataset.name
             if database_dataset.project is not None:
                 mappers = [
@@ -122,9 +120,9 @@ class DatasetService:
             If the project cannot be changed, with why.
         """
         with self._database_service.get_session(session) as session:
-            self._schema_service.support_of(
+            self._schema_service.assert_can_change(
                 self._database_service.get_dataset(session, uid), session
-            ).assert_can_change()
+            )
 
     def get_optional(self, uid: UUID, session: Session | None = None) -> Dataset | None:
         with self._database_service.get_session(session) as session:

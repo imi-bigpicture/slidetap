@@ -47,6 +47,7 @@ from slidetap.services import (
     BatchService,
     DatabaseService,
     MapperService,
+    MigrationService,
     ProjectService,
     SchemaService,
     StorageService,
@@ -85,6 +86,7 @@ def project_service(
         mapper_service=decoy.mock(cls=MapperService),
         database_service=sqlite_database_service,
         storage_service=storage_service,
+        migration_service=decoy.mock(cls=MigrationService),
     )
 
 

@@ -190,7 +190,7 @@ class AttributeService:
     ) -> None:
         with self._database_service.get_session() as session:
             project = self._database_service.get_project(session, project)
-            self._schema_service.support_of(project, session).assert_can_change()
+            self._schema_service.assert_can_change(project, session)
             for attribute in attributes:
                 self.set_display_value(attribute)
                 database_attribute = self._database_service.get_attribute(
@@ -211,7 +211,7 @@ class AttributeService:
     ) -> None:
         with self._database_service.get_session() as session:
             dataset = self._database_service.get_dataset(session, dataset)
-            self._schema_service.support_of(dataset, session).assert_can_change()
+            self._schema_service.assert_can_change(dataset, session)
             for attribute in attributes:
                 self.set_display_value(attribute)
 
@@ -254,9 +254,7 @@ class AttributeService:
 
     def _assert_can_edit(self, session: Session, attribute: DatabaseAttribute) -> None:
         """Refuse changing an attribute of a project that cannot be edited."""
-        support = self._schema_service.support_of_attribute(attribute, session)
-        if support is not None:
-            support.assert_can_change()
+        self._schema_service.assert_can_change(attribute, session)
 
     def create_or_update_attributes(
         self,

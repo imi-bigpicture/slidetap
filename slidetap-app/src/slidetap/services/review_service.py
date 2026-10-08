@@ -114,7 +114,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
-            self._schema_service.support_of(item, session).assert_can_change()
+            self._schema_service.assert_can_change(item, session)
             if status == ReviewStatus.REVIEWED:
                 refusal = self._invalid_descendants_reason(item, session)
             if refusal is not None:
@@ -355,7 +355,7 @@ class ReviewService:
         flagged = 0
         with self._database_service.get_session(session) as session:
             dataset = self._database_service.get_dataset(session, dataset_uid)
-            self._schema_service.support_of(dataset, session).assert_can_change()
+            self._schema_service.assert_can_change(dataset, session)
             root = self._schema_service.root_of(dataset, session)
             review_unit = root.review_unit
             if review_unit is None:
@@ -449,7 +449,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
-            self._schema_service.support_of(item, session).assert_can_change()
+            self._schema_service.assert_can_change(item, session)
             unit = self.review_unit_of(item)
             if unit is None:
                 return None
@@ -747,7 +747,7 @@ class ReviewService:
             issue = self._database_service.get_optional_review_issue(session, issue_uid)
             if issue is None:
                 return None
-            self._schema_service.support_of(issue.item, session).assert_can_change()
+            self._schema_service.assert_can_change(issue.item, session)
             if issue.source == ReviewIssueSource.VALIDATION:
                 raise NotAllowedActionError(
                     "What validation raised is settled by the item becoming "

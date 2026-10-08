@@ -77,6 +77,7 @@ from slidetap.services import (
     ItemService,
     MapperService,
     MetadataSearchItemService,
+    MigrationService,
     ProjectService,
     ReviewService,
     SchemaService,
@@ -356,7 +357,7 @@ class TestProjectsOnTwoRoots:
             with pytest.raises(ValueError, match="has no project"):
                 schema_service.root_of(database_dataset, session)
             with pytest.raises(ValueError, match="has no project"):
-                schema_service.support_of(database_dataset, session)
+                schema_service.change_refusal(database_dataset, session)
 
     @pytest.mark.parametrize("other_is_root", [False])
     def test_what_a_root_does_not_have_is_not_found(
@@ -516,6 +517,7 @@ class TestProjectList:
             mapper_service=decoy.mock(cls=MapperService),
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
+            migration_service=decoy.mock(cls=MigrationService),
         )
         example = TestProjectsOnTwoRoots.store_project(sqlite_database_service, schema)
         other = TestProjectsOnTwoRoots.store_project(
@@ -584,6 +586,7 @@ class TestProjectList:
                 mapper_service=mapper_service,
                 database_service=sqlite_database_service,
                 storage_service=decoy.mock(cls=StorageService),
+                migration_service=decoy.mock(cls=MigrationService),
             ),
             sqlite_database_service,
             schema_service,
@@ -741,6 +744,7 @@ class TestViewOnlyRoot:
             mapper_service=decoy.mock(cls=MapperService),
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
+            migration_service=decoy.mock(cls=MigrationService),
         )
 
     def test_a_project_on_a_view_only_root_is_offered_no_change(
@@ -1008,6 +1012,7 @@ class TestViewOnlyRoot:
             mapper_service=decoy.mock(cls=MapperService),
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
+            migration_service=decoy.mock(cls=MigrationService),
         )
 
         # Act

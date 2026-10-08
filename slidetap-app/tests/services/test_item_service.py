@@ -44,11 +44,9 @@ from slidetap.model import (
     MetadataSearchResult,
     NotAllowedActionError,
     Project,
-    ProjectStatus,
     ReviewIssueSource,
     RootSchema,
     RootSchemaIndex,
-    RootSchemaSupport,
     Sample,
 )
 from slidetap.model.batch import BatchCreate
@@ -451,18 +449,10 @@ class TestMovingAnAttributeBetweenItems:
         review_service: ReviewService,
     ) -> ItemService:
         schema_service = decoy.mock(cls=SchemaService)
-        decoy.when(schema_service.support_of(matchers.Anything())).then_return(
-            RootSchemaSupport(
-                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-            )
-        )
+        decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
         decoy.when(
-            schema_service.support_of(matchers.Anything(), matchers.Anything())
-        ).then_return(
-            RootSchemaSupport(
-                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-            )
-        )
+            schema_service.can_change(matchers.Anything(), matchers.Anything())
+        ).then_return(True)
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
@@ -590,18 +580,10 @@ class TestMovingAnItemToAnotherParent:
             {slide_model.schema_uid: 1}
         )
         schema_service = decoy.mock(cls=SchemaService)
-        decoy.when(schema_service.support_of(parked_image)).then_return(
-            RootSchemaSupport(
-                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-            )
-        )
+        decoy.when(schema_service.can_change(parked_image)).then_return(True)
         decoy.when(
-            schema_service.support_of(parked_image, matchers.Anything())
-        ).then_return(
-            RootSchemaSupport(
-                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-            )
-        )
+            schema_service.can_change(parked_image, matchers.Anything())
+        ).then_return(True)
         decoy.when(schema_service.root_of(parked_image)).then_return(root)
         decoy.when(
             schema_service.root_of(parked_image, matchers.Anything())

@@ -73,7 +73,6 @@ from slidetap.model import (
     ObservationSchema,
     ReviewStatus,
     RootSchemaIndex,
-    RootSchemaSupport,
     Sample,
     SampleSchema,
 )
@@ -469,7 +468,7 @@ class ItemService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
-            self._schema_service.support_of(item, session).assert_can_change()
+            self._schema_service.assert_can_change(item, session)
             if item.locked:
                 # What a locked batch holds is what its bundle holds, so taking
                 # something out of the project is not one of the things left to
@@ -516,7 +515,7 @@ class ItemService:
             if named is None:
                 return None
             for item in named:
-                self._schema_service.support_of(item, session).assert_can_change()
+                self._schema_service.assert_can_change(item, session)
             chosen = self._chosen_for_selection(named, value.items, session)
             if chosen is None:
                 return None
@@ -809,7 +808,7 @@ class ItemService:
             # Before anything is read or written: a locked item is not edited,
             # and the work of working out what the edit would mean is work for
             # an edit that is not going to happen.
-            self._schema_service.support_of(existing_item, session).assert_can_change()
+            self._schema_service.assert_can_change(existing_item, session)
             self._raise_if_locked_edit(existing_item, item)
             # Read before the edit, and read as validity is expected to stand
             # at this point in the batch's life: only a save that crosses
@@ -1187,7 +1186,10 @@ class ItemService:
         with self._database_service.get_session(session) as session:
             if unit is None:
                 # A unit is checked once, for the whole of its result.
-                self._support_of_dataset(session, item.dataset_uid).assert_can_change()
+                self._schema_service.assert_can_change(
+                    self._database_service.get_dataset(session, item.dataset_uid),
+                    session,
+                )
             if mappers is None:
                 mappers = self._mappers_for_item(item, session)
             item_key = (item.dataset_uid, item.schema_uid, item.identifier)
@@ -1351,7 +1353,9 @@ class ItemService:
         # Read before the unit starts adding: the items of a result share a
         # dataset, and with it the root of the project it belongs to.
         dataset_uid = result.items[0].dataset_uid
-        self._support_of_dataset(session, dataset_uid).assert_can_change()
+        self._schema_service.assert_can_change(
+            self._database_service.get_dataset(session, dataset_uid), session
+        )
         root = self._schema_service.root_of_dataset(dataset_uid, session)
         # Everything the items of this result share, looked up once for all of
         # them. Nothing in the loop below queries, so nothing in it flushes,
@@ -1532,8 +1536,7 @@ class ItemService:
                 raise NotAllowedActionError(
                     f"Cannot add to batch {batch.uid}: it is locked."
                 )
-            support = self._schema_service.support_of(batch.project, session)
-            support.assert_can_change()
+            self._schema_service.assert_can_change(batch.project, session)
             root = self._schema_service.root_of(batch.project, session)
             if isinstance(item_schema, UUID):
                 item_schema = root.items[item_schema]
@@ -1548,11 +1551,12 @@ class ItemService:
             new_item = self._build_new_item_model(
                 item_schema, batch.project.dataset_uid, batch.uid, parents
             )
+            # The project can be changed, as asserted above.
             new_item.identifier = self._resolve_identifier(
-                support, root, new_item, identifier
+                True, root, new_item, identifier
             )
-            new_item.name = self._resolve_name(support, new_item)
-            new_item.pseudonym = self._resolve_pseudonym(support, new_item)
+            new_item.name = self._resolve_name(True, new_item)
+            new_item.pseudonym = self._resolve_pseudonym(True, new_item)
             return self.add(new_item, mappers, session=session)
 
     def suggest_child(
@@ -1572,7 +1576,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             parent = self._database_service.get_item(session, parent_uid)
             # What the client is offered: named as the create would name it.
-            support = self._schema_service.support_of(parent, session)
+            can_change = self._schema_service.can_change(parent, session)
             root = self._schema_service.root_of(parent, session)
             if isinstance(item_schema, UUID):
                 item_schema = root.items[item_schema]
@@ -1582,7 +1586,7 @@ class ItemService:
                 parent.batch_uid,
                 [parent.model],
             )
-            identifier = self._resolve_identifier(support, root, new_item, None)
+            identifier = self._resolve_identifier(can_change, root, new_item, None)
             existing = self._database_service.get_optional_item_by_identifier(
                 session, identifier, item_schema.uid, parent.dataset_uid
             )
@@ -1734,9 +1738,9 @@ class ItemService:
         ``valid_relations`` reflects the new graph.
         """
         with self._database_service.get_session(session) as session:
-            self._schema_service.support_of(
+            self._schema_service.assert_can_change(
                 self._database_service.get_item(session, item), session
-            ).assert_can_change()
+            )
             outcome = self._select_item(item, value, session)
             touched = {step.item.uid: step.item for step in outcome.steps}
             self._validate_touched(touched.values(), session, outcome.valid_before)
@@ -1750,8 +1754,7 @@ class ItemService:
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session() as session:
             source = self._database_service.get_item(session, item)
-            support = self._schema_service.support_of(source, session)
-            support.assert_can_change()
+            self._schema_service.assert_can_change(source, session)
             root = self._schema_service.root_of(source, session)
             source_schema = root.items[source.schema_uid]
             parents = self._validate_target_parents(
@@ -1760,9 +1763,10 @@ class ItemService:
             copy = source.model
             copy.uid = uuid.uuid4()
             self._replace_parent_relations(copy, parents)
-            copy.identifier = self._resolve_identifier(support, root, copy, identifier)
-            copy.name = self._resolve_name(support, copy)
-            copy.pseudonym = self._resolve_pseudonym(support, copy)
+            # The project can be changed, as asserted above.
+            copy.identifier = self._resolve_identifier(True, root, copy, identifier)
+            copy.name = self._resolve_name(True, copy)
+            copy.pseudonym = self._resolve_pseudonym(True, copy)
             self._reject_pseudonym_in_use(copy, None, session)
             for attribute in copy.attributes.values():
                 attribute.uid = uuid.uuid4()
@@ -1809,8 +1813,9 @@ class ItemService:
         Returns how many pseudonyms were taken off.
         """
         with self._database_service.get_session(session) as session:
-            support = self._support_of_dataset(session, dataset_uid)
-            support.assert_can_change()
+            self._schema_service.assert_can_change(
+                self._database_service.get_dataset(session, dataset_uid), session
+            )
             cleared = 0
             for item in self._database_service.get_items_in_dataset(
                 session, dataset_uid
@@ -1877,8 +1882,9 @@ class ItemService:
         if pseudonym_factory is None:
             raise ValueError("This application mints no pseudonyms.")
         with self._database_service.get_session(session) as session:
-            support = self._support_of_dataset(session, dataset_uid)
-            support.assert_can_change()
+            self._schema_service.assert_can_change(
+                self._database_service.get_dataset(session, dataset_uid), session
+            )
             root = self._schema_service.root_of_dataset(dataset_uid, session)
             items = list(
                 self._database_service.get_items_in_dataset(session, dataset_uid)
@@ -1953,8 +1959,9 @@ class ItemService:
         Returns how many identifiers were replaced.
         """
         with self._database_service.get_session(session) as session:
-            support = self._support_of_dataset(session, dataset_uid)
-            support.assert_can_change()
+            self._schema_service.assert_can_change(
+                self._database_service.get_dataset(session, dataset_uid), session
+            )
             items = list(
                 self._database_service.get_items_in_dataset(session, dataset_uid)
             )
@@ -2059,7 +2066,7 @@ class ItemService:
                 raise NotAllowedActionError(
                     f"Cannot move {moved.identifier}: its batch is locked."
                 )
-            self._schema_service.support_of(moved, session).assert_can_change()
+            self._schema_service.assert_can_change(moved, session)
             root = self._schema_service.root_of(moved, session)
             item_schema = root.items[moved.schema_uid]
             parents = self._validate_target_parents(
@@ -2150,8 +2157,8 @@ class ItemService:
             target = self._database_service.get_item(session, target_item_uid)
             if target is None:
                 raise ValueError(f"Target item {target_item_uid} not found")
-            self._schema_service.support_of(source, session).assert_can_change()
-            self._schema_service.support_of(target, session).assert_can_change()
+            self._schema_service.assert_can_change(source, session)
+            self._schema_service.assert_can_change(target, session)
             if target.schema_uid != source.schema_uid:
                 raise ValueError(
                     f"Cannot swap attribute between items of different "
@@ -2418,7 +2425,7 @@ class ItemService:
 
     def _resolve_identifier(
         self,
-        support: RootSchemaSupport,
+        can_change: bool,
         root: RootSchemaIndex,
         item: Item,
         supplied: str | None,
@@ -2426,7 +2433,7 @@ class ItemService:
         if supplied is not None:
             return supplied
         factory = self._item_naming_factory
-        if factory is not None and support.can_change:
+        if factory is not None and can_change:
             return factory.create_identifier(item)
         # No factory wired: include a short uuid suffix so repeated creates
         # don't collide with ``add()``'s identifier-based dedup and silently
@@ -2437,11 +2444,11 @@ class ItemService:
             return f"New item ({suffix})"
         return f"New {schema.display_name} ({suffix})"
 
-    def _resolve_name(self, support: RootSchemaSupport, item: Item) -> str | None:
+    def _resolve_name(self, can_change: bool, item: Item) -> str | None:
         # Not asked for a root the application cannot name items on, as it
         # would read the item against a schema it was not written for.
         factory = self._item_naming_factory
-        if factory is None or not support.can_change:
+        if factory is None or not can_change:
             return None
         return factory.create_name(item)
 
@@ -2478,21 +2485,13 @@ class ItemService:
             f"else."
         )
 
-    def _resolve_pseudonym(self, support: RootSchemaSupport, item: Item) -> str | None:
+    def _resolve_pseudonym(self, can_change: bool, item: Item) -> str | None:
         # Not minted for a root the application cannot mint pseudonyms on, as
         # for an application that mints none: the item is created without one.
         factory = self._pseudonym_factory
-        if factory is None or not support.can_change:
+        if factory is None or not can_change:
             return None
         return factory.create_pseudonym(item)
-
-    def _support_of_dataset(
-        self, session: Session, dataset_uid: UUID
-    ) -> RootSchemaSupport:
-        """What can be done with the project the dataset is of."""
-        return self._schema_service.support_of(
-            self._database_service.get_dataset(session, dataset_uid), session
-        )
 
     def _select_item(
         self,

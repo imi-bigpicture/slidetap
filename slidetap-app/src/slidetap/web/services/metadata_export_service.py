@@ -42,7 +42,7 @@ class MetadataExportService:
 
     async def export(self, project: Project):
         self._logger.info(f"Exporting project {project}.")
-        self._schema_service.support_of(project).assert_can_change()
+        self._schema_service.assert_can_change(project)
         self._project_service.set_as_exporting(project)
         await self._scheduler.metadata_project_export(project)
 
@@ -51,6 +51,6 @@ class MetadataExportService:
         project cannot be changed."""
         with self._database_service.get_session() as session:
             item = self._database_service.get_item(session, item_uid)
-            if not self._schema_service.support_of(item, session).can_change:
+            if not self._schema_service.can_change(item, session):
                 return None
             return self._metadata_export_interface.preview_item(item.model)

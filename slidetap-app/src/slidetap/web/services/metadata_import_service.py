@@ -98,7 +98,7 @@ class MetadataImportService:
         # Before the document is read, so the answer is about the batch.
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
-            self._schema_service.support_of(database_batch, session).assert_can_change()
+            self._schema_service.assert_can_change(database_batch, session)
             self._batch_service.assert_can_search(database_batch)
         # Before the batch is emptied below, so that a document the importer
         # refuses leaves the batch as it was rather than cleared out.
@@ -118,7 +118,7 @@ class MetadataImportService:
             session.get_one(
                 DatabaseProject, database_batch.project_uid, with_for_update=True
             )
-            self._schema_service.support_of(database_batch, session).assert_can_change()
+            self._schema_service.assert_can_change(database_batch, session)
             self._batch_service.reset(database_batch, session)
             # What another batch hangs off is handed to that batch first, so
             # that clearing this one out below leaves the other one whole.
@@ -169,7 +169,7 @@ class MetadataImportService:
                 )
             batch = self._database_service.get_batch(session, row.batch_uid)
             if batch is not None:
-                self._schema_service.support_of(batch, session).assert_can_change()
+                self._schema_service.assert_can_change(batch, session)
             if batch is not None and batch.metadata_searching:
                 raise ValueError(
                     f"Batch {row.batch_uid} is currently searching; "
@@ -185,7 +185,7 @@ class MetadataImportService:
             row = session.get(DatabaseMetadataSearchItem, search_item_uid)
             if row is None:
                 return
-            self._schema_service.support_of(
+            self._schema_service.assert_can_change(
                 self._database_service.get_batch(session, row.batch_uid), session
-            ).assert_can_change()
+            )
             self._search_item_service.delete(row, session=session)

@@ -64,7 +64,7 @@ class ImagePipelineService:
             if image is None:
                 raise ValueError(f"Image {image_uid} does not exist.")
             # Storing is exporting the image, and the rest is processing it.
-            self._schema_service.support_of(image, session).assert_can_change()
+            self._schema_service.assert_can_change(image, session)
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")
@@ -101,7 +101,7 @@ class ImagePipelineService:
             )
             if database_batch is None:
                 return None
-            self._schema_service.support_of(database_batch, session).assert_can_change()
+            self._schema_service.assert_can_change(database_batch, session)
             root = self._schema_service.root_of(database_batch.project, session)
             for item_schema in root.items.values():
                 self._database_service.delete_items(
@@ -123,7 +123,7 @@ class ImagePipelineService:
         """Post-process a batch (export)."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
-            self._schema_service.support_of(database_batch, session).assert_can_change()
+            self._schema_service.assert_can_change(database_batch, session)
             root = self._schema_service.root_of(database_batch.project, session)
             for item_schema in root.items.values():
                 self._database_service.delete_items(
@@ -151,9 +151,9 @@ class ImagePipelineService:
         an attempt that failed part-way is resumed.
         """
         with self._database_service.get_session() as session:
-            self._schema_service.support_of(
+            self._schema_service.assert_can_change(
                 self._database_service.get_project(session, project_uid), session
-            ).assert_can_change()
+            )
         for batch in self._batch_service.get_all(project_uid=project_uid):
             if batch.status in (
                 BatchStatus.LOCKED,

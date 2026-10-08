@@ -60,7 +60,7 @@ from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.review_service import ReviewService
-from slidetap.services.schema_service import SchemaService
+from slidetap.services.schema_service import ChangeSubject, SchemaService
 from slidetap.services.validation_service import ValidationService
 
 
@@ -121,6 +121,34 @@ class MapperService:
         self._review_service = review_service
         self._mapper_injector = mapper_injector
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+    def _remappable(self, subject: ChangeSubject, session: Session) -> bool:
+        """Tell whether what something was mapped to follows a mapping that
+        changes.
+
+        Not where the project cannot be changed, nor where it was exported,
+        which keeps what went out as it was. An attribute row of no project
+        follows the mapping.
+
+        Parameters
+        ----------
+        subject: ChangeSubject
+            The project, or a dataset, batch, item, or attribute row of one.
+        session: Session
+            The session to look up the project in.
+
+        Returns
+        -------
+        bool
+            Whether what was mapped follows the mapping.
+        """
+        project = self._schema_service.project_of(subject, session)
+        if project is None:
+            return True
+        return (
+            self._schema_service.can_change(project, session)
+            and not project.was_exported
+        )
 
     def assign_families(self) -> None:
         """Give the mappers stored before mappers had a family the family of the
@@ -683,8 +711,7 @@ class MapperService:
         )
         for attribute in attributes:
             attribute.mapping_item_uid = None
-            support = self._schema_service.support_of_attribute(attribute, session)
-            if support is not None and not support.remappable:
+            if not self._remappable(attribute, session):
                 continue
             # The mapped value is typed by the attribute type, which the attribute
             # cannot be narrowed to while it is one of a union of attribute types.
@@ -957,9 +984,9 @@ class MapperService:
             session, mapper.root_attribute_schema_uid
         )
         editable = {
-            project_uid: self._schema_service.support_of(
+            project_uid: self._remappable(
                 self._database_service.get_project(session, project_uid), session
-            ).remappable
+            )
             for project_uid in set(projects.values())
         }
         for root_attribute in root_attributes:
@@ -1233,7 +1260,7 @@ class MapperService:
         """Re-apply the project's mappers to one item's attributes."""
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item_uid)
-            self._schema_service.support_of(item, session).assert_can_change()
+            self._schema_service.assert_can_change(item, session)
             project_mappers = self._project_mappers_for_item(item)
             if not project_mappers:
                 return
@@ -1246,7 +1273,7 @@ class MapperService:
         (child samples, images, annotations, observations)."""
         with self._database_service.get_session(session) as session:
             root = self._database_service.get_item(session, item_uid)
-            self._schema_service.support_of(root, session).assert_can_change()
+            self._schema_service.assert_can_change(root, session)
             project_mappers = self._project_mappers_for_item(root)
             if not project_mappers:
                 return
@@ -1262,7 +1289,7 @@ class MapperService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch_uid)
-            self._schema_service.support_of(batch, session).assert_can_change()
+            self._schema_service.assert_can_change(batch, session)
             self._require_stable_batch(batch.status, batch_uid)
             project_mappers = self._mappers_in_groups(batch.project.mapper_groups)
             if not project_mappers:
@@ -1284,7 +1311,7 @@ class MapperService:
                 raise NotAllowedActionError(
                     f"Cannot remap dataset {dataset_uid}: no project owns it."
                 )
-            self._schema_service.support_of(project, session).assert_can_change()
+            self._schema_service.assert_can_change(project, session)
             for batch in project.batches:
                 self._require_stable_batch(batch.status, batch.uid)
             project_mappers = self._mappers_in_groups(project.mapper_groups)

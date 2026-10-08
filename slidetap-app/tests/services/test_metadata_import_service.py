@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 import io
-from uuid import uuid4
 
 import pytest
 from decoy import Decoy, matchers
@@ -27,9 +26,7 @@ from slidetap.model import (
     File,
     ItemSchema,
     NotAllowedActionError,
-    ProjectStatus,
     RootSchemaIndex,
-    RootSchemaSupport,
 )
 from slidetap.services import (
     BatchService,
@@ -71,18 +68,10 @@ def metadata_import_interface(decoy: Decoy):
 @pytest.fixture()
 def schema_service(decoy: Decoy):
     schema_service = decoy.mock(cls=SchemaService)
-    decoy.when(schema_service.support_of(matchers.Anything())).then_return(
-        RootSchemaSupport(
-            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-        )
-    )
+    decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
     decoy.when(
-        schema_service.support_of(matchers.Anything(), matchers.Anything())
-    ).then_return(
-        RootSchemaSupport(
-            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-        )
-    )
+        schema_service.can_change(matchers.Anything(), matchers.Anything())
+    ).then_return(True)
     return schema_service
 
 
@@ -285,12 +274,12 @@ class TestMetadataImportServiceService:
             if len(asked) > 1:
                 raise NotAllowedActionError("Search is refused.")
 
-        support = decoy.mock(cls=RootSchemaSupport)
-        decoy.when(schema_service.support_of(database_batch)).then_return(support)
+        decoy.when(schema_service.assert_can_change(database_batch)).then_do(
+            refuse_the_second_time
+        )
         decoy.when(
-            schema_service.support_of(database_batch, matchers.Anything())
-        ).then_return(support)
-        decoy.when(support.assert_can_change()).then_do(refuse_the_second_time)
+            schema_service.assert_can_change(database_batch, matchers.Anything())
+        ).then_do(refuse_the_second_time)
 
         # Act
         with pytest.raises(NotAllowedActionError):

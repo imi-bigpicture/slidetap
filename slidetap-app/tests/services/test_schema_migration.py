@@ -423,18 +423,12 @@ class _StoredProject:
         )
 
     def can_migrate(
-        self, database_service: DatabaseService, schema_service: SchemaService
+        self, database_service: DatabaseService, migration_service: MigrationService
     ) -> bool:
-        """Whether the project can be migrated now, as its root schema support says."""
+        """Whether the project can be migrated now."""
         with database_service.get_session() as session:
             project = database_service.get_project(session, self.project.uid)
-            return (
-                schema_service.support_of(project).migrate_refusal(
-                    DatabaseService.has_stored_batches(session, project),
-                    DatabaseService.has_busy_batches(session, project),
-                )
-                is None
-            )
+            return migration_service.migrate_refusal(project, session) is None
 
     def _sample(self, schema_uid: UUID, identifier: str) -> Sample:
         return Sample(
@@ -1193,7 +1187,6 @@ class TestMigratingAProject:
         self,
         sqlite_database_service: DatabaseService,
         migration_service: MigrationService,
-        schema_service: SchemaService,
         stored: _StoredProject,
     ):
         # Arrange
@@ -1216,7 +1209,7 @@ class TestMigratingAProject:
             migration_service.revert(stored.project.uid)
         with sqlite_database_service.get_session() as session:
             assert session.scalars(select(DatabaseAttributeMigrationIssue)).all() == []
-        assert stored.can_migrate(sqlite_database_service, schema_service) is True
+        assert stored.can_migrate(sqlite_database_service, migration_service) is True
 
     def test_a_migration_reverted_before_it_is_planned_is_not_planned(
         self,
@@ -1238,7 +1231,6 @@ class TestMigratingAProject:
     def test_a_migrating_project_is_not_migrated_again(
         self,
         sqlite_database_service: DatabaseService,
-        schema_service: SchemaService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
@@ -1246,13 +1238,12 @@ class TestMigratingAProject:
         migration_service.create(stored.project.uid)
 
         # Act & Assert
-        assert stored.can_migrate(sqlite_database_service, schema_service) is False
+        assert stored.can_migrate(sqlite_database_service, migration_service) is False
         with pytest.raises(NotAllowedActionError):
             migration_service.create(stored.project.uid)
 
     def test_a_migration_is_refused_while_a_batch_is_busy(
         self,
-        schema_service: SchemaService,
         sqlite_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
@@ -1265,7 +1256,7 @@ class TestMigratingAProject:
         # Act & Assert
         with pytest.raises(NotAllowedActionError, match="being searched"):
             migration_service.create(stored.project.uid)
-        assert stored.can_migrate(sqlite_database_service, schema_service) is False
+        assert stored.can_migrate(sqlite_database_service, migration_service) is False
         with pytest.raises(NotFoundError):
             migration_service.get(stored.project.uid)
 
@@ -1374,6 +1365,7 @@ class TestMigratingAProject:
             mapper_service=decoy.mock(cls=MapperService),
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
+            migration_service=migration_service,
         )
         before = project_service.get_actions(stored.project.uid)
 
@@ -1386,7 +1378,7 @@ class TestMigratingAProject:
         assert before.migrate_refusal is None
         assert while_migrating.has_migration is True
         assert while_migrating.migrate_refusal == "the project is being migrated"
-        assert stored.can_migrate(sqlite_database_service, schema_service) is False
+        assert stored.can_migrate(sqlite_database_service, migration_service) is False
         assert not any(
             while_migrating.model_dump(
                 exclude={"has_migration", "migrate_refusal"}
@@ -1411,6 +1403,7 @@ class TestMigratingAProject:
             mapper_service=decoy.mock(cls=MapperService),
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
+            migration_service=migration_service,
         )
         migration_service.create(stored.project.uid)
 
@@ -1427,7 +1420,7 @@ class TestMigratingAProject:
         stored: _StoredProject,
     ):
         # Arrange
-        assert stored.can_migrate(sqlite_database_service, schema_service) is True
+        assert stored.can_migrate(sqlite_database_service, migration_service) is True
         migration_service.create(stored.project.uid)
 
         # Act & Assert
@@ -1435,7 +1428,7 @@ class TestMigratingAProject:
             item_service.select(stored.slide.uid, ItemSelect(select=False))
         with sqlite_database_service.get_session() as session:
             project = sqlite_database_service.get_project(session, stored.project.uid)
-            assert schema_service.support_of(project).change_refusal == (
+            assert schema_service.change_refusal(project) == (
                 "the project is being migrated"
             )
 
@@ -1461,8 +1454,9 @@ class TestMigratingAProject:
             mapper_service=decoy.mock(cls=MapperService),
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
+            migration_service=migration_service,
         )
-        assert stored.can_migrate(sqlite_database_service, schema_service) is True
+        assert stored.can_migrate(sqlite_database_service, migration_service) is True
         with sqlite_database_service.get_session() as session:
             project = sqlite_database_service.get_project(session, stored.project.uid)
             project.status = ProjectStatus.EXPORTING
@@ -1471,7 +1465,7 @@ class TestMigratingAProject:
             project_service.set_as_in_progress(stored.project.uid)
 
         # Act & Assert
-        assert stored.can_migrate(sqlite_database_service, schema_service) is False
+        assert stored.can_migrate(sqlite_database_service, migration_service) is False
         with pytest.raises(NotAllowedActionError, match="has been exported"):
             migration_service.create(stored.project.uid)
 
@@ -1495,7 +1489,6 @@ class TestMigratingAProject:
     def test_a_project_with_a_search_item_not_yet_searched_is_busy(
         self,
         sqlite_database_service: DatabaseService,
-        schema_service: SchemaService,
         migration_service: MigrationService,
         stored: _StoredProject,
         schema: ExampleSchema,
@@ -1513,7 +1506,7 @@ class TestMigratingAProject:
             )
 
         # Act & Assert
-        assert stored.can_migrate(sqlite_database_service, schema_service) is False
+        assert stored.can_migrate(sqlite_database_service, migration_service) is False
         with pytest.raises(NotAllowedActionError, match="being searched"):
             migration_service.create(stored.project.uid)
 
@@ -1528,7 +1521,7 @@ class TestMigratingAProject:
     def test_a_project_with_images_stored_is_not_migrated(
         self,
         sqlite_database_service: DatabaseService,
-        schema_service: SchemaService,
+        migration_service: MigrationService,
         stored: _StoredProject,
         status: BatchStatus,
         migratable: bool,
@@ -1544,10 +1537,7 @@ class TestMigratingAProject:
         # Act
         with sqlite_database_service.get_session() as session:
             project = sqlite_database_service.get_project(session, stored.project.uid)
-            reason = schema_service.support_of(project).migrate_refusal(
-                DatabaseService.has_stored_batches(session, project),
-                DatabaseService.has_busy_batches(session, project),
-            )
+            reason = migration_service.migrate_refusal(project, session)
 
         # Assert
         if migratable:

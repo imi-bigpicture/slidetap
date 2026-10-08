@@ -19,6 +19,7 @@ import dataclasses
 import logging
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -149,6 +150,22 @@ class MigrationService:
 
     ITEM_SCHEMA_KINDS = (SampleSchema, ImageSchema, AnnotationSchema, ObservationSchema)
 
+    NO_MIGRATION_REFUSAL: ClassVar[str] = "its root has no migration"
+    """Why a project whose root has no migration cannot be migrated."""
+
+    NOT_MIGRATING_REFUSAL: ClassVar[str] = "it is not being migrated"
+    """Why a started migration cannot go on with a project that is not
+    migrating."""
+
+    EXPORTED_REFUSAL: ClassVar[str] = "it has been exported"
+    """Why an exported project cannot be migrated."""
+
+    STORED_REFUSAL: ClassVar[str] = "its images are stored, or locked to be stored"
+    """Why a project with stored images cannot be migrated."""
+
+    BUSY_REFUSAL: ClassVar[str] = "batches are being searched or processed"
+    """Why a project with busy batches cannot be migrated."""
+
     def __init__(
         self,
         schema_service: SchemaService,
@@ -163,7 +180,8 @@ class MigrationService:
         Parameters
         ----------
         schema_service: SchemaService
-            For the roots, their migrations, and what a project supports.
+            For the roots, their migrations, and whether a project can be
+            changed.
         database_service: DatabaseService
             For the sessions and the rows of the project.
         attribute_service: AttributeService
@@ -207,7 +225,7 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            self._assert_can_migrate(session, project)
+            self.assert_can_migrate(project, session)
             stale = self._get_optional(session, project.uid)
             if stale is not None:
                 session.delete(stale)
@@ -253,7 +271,7 @@ class MigrationService:
                     f"Project {project.uid} has no migration being planned."
                 )
                 return
-            self._assert_can_migrate(session, project, started=True)
+            self.assert_can_migrate(project, session, started=True)
             objects, _ = self._run(session, project)
             target_root = self._schema_service.get_root(
                 migration.target_root_schema_uid
@@ -454,7 +472,7 @@ class MigrationService:
                     f"Project {project.uid} has no migration being completed."
                 )
                 return
-            self._assert_can_migrate(session, project, started=True)
+            self.assert_can_migrate(project, session, started=True)
             objects, search_items = self._run(session, project)
             issues = {
                 (
@@ -682,35 +700,77 @@ class MigrationService:
         )
         return True
 
-    def _assert_can_migrate(
-        self, session: Session, project: DatabaseProject, started: bool = False
-    ) -> None:
-        """Refuse migrating a project that cannot be, by its root schema
-        support and what its batches are doing.
+    def migrate_refusal(
+        self,
+        project: DatabaseProject,
+        session: Session | None = None,
+        started: bool = False,
+    ) -> str | None:
+        """Tell why a project cannot be migrated.
+
+        A project is migrated only where its root has a migration, and not
+        while deleted or, before the migration has started, being migrated. A
+        project that has been exported cannot be migrated, as its exported
+        metadata uses the schema it was exported with, nor one with images
+        stored, or locked to be stored, nor one with batches being searched or
+        processed.
 
         Parameters
         ----------
-        session: Session
-            The session to read the batches of the project in.
         project: DatabaseProject
-            The project, locked.
+            The project.
+        session: Session | None = None
+            The session to read the batches of the project in.
         started: bool = False
-            Whether the migration is under way.
+            Whether the migration has started. If it has, the project must have
+            the status MIGRATING.
+
+        Returns
+        -------
+        str | None
+            Why the project cannot be migrated, or None where it can.
+        """
+        if self._schema_service.migration_of(project.root_schema_uid) is None:
+            return self.NO_MIGRATION_REFUSAL
+        if started:
+            if project.status != ProjectStatus.MIGRATING:
+                return self.NOT_MIGRATING_REFUSAL
+        elif project.status in SchemaService.INACTIVE_STATUSES:
+            return SchemaService.INACTIVE_STATUSES[project.status]
+        if project.was_exported:
+            return self.EXPORTED_REFUSAL
+        with self._database_service.get_session(session) as session:
+            if DatabaseService.has_stored_batches(session, project):
+                return self.STORED_REFUSAL
+            if DatabaseService.has_busy_batches(session, project):
+                return self.BUSY_REFUSAL
+        return None
+
+    def assert_can_migrate(
+        self,
+        project: DatabaseProject,
+        session: Session | None = None,
+        started: bool = False,
+    ) -> None:
+        """Refuse migrating a project that cannot be, see `migrate_refusal`.
+
+        Parameters
+        ----------
+        project: DatabaseProject
+            The project, locked where it is to be migrated.
+        session: Session | None = None
+            The session to read the batches of the project in.
+        started: bool = False
+            Whether the migration has started.
 
         Raises
         ------
         NotAllowedActionError
             If the project cannot be migrated, with why.
         """
-        support = self._schema_service.support_of(project, session)
-        if not support.has_migration:
-            support.assert_can_migrate(False, False, started)
-            return
-        support.assert_can_migrate(
-            DatabaseService.has_stored_batches(session, project),
-            DatabaseService.has_busy_batches(session, project),
-            started,
-        )
+        reason = self.migrate_refusal(project, session, started)
+        if reason is not None:
+            raise NotAllowedActionError(f"The project cannot be migrated: {reason}.")
 
     def _lock_project(self, session: Session, project_uid: UUID) -> DatabaseProject:
         """Get a project, its row locked so that what is checked is what is

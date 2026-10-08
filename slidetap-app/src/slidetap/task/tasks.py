@@ -173,7 +173,7 @@ def download_and_pre_process_image(
     logger.info(f"Download and pre-process image {image_uid}")
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
-        refusal = schema_service.support_of(database_image).change_refusal
+        refusal = schema_service.change_refusal(database_image)
         if refusal is not None:
             logger.warning(f"Image {image_uid} is not processed: {refusal}.")
             batch_service.set_as_failed(
@@ -376,7 +376,7 @@ def post_process_image(
     logger.info(f"Post processing image {image_uid}")
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
-        refusal = schema_service.support_of(database_image).change_refusal
+        refusal = schema_service.change_refusal(database_image)
         if refusal is not None:
             logger.warning(f"Image {image_uid} is not processed: {refusal}.")
             batch_service.set_as_failed(
@@ -491,7 +491,7 @@ def store_batch_images_to_outbox(
         # Checked before any image is set as storing, and for the batch as a
         # whole: a task queued before a deploy can be for a root that is no
         # longer editable.
-        refusal = schema_service.support_of(database_batch).change_refusal
+        refusal = schema_service.change_refusal(database_batch)
         if refusal is not None:
             logger.warning(f"Batch {batch_uid} is not stored: {refusal}.")
             batch_service.set_as_failed(
@@ -765,7 +765,7 @@ def process_metadata_export(
         database_project = database_service.get_project(session, project_id)
         if not database_project.exporting:
             return
-        refusal = schema_service.support_of(database_project).change_refusal
+        refusal = schema_service.change_refusal(database_project)
         if refusal is not None:
             logger.warning(f"Project {project_id} is not exported: {refusal}.")
             project_service.revert_export(database_project, session)
@@ -872,7 +872,7 @@ def process_metadata_import(
         database_batch = database_service.get_batch(session, batch_uid)
         if not database_batch.metadata_searching:
             return
-        refusal = schema_service.support_of(database_batch).change_refusal
+        refusal = schema_service.change_refusal(database_batch)
         if refusal is not None:
             batch_service.set_as_failed(
                 database_batch,
@@ -992,7 +992,7 @@ def retry_metadata_search_item(
         database_batch = database_service.get_batch(
             session, database_search_item.batch_uid
         )
-        refusal = schema_service.support_of(database_batch).change_refusal
+        refusal = schema_service.change_refusal(database_batch)
         if refusal is not None:
             search_item_service.mark_failed(
                 database_search_item,

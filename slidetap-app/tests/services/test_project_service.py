@@ -24,13 +24,13 @@ from slidetap.model import (
     NotAllowedActionError,
     Project,
     ProjectStatus,
-    RootSchemaSupport,
 )
 from slidetap.services import (
     AttributeService,
     BatchService,
     DatabaseService,
     MapperService,
+    MigrationService,
     ProjectService,
     SchemaService,
     StorageService,
@@ -56,18 +56,10 @@ def batch_service(decoy: Decoy) -> BatchService:
 @pytest.fixture()
 def schema_service(decoy: Decoy) -> SchemaService:
     schema_service = decoy.mock(cls=SchemaService)
-    decoy.when(schema_service.support_of(matchers.Anything())).then_return(
-        RootSchemaSupport(
-            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-        )
-    )
+    decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
     decoy.when(
-        schema_service.support_of(matchers.Anything(), matchers.Anything())
-    ).then_return(
-        RootSchemaSupport(
-            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
-        )
-    )
+        schema_service.can_change(matchers.Anything(), matchers.Anything())
+    ).then_return(True)
     return schema_service
 
 
@@ -88,6 +80,7 @@ def storage_service(decoy: Decoy) -> StorageService:
 
 @pytest.fixture()
 def project_service(
+    decoy: Decoy,
     database_service: DatabaseService,
     attribute_service: AttributeService,
     batch_service: BatchService,
@@ -104,6 +97,7 @@ def project_service(
         mapper_service=mapper_service,
         database_service=database_service,
         storage_service=storage_service,
+        migration_service=decoy.mock(cls=MigrationService),
     )
 
 
