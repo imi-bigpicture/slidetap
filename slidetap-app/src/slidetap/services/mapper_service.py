@@ -40,7 +40,6 @@ from slidetap.external_interfaces.implementations.migration import (
 )
 from slidetap.model import (
     AnyAttribute,
-    AnyAttributeSchema,
     Attribute,
     AttributeSchema,
     BatchStatus,
@@ -218,11 +217,12 @@ class MapperService:
         """Migrate a mapper to the schemas a migration gives its attributes, and
         to the family of the root of new projects.
 
-        The schemas are found by migrating an empty attribute of each with
-        `SchemaMigration.migrate_attribute`; a mapper whose schemas the
-        migration gives no target, or the same ones, is left as it is. The
-        mapper keeps its uid, name, groups, expressions, and hits, and each of
-        its mapping items is migrated in place by `migrate_attribute`. A
+        The schemas are given by `SchemaMigration.migrate_attribute_schema`
+        for the attribute schema of the mapper and its root attribute schema;
+        a mapper whose schemas the migration gives no target, or the same ones,
+        is left as it is. The mapper keeps its uid, name, groups, expressions,
+        and hits, and each of its mapping items is migrated in place by
+        `migrate_attribute`. A
         mapping item migrated to None, or to an attribute without an original
         value, is removed, and the attributes it mapped keep what they were
         mapped to.
@@ -246,26 +246,35 @@ class MapperService:
         ValueError
             If another mapper of its name is in the family it is migrated to.
         """
-        attribute_uid = self._target_schema_uid(migration, mapper.attribute_schema_uid)
-        root_uid = (
-            attribute_uid
-            if mapper.root_attribute_schema_uid == mapper.attribute_schema_uid
-            else self._target_schema_uid(migration, mapper.root_attribute_schema_uid)
-        )
-        if attribute_uid is None or root_uid is None:
+        try:
+            attribute_schema = self._schema_service.get_any_attribute(
+                mapper.attribute_schema_uid
+            )
+            root_attribute_schema = self._schema_service.get_any_attribute(
+                mapper.root_attribute_schema_uid
+            )
+        except ValueError:
             return False
-        if (attribute_uid, root_uid) == (
+        target_attribute_schema = migration.migrate_attribute_schema(attribute_schema)
+        target_root_attribute_schema = (
+            target_attribute_schema
+            if root_attribute_schema.uid == attribute_schema.uid
+            else migration.migrate_attribute_schema(root_attribute_schema)
+        )
+        if target_attribute_schema is None or target_root_attribute_schema is None:
+            return False
+        if (target_attribute_schema.uid, target_root_attribute_schema.uid) == (
             mapper.attribute_schema_uid,
             mapper.root_attribute_schema_uid,
         ):
             # The same schema in both roots, which the mapper serves as it is.
             return False
         if self._database_service.get_mapper_for_schemas(
-            session, attribute_uid, root_uid
+            session, target_attribute_schema.uid, target_root_attribute_schema.uid
         ):
             self._logger.warning(
                 f"Mapper {mapper.name} is not migrated to attribute schema "
-                f"{attribute_uid}, which another mapper maps."
+                f"{target_attribute_schema.uid}, which another mapper maps."
             )
             return False
         family_uid = self._schema_service.default_root.family_uid
@@ -296,12 +305,13 @@ class MapperService:
             self._forget_mapping_items(
                 session, mapper.root_attribute_schema_uid, removed
             )
-        mapper.attribute_schema_uid = attribute_uid
-        mapper.root_attribute_schema_uid = root_uid
+        mapper.attribute_schema_uid = target_attribute_schema.uid
+        mapper.root_attribute_schema_uid = target_root_attribute_schema.uid
         mapper.family_uid = family_uid
         session.flush()
         self._logger.info(
-            f"Moved mapper {mapper.name} to attribute schema {attribute_uid}."
+            f"Moved mapper {mapper.name} to attribute schema "
+            f"{target_attribute_schema.uid}."
         )
         return True
 
@@ -329,22 +339,6 @@ class MapperService:
             mapping = session.get(DatabaseMappingItem, uid)
             if mapping is not None:
                 session.delete(mapping)
-
-    def _target_schema_uid(
-        self, migration: SchemaMigration, attribute_schema_uid: UUID
-    ) -> UUID | None:
-        """Return the schema a migration migrates the attributes of a schema to,
-        found by migrating an empty one."""
-        try:
-            schema = self._schema_service.get_any_attribute(attribute_schema_uid)
-        except ValueError:
-            return None
-        migrated = migration.migrate_attribute(
-            self._attribute_service.empty_attribute_from_schema(
-                cast(AnyAttributeSchema, schema)
-            )
-        )
-        return migrated.schema_uid if migrated is not None else None
 
     def _inject(self, mapper_injector: MapperInjectorInterface) -> None:
         injected_expressions: set[tuple[UUID, str]] = set()

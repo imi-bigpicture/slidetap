@@ -19,6 +19,7 @@ from uuid import UUID
 
 from slidetap.model import (
     AnyAttribute,
+    AttributeSchema,
     Dataset,
     Item,
     MetadataSearchItem,
@@ -128,5 +129,24 @@ class SchemaMigration(metaclass=ABCMeta):
         AnyAttribute | None
             The attribute on the attribute schema of the target root it moves
             to, or None where it has none.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def migrate_attribute_schema(
+        self, schema: AttributeSchema
+    ) -> AttributeSchema | None:
+        """Give the attribute schema of the target root that a source attribute
+        schema migrates to.
+
+        Parameters
+        ----------
+        schema: AttributeSchema
+            An attribute schema of the source root, at any depth.
+
+        Returns
+        -------
+        AttributeSchema | None
+            The attribute schema of the target root, or None where it has none.
         """
         raise NotImplementedError()

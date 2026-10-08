@@ -820,18 +820,41 @@ class TestDeclarativeSchemaMigration:
         assert migrated.schema_uid == schemas.target_details.uid
         assert migrated.original_value["colour"].value == "BLUE"
 
-    def test_an_empty_attribute_gives_its_target_schema(self, schemas: Schemas):
+    @pytest.mark.parametrize(
+        ("source_name", "target_name"),
+        [
+            ("kept", "kept"),
+            ("sex", "target_sex"),
+            ("old_name", "new_name"),
+            ("details", "target_details"),
+            ("colour", "target_colour"),
+            ("list_colour", "target_list_colour"),
+            ("shade", "target_shade"),
+        ],
+    )
+    def test_an_attribute_schema_at_any_depth_gives_its_target_schema(
+        self, schemas: Schemas, source_name: str, target_name: str
+    ):
+        """Kept, moved, renamed, and nested in an object, a list, or a union."""
         # Arrange
         migration = self._migration(schemas)
-        attribute = StringAttribute(uid=uuid4(), schema_uid=schemas.old_name.uid)
 
         # Act
-        migrated = migration.migrate_attribute(attribute)
+        target = migration.migrate_attribute_schema(getattr(schemas, source_name))
 
         # Assert
-        assert migrated is not None
-        assert migrated.schema_uid == schemas.new_name.uid
-        assert migrated.value is None
+        assert target == getattr(schemas, target_name)
+
+    @pytest.mark.parametrize("dropped", [True, False])
+    def test_a_dropped_or_unknown_attribute_schema_has_no_target_schema(
+        self, schemas: Schemas, dropped: bool
+    ):
+        # Arrange
+        migration = self._migration(schemas)
+        schema = schemas.gone if dropped else schemas.added
+
+        # Act & Assert
+        assert migration.migrate_attribute_schema(schema) is None
 
     @pytest.mark.parametrize("schema_uid", ["gone", None])
     def test_a_dropped_or_unknown_attribute_is_not_migrated_for_a_mapper(

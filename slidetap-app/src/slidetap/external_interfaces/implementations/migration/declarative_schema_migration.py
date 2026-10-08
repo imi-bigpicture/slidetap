@@ -24,6 +24,7 @@ from slidetap.external_interfaces.implementations.migration.object_migrator impo
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
     AnyAttribute,
+    AttributeSchema,
     Dataset,
     Item,
     ItemSchema,
@@ -46,7 +47,8 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     `migrate_attribute` migrates an attribute with the migrator whose schemas
     hold it, at any depth, so that the mapping items of a mapper moved to the
-    target root are migrated as the attributes of the objects are.
+    target root are migrated as the attributes of the objects are, and
+    `migrate_attribute_schema` gives the target schema of that migrator.
     """
 
     def __init__(
@@ -232,6 +234,29 @@ class DeclarativeSchemaMigration(SchemaMigration):
             if found is not None:
                 attribute_migrator, target = found
                 return attribute_migrator.migrate(attribute, target).attribute
+        return None
+
+    def migrate_attribute_schema(
+        self, schema: AttributeSchema
+    ) -> AttributeSchema | None:
+        """Give the target attribute schema of the attribute migrator of a
+        source attribute schema, at any depth of an object migrator.
+
+        Parameters
+        ----------
+        schema: AttributeSchema
+            An attribute schema of the source root.
+
+        Returns
+        -------
+        AttributeSchema | None
+            The target attribute schema, or None where no object migrator has a
+            migrator of the schema.
+        """
+        for migrator in self.migrators:
+            found = migrator.attribute_migrator_of(schema.uid)
+            if found is not None:
+                return found[1]
         return None
 
     def _item_migrator(self, name: str, schema_uid: UUID) -> ObjectMigrator[Item]:
