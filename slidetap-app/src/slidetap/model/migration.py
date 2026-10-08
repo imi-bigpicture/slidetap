@@ -39,14 +39,16 @@ class UnresolvedAttribute:
     """What could be converted, on the attribute schema of the target tag, for
     the curator to start from, or None."""
 
-    reason: str
-    """Why the attribute was not converted."""
+    problem: str
+    """A description, for the curator, of why the attribute was not
+    converted."""
 
 
 @dataclass(frozen=True)
-class MigratedObject:
-    """What a migration may change of a project, dataset, or item: the schema
-    it is on, and its attributes.
+class ObjectMigrationResult:
+    """What a migration returns for one project, dataset, or item, which core
+    applies when the migration is completed: the schema it is on, and its
+    attributes.
 
     Everything else, such as the uid, the relations, the images, the review
     status, and the pseudonym, is kept by core as it is.
@@ -56,17 +58,16 @@ class MigratedObject:
     """The project, dataset, or item schema of the target root, of the same
     kind as the one it was on."""
 
-    attributes: Mapping[str, AnyAttribute] = field(default_factory=dict)
-    """The attributes by tag, each on the attribute schema of that tag in the
-    target schema. An attribute left out is dropped."""
+    attributes: Mapping[str, AnyAttribute | UnresolvedAttribute] = field(
+        default_factory=dict
+    )
+    """The attributes by tag on the target schema, each migrated, or
+    unresolved for the curator to resolve. An attribute left out is dropped."""
 
-    private_attributes: Mapping[str, AnyAttribute] = field(default_factory=dict)
+    private_attributes: Mapping[str, AnyAttribute | UnresolvedAttribute] = field(
+        default_factory=dict
+    )
     """The private attributes, as `attributes`."""
-
-    unresolved: Mapping[str, UnresolvedAttribute] = field(default_factory=dict)
-    """What the curator resolves, by tag of the target schema, a public or else
-    a private attribute, which is in neither `attributes` nor
-    `private_attributes`. The resolved value is put at the tag, or nothing."""
 
 
 class MigrationStatus(Enum):
@@ -89,7 +90,7 @@ class MigrationStatus(Enum):
 
 
 class MigrationObjectKind(Enum):
-    """What kind of object of a project a migration object is."""
+    """What kind of object of a project an object with migration issues is."""
 
     PROJECT = "project"
     """The project."""
@@ -101,7 +102,7 @@ class MigrationObjectKind(Enum):
     """An item of the dataset."""
 
 
-class MigrationAttributeIssue(CamelCaseBaseModel):
+class AttributeMigrationIssue(CamelCaseBaseModel):
     """A top-level attribute of an object that the migration could not
     convert, left invalid, or dropped, and how the curator resolved it."""
 
@@ -110,18 +111,9 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     """The tag in the target schema, or in the source schema for a dropped
     attribute."""
 
-    source_attribute_schema_uid: UUID | None = None
-    """The schema in the source root of the original attribute, or None where
-    the issue has no original attribute, such as for an attribute that is new
-    in the target root."""
-
     target_attribute_schema_uid: UUID | None = None
     """The attribute schema of the tag in the target root, which a resolved
     value is on, None for a dropped attribute."""
-
-    dropped: bool = False
-    """Whether the migration dropped the attribute, which the curator can only
-    accept."""
 
     display_name: str
     """The display name of the target attribute, or of the source attribute
@@ -142,23 +134,12 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     """When the issue was resolved, or the dropped attribute accepted, None
     until it is."""
 
-    left_empty: bool = False
-    """Whether the attribute issue was resolved by leaving it empty."""
-
     resolved: AnyAttribute | None = None
     """The value the issue is resolved with, None where left empty, accepted
     as dropped, or not yet resolved."""
 
 
-class MigrationResolution(CamelCaseBaseModel):
-    """How the curator resolves an attribute issue."""
-
-    attribute: AnyAttribute | None = None
-    """The value, on the attribute schema of the attribute issue, or None to
-    leave the attribute empty or accept a dropped attribute."""
-
-
-class MigrationObject(CamelCaseBaseModel):
+class ObjectMigrationIssues(CamelCaseBaseModel):
     """A project, dataset, or item with attribute issues to resolve."""
 
     uid: UUID
@@ -174,7 +155,7 @@ class MigrationObject(CamelCaseBaseModel):
     target_schema_display_name: str
     """The display name of the target schema."""
 
-    attribute_issues: list[MigrationAttributeIssue] = Field(default_factory=list)
+    attribute_issues: list[AttributeMigrationIssue] = Field(default_factory=list)
     """The attribute issues of the object, the dropped attributes included."""
 
 
@@ -203,12 +184,6 @@ class ProjectMigration(CamelCaseBaseModel):
 
     created: datetime
     updated: datetime
-    objects: list[MigrationObject] = Field(default_factory=list)
-    """The objects with attribute issues: the project, the dataset, then the
-    items by identifier."""
-
-    attribute_issues: int = 0
-    """How many attribute issues there are, the dropped attributes included."""
-
-    resolved: int = 0
-    """How many attribute issues are resolved or accepted."""
+    issues: list[ObjectMigrationIssues] = Field(default_factory=list)
+    """The issues of each object that has any: the project, the dataset, then
+    the items by identifier."""

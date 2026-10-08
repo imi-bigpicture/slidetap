@@ -24,11 +24,11 @@ from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from slidetap.model import (
-    MigrationAttributeIssue,
-    MigrationResolution,
+    AnyAttribute,
+    AttributeMigrationIssue,
     NotAllowedActionError,
     Project,
     ProjectActions,
@@ -589,9 +589,9 @@ async def create_project_migration(
 async def resolve_project_migration_attribute_issue(
     project_uid: UUID,
     attribute_issue_uid: UUID,
-    resolution: MigrationResolution,
     migration_service: FromDishka[MigrationService],
-) -> MigrationAttributeIssue:
+    attribute: AnyAttribute | None = Body(default=None),
+) -> AttributeMigrationIssue:
     """Resolve an attribute issue of the migration of the project: a value on
     its attribute schema, or left empty.
 
@@ -601,12 +601,13 @@ async def resolve_project_migration_attribute_issue(
         Id of project.
     attribute_issue_uid: UUID
         Id of the attribute issue.
-    resolution: MigrationResolution
-        The value, or none to leave the attribute empty.
+    attribute: AnyAttribute | None = None
+        The value, or none to leave the attribute empty or accept a dropped
+        attribute.
 
     Returns
     ----------
-    MigrationAttributeIssue
+    AttributeMigrationIssue
         The attribute issue, resolved.
 
     Raises
@@ -618,7 +619,7 @@ async def resolve_project_migration_attribute_issue(
         If there is no such project, migration, or attribute issue (404).
     """
     try:
-        return migration_service.resolve(project_uid, attribute_issue_uid, resolution)
+        return migration_service.resolve(project_uid, attribute_issue_uid, attribute)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)

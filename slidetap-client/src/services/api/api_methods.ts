@@ -157,7 +157,7 @@ export async function post(
   return response
 }
 
-export async function put(path: string, data?: object): Promise<Response> {
+export async function put(path: string, data?: object | null): Promise<Response> {
   const url = buildUrl(path)
   return await http('PUT', url, JSON.stringify(data))
 }

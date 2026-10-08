@@ -31,19 +31,14 @@ export enum MigrationObjectKind {
 
 /** A top-level attribute of an object that the migration could not convert,
  * left invalid, or dropped, and how the curator resolved it. */
-export interface MigrationAttributeIssue {
+export interface AttributeMigrationIssue {
   readonly uid: string
   /** The tag in the target schema, or in the source schema for a dropped
    * attribute. */
   readonly tag: string
-  /** The attribute schema of the original in the source root, null where the
-   * object had no attribute. */
-  readonly sourceAttributeSchemaUid: string | null
   /** The attribute schema of the tag in the target root, null for a dropped
    * attribute. */
   readonly targetAttributeSchemaUid: string | null
-  /** Whether the migration dropped the attribute, which can only be accepted. */
-  readonly dropped: boolean
   /** The display name of the target attribute, or of the source attribute for
    * a dropped attribute. */
   readonly displayName: string
@@ -58,14 +53,13 @@ export interface MigrationAttributeIssue {
   /** When the issue was resolved, or the dropped attribute accepted, null until
    * it is. */
   readonly resolvedAt: string | null
-  readonly leftEmpty: boolean
   /** The value the issue is resolved with, null where left empty, accepted as
    * dropped, or not yet resolved. */
   readonly resolved: Attribute<AttributeValueTypes> | null
 }
 
 /** A project, dataset, or item with attribute issues. */
-export interface MigrationObject {
+export interface ObjectMigrationIssues {
   readonly uid: string
   readonly kind: MigrationObjectKind
   /** The name of the project or dataset, the identifier of an item. */
@@ -74,7 +68,7 @@ export interface MigrationObject {
   readonly targetSchemaUid: string
   readonly targetSchemaDisplayName: string
   /** The attribute issues, the dropped attributes included. */
-  readonly attributeIssues: MigrationAttributeIssue[]
+  readonly attributeIssues: AttributeMigrationIssue[]
 }
 
 /** The migration of a project to another root schema, with its plan. */
@@ -90,9 +84,7 @@ export interface ProjectMigration {
   readonly error: string | null
   readonly created: string
   readonly updated: string
-  readonly objects: MigrationObject[]
-  /** How many attribute issues there are, the dropped attributes included. */
-  readonly attributeIssues: number
-  /** How many attribute issues are resolved or accepted. */
-  readonly resolved: number
+  /** The issues of each object that has any: the project, the dataset, then
+   * the items by identifier. */
+  readonly issues: ObjectMigrationIssues[]
 }

@@ -35,7 +35,7 @@ from slidetap.database.types import attribute_db_type
 from slidetap.model import AnyAttribute, MigrationStatus, ProjectStatus
 
 
-class DatabaseMigrationAttributeIssue(Base):
+class DatabaseAttributeMigrationIssue(Base):
     """A top-level attribute of an object that the migration could not
     convert, left invalid, or dropped, and how the curator resolved it.
 
@@ -44,17 +44,17 @@ class DatabaseMigrationAttributeIssue(Base):
     has a target attribute schema and the source one where there was one, and
     one of a dropped attribute has only a source attribute schema."""
 
-    __tablename__ = "migration_attribute_issue"
+    __tablename__ = "attribute_migration_issue"
     __table_args__ = (
         # Every issue is about a source attribute, a target attribute, or both.
         CheckConstraint(
             "source_attribute_schema_uid IS NOT NULL "
             "OR target_attribute_schema_uid IS NOT NULL",
-            name="ck_migration_attribute_issue_attribute_schema",
+            name="ck_attribute_migration_issue_attribute_schema",
         ),
         # One issue per target attribute of an object.
         Index(
-            "uq_migration_attribute_issue_target",
+            "uq_attribute_migration_issue_target",
             "migration_uid",
             "object_uid",
             "target_attribute_schema_uid",
@@ -64,7 +64,7 @@ class DatabaseMigrationAttributeIssue(Base):
         ),
         # One issue per dropped source attribute of an object.
         Index(
-            "uq_migration_attribute_issue_dropped",
+            "uq_attribute_migration_issue_dropped",
             "migration_uid",
             "object_uid",
             "source_attribute_schema_uid",
@@ -210,8 +210,8 @@ class DatabaseProjectMigration(Base):
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
     updated: Mapped[datetime.datetime] = mapped_column(DateTime)
 
-    attribute_issues: Mapped[list[DatabaseMigrationAttributeIssue]] = relationship(
-        "DatabaseMigrationAttributeIssue",
+    attribute_issues: Mapped[list[DatabaseAttributeMigrationIssue]] = relationship(
+        "DatabaseAttributeMigrationIssue",
         cascade="all, delete-orphan",
     )
 

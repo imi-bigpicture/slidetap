@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("project_uid"),
     )
     op.create_table(
-        "migration_attribute_issue",
+        "attribute_migration_issue",
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
         sa.Column("object_uid", sa.Uuid(), nullable=False),
@@ -60,26 +60,26 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "source_attribute_schema_uid IS NOT NULL "
             "OR target_attribute_schema_uid IS NOT NULL",
-            name="ck_migration_attribute_issue_attribute_schema",
+            name="ck_attribute_migration_issue_attribute_schema",
         ),
     )
     op.create_index(
-        "ix_migration_attribute_issue_migration_uid",
-        "migration_attribute_issue",
+        "ix_attribute_migration_issue_migration_uid",
+        "attribute_migration_issue",
         ["migration_uid"],
     )
     # An issue with a target is unique by it, a dropped attribute by its source.
     op.create_index(
-        "uq_migration_attribute_issue_target",
-        "migration_attribute_issue",
+        "uq_attribute_migration_issue_target",
+        "attribute_migration_issue",
         ["migration_uid", "object_uid", "target_attribute_schema_uid"],
         unique=True,
         sqlite_where=sa.text("target_attribute_schema_uid IS NOT NULL"),
         postgresql_where=sa.text("target_attribute_schema_uid IS NOT NULL"),
     )
     op.create_index(
-        "uq_migration_attribute_issue_dropped",
-        "migration_attribute_issue",
+        "uq_attribute_migration_issue_dropped",
+        "attribute_migration_issue",
         ["migration_uid", "object_uid", "source_attribute_schema_uid"],
         unique=True,
         sqlite_where=sa.text("target_attribute_schema_uid IS NULL"),
@@ -103,16 +103,16 @@ def downgrade() -> None:
         "WHERE uid IN (SELECT project_uid FROM project_migration)"
     )
     op.drop_index(
-        "uq_migration_attribute_issue_dropped",
-        table_name="migration_attribute_issue",
+        "uq_attribute_migration_issue_dropped",
+        table_name="attribute_migration_issue",
     )
     op.drop_index(
-        "uq_migration_attribute_issue_target",
-        table_name="migration_attribute_issue",
+        "uq_attribute_migration_issue_target",
+        table_name="attribute_migration_issue",
     )
     op.drop_index(
-        "ix_migration_attribute_issue_migration_uid",
-        table_name="migration_attribute_issue",
+        "ix_attribute_migration_issue_migration_uid",
+        table_name="attribute_migration_issue",
     )
-    op.drop_table("migration_attribute_issue")
+    op.drop_table("attribute_migration_issue")
     op.drop_table("project_migration")

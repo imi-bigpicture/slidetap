@@ -28,7 +28,7 @@ from slidetap.model import (
     Dataset,
     Item,
     ItemSchema,
-    MigratedObject,
+    ObjectMigrationResult,
     Project,
     RootSchema,
 )
@@ -103,7 +103,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
             *self._item_migrators.values(),
         ]
 
-    def migrate_project(self, project: Project) -> MigratedObject:
+    def migrate_project(self, project: Project) -> ObjectMigrationResult:
         """Migrate a project from its schema on the source root to the target
         root, with the project migrator.
 
@@ -114,13 +114,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Returns
         -------
-        MigratedObject
+        ObjectMigrationResult
             The project schema of the target root, the project's attributes on
             it, and the attributes that lost values as unresolved.
         """
         return self._project_migrator.migrate(project)
 
-    def migrate_dataset(self, dataset: Dataset) -> MigratedObject:
+    def migrate_dataset(self, dataset: Dataset) -> ObjectMigrationResult:
         """Migrate a dataset from its schema on the source root to the target
         root, with the dataset migrator.
 
@@ -131,13 +131,13 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Returns
         -------
-        MigratedObject
+        ObjectMigrationResult
             The dataset schema of the target root, the dataset's attributes on
             it, and the attributes that lost values as unresolved.
         """
         return self._dataset_migrator.migrate(dataset)
 
-    def migrate_item(self, item: Item) -> MigratedObject:
+    def migrate_item(self, item: Item) -> ObjectMigrationResult:
         """Migrate an item from its schema on the source root to the target root,
         with the migrator of its item schema.
 
@@ -148,7 +148,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
         Returns
         -------
-        MigratedObject
+        ObjectMigrationResult
             The target item schema of the migrator, the item's attributes on
             it, and the attributes that lost values as unresolved.
 

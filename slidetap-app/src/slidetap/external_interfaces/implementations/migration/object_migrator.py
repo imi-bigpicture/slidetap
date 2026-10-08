@@ -30,7 +30,7 @@ from slidetap.model import (
     AttributeSchema,
     Dataset,
     Item,
-    MigratedObject,
+    ObjectMigrationResult,
     Project,
     UnresolvedAttribute,
 )
@@ -125,7 +125,7 @@ class ObjectMigrator(Generic[T]):
         """The schema of the target root."""
         return self._target
 
-    def migrate(self, obj: T) -> MigratedObject:
+    def migrate(self, obj: T) -> ObjectMigrationResult:
         """Migrate a project, dataset, or item to the target schema.
 
         Parameters
@@ -135,7 +135,7 @@ class ObjectMigrator(Generic[T]):
 
         Returns
         -------
-        MigratedObject
+        ObjectMigrationResult
             The target schema, the attributes on it by target tag, and the
             attributes whose value in effect lost values as unresolved.
 
@@ -144,18 +144,12 @@ class ObjectMigrator(Generic[T]):
         ValueError
             If an attribute is held at a tag that is not of the source schema.
         """
-        unresolved: dict[str, UnresolvedAttribute] = {}
-        attributes = self._migrate_attributes(
-            obj.attributes, self._attributes, unresolved
-        )
-        private_attributes = self._migrate_attributes(
-            obj.private_attributes, self._private_attributes, unresolved
-        )
-        return MigratedObject(
+        return ObjectMigrationResult(
             schema_uid=self._target.uid,
-            attributes=attributes,
-            private_attributes=private_attributes,
-            unresolved=unresolved,
+            attributes=self._migrate_attributes(obj.attributes, self._attributes),
+            private_attributes=self._migrate_attributes(
+                obj.private_attributes, self._private_attributes
+            ),
         )
 
     def attribute_migrator_of(
@@ -203,17 +197,16 @@ class ObjectMigrator(Generic[T]):
         self,
         attributes: Mapping[str, AnyAttribute],
         pairs: Mapping[str, AttributePair | None],
-        unresolved: dict[str, UnresolvedAttribute],
-    ) -> dict[str, AnyAttribute]:
+    ) -> dict[str, AnyAttribute | UnresolvedAttribute]:
         """Migrate the attributes of the object to their tags in the target,
-        putting those that lost values in `unresolved` instead.
+        each that lost values as unresolved.
 
         Raises
         ------
         ValueError
             If an attribute is held at a tag that is not of the source schema.
         """
-        migrated: dict[str, AnyAttribute] = {}
+        migrated: dict[str, AnyAttribute | UnresolvedAttribute] = {}
         for source_tag, attribute in attributes.items():
             if source_tag not in pairs:
                 raise ValueError(
@@ -225,10 +218,10 @@ class ObjectMigrator(Generic[T]):
                 continue
             result = pair.migrate(attribute)
             if result.lost:
-                unresolved[pair.target_key] = UnresolvedAttribute(
+                migrated[pair.target_key] = UnresolvedAttribute(
                     original=attribute,
                     proposed=result.attribute,
-                    reason=" ".join(dict.fromkeys(result.lost)),
+                    problem=" ".join(dict.fromkeys(result.lost)),
                 )
             else:
                 migrated[pair.target_key] = result.attribute

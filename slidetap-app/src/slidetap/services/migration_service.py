@@ -17,7 +17,7 @@
 import contextlib
 import dataclasses
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -26,12 +26,12 @@ from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
+    DatabaseAttributeMigrationIssue,
     DatabaseDataset,
     DatabaseItem,
     DatabaseMapper,
     DatabaseMappingItem,
     DatabaseMetadataSearchItem,
-    DatabaseMigrationAttributeIssue,
     DatabaseProject,
     DatabaseProjectMigration,
     DatabaseUnmappedValue,
@@ -43,6 +43,7 @@ from slidetap.external_interfaces.implementations.migration import (
 from slidetap.model import (
     AnnotationSchema,
     AnyAttribute,
+    AttributeMigrationIssue,
     AttributeSchema,
     Dataset,
     DatasetSchema,
@@ -50,15 +51,13 @@ from slidetap.model import (
     Item,
     ItemSchema,
     MetadataSearchItem,
-    MigratedObject,
-    MigrationAttributeIssue,
     MigrationError,
-    MigrationObject,
     MigrationObjectKind,
-    MigrationResolution,
     MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
+    ObjectMigrationIssues,
+    ObjectMigrationResult,
     ObservationSchema,
     Project,
     ProjectMigration,
@@ -90,14 +89,32 @@ class ObjectInMigration:
     target_schema: AnyObjectSchema
     """Its schema on the target root."""
 
-    target_attributes: Mapping[str, AnyAttribute]
-    """Its attributes on the target schema, by tag."""
+    target_attributes: Mapping[str, AnyAttribute | UnresolvedAttribute]
+    """Its attributes on the target schema by tag, each migrated, or
+    unresolved for the curator to resolve."""
 
-    target_private_attributes: Mapping[str, AnyAttribute]
-    """Its private attributes on the target schema, by tag."""
+    target_private_attributes: Mapping[str, AnyAttribute | UnresolvedAttribute]
+    """Its private attributes on the target schema, as `target_attributes`."""
 
-    unresolved: Mapping[str, UnresolvedAttribute]
-    """Attributes of the target schema for the curator to resolve, by tag."""
+    def unresolved(
+        self,
+    ) -> Iterator[tuple[str, UnresolvedAttribute, AttributeSchema | None]]:
+        """Iterate the unresolved attributes, public then private.
+
+        Returns
+        -------
+        Iterator[tuple[str, UnresolvedAttribute, AttributeSchema | None]]
+            The tag and the unresolved attribute, with the attribute schema of
+            the tag among the public or the private attributes of the target
+            schema, as the attribute is, or None where it has none.
+        """
+        for attributes, schemas in (
+            (self.target_attributes, self.target_schema.attributes),
+            (self.target_private_attributes, self.target_schema.private_attributes),
+        ):
+            for tag, attribute in attributes.items():
+                if isinstance(attribute, UnresolvedAttribute):
+                    yield tag, attribute, schemas.get(tag)
 
 
 @dataclass(frozen=True)
@@ -280,8 +297,8 @@ class MigrationService:
         self,
         project_uid: UUID,
         attribute_issue_uid: UUID,
-        resolution: MigrationResolution,
-    ) -> MigrationAttributeIssue:
+        attribute: AnyAttribute | None,
+    ) -> AttributeMigrationIssue:
         """Resolve an attribute issue: a value on its attribute schema, or left
         empty. A dropped attribute is resolved by accepting it, without a value.
 
@@ -291,13 +308,13 @@ class MigrationService:
             The uid of the project.
         attribute_issue_uid: UUID
             The uid of the attribute issue.
-        resolution: MigrationResolution
+        attribute: AnyAttribute | None
             The value, or None to leave the attribute empty or accept it as
             dropped.
 
         Returns
         -------
-        MigrationAttributeIssue
+        AttributeMigrationIssue
             The attribute issue, resolved.
 
         Raises
@@ -328,22 +345,19 @@ class MigrationService:
                     f"issue {attribute_issue_uid}."
                 )
             if issue.dropped:
-                if resolution.attribute is not None:
+                if attribute is not None:
                     raise NotAllowedActionError(
                         f"Attribute issue {issue.uid} is of a dropped attribute, "
                         f"which is accepted without a value."
                     )
             else:
                 tag, schema = self._issue_attribute_schema(migration, issue)
-                if (
-                    resolution.attribute is not None
-                    and resolution.attribute.schema_uid != schema.uid
-                ):
+                if attribute is not None and attribute.schema_uid != schema.uid:
                     raise NotAllowedActionError(
                         f"The value of {tag!r} must be on attribute schema "
-                        f"{schema.uid}, not {resolution.attribute.schema_uid}."
+                        f"{schema.uid}, not {attribute.schema_uid}."
                     )
-            issue.resolve(resolution.attribute)
+            issue.resolve(attribute)
             migration.set_status(MigrationStatus.CURATING)
             session.flush()
             return self._attribute_issue_model(migration, issue)
@@ -830,7 +844,7 @@ class MigrationService:
         now: set[tuple[UUID, str | UUID | None]] = {
             (object_.source.uid, tag)
             for object_ in objects
-            for tag in object_.unresolved
+            for tag, _, _ in object_.unresolved()
         }
         now.update(
             (object_.source.uid, attribute.schema_uid)
@@ -926,7 +940,7 @@ class MigrationService:
     @staticmethod
     def _migrate(
         migration: SchemaMigration, source: Project | Dataset | Item
-    ) -> MigratedObject:
+    ) -> ObjectMigrationResult:
         """Run the migration for an object, on a copy of it.
 
         Parameters
@@ -938,7 +952,7 @@ class MigrationService:
 
         Returns
         -------
-        MigratedObject
+        ObjectMigrationResult
             What the migration returned for the object.
         """
         copy = source.model_copy(deep=True)
@@ -977,7 +991,7 @@ class MigrationService:
     def _in_migration(
         self,
         source: Project | Dataset | Item,
-        migrated: MigratedObject,
+        migrated: ObjectMigrationResult,
         source_root: RootSchemaIndex,
         target_root: RootSchemaIndex,
     ) -> ObjectInMigration:
@@ -988,7 +1002,7 @@ class MigrationService:
         ----------
         source: Project | Dataset | Item
             The object, on the source root.
-        migrated: MigratedObject
+        migrated: ObjectMigrationResult
             What the migration returned for the object.
         source_root: RootSchemaIndex
             The root the object is on.
@@ -1032,7 +1046,6 @@ class MigrationService:
             target_schema,
             migrated.attributes,
             migrated.private_attributes,
-            migrated.unresolved,
         )
 
     def _target_item_schema(
@@ -1110,8 +1123,9 @@ class MigrationService:
         ------
         MigrationError
             If an attribute is not the target schema's by tag, or an unresolved
-            attribute is not a tag of the target schema, is also converted, or
-            is proposed on another attribute schema.
+            attribute is not a tag of the target schema, among the public or
+            the private attributes as it is, or is proposed on another
+            attribute schema.
         """
         uid, target_schema = object_.source.uid, object_.target_schema
         for attributes, schemas in (
@@ -1119,21 +1133,14 @@ class MigrationService:
             (object_.target_private_attributes, target_schema.private_attributes),
         ):
             for tag, attribute in attributes.items():
+                if isinstance(attribute, UnresolvedAttribute):
+                    continue
                 self._check_attribute(uid, tag, attribute, schemas.get(tag))
-        for tag, unresolved in object_.unresolved.items():
-            attribute_schema = self._attribute_schema(target_schema, tag)
+        for tag, unresolved, attribute_schema in object_.unresolved():
             if attribute_schema is None:
                 raise MigrationError(
                     f"The migration left {tag!r} of {uid} unresolved, which "
                     f"is not an attribute of the target schema."
-                )
-            if (
-                tag in object_.target_attributes
-                or tag in object_.target_private_attributes
-            ):
-                raise MigrationError(
-                    f"The migration both converted and left unresolved {tag!r} of "
-                    f"{uid}."
                 )
             if unresolved.proposed is not None:
                 self._check_attribute(uid, tag, unresolved.proposed, attribute_schema)
@@ -1166,11 +1173,10 @@ class MigrationService:
         """
         source_schema = self._object_schema(source_root, object_.source.schema_uid)
         attributes = dict(object_.target_attributes)
-        unresolved = dict(object_.unresolved)
         for tag, target_attribute_schema in object_.target_schema.attributes.items():
-            if tag in unresolved:
-                continue
             attribute = attributes.get(tag)
+            if isinstance(attribute, UnresolvedAttribute):
+                continue
             if self._is_valid(attribute, target_attribute_schema):
                 continue
             source_tag, original = self._original(object_.source, attribute, tag)
@@ -1179,19 +1185,16 @@ class MigrationService:
                 original, source_attribute_schema
             ):
                 continue
-            attributes.pop(tag, None)
-            unresolved[tag] = UnresolvedAttribute(
+            attributes[tag] = UnresolvedAttribute(
                 original=original,
                 proposed=attribute,
-                reason=(
+                problem=(
                     f"Required in {target_root.display_name}, has no value."
                     if attribute is None or attribute.value is None
                     else f"Not a valid value in {target_root.display_name}."
                 ),
             )
-        return dataclasses.replace(
-            object_, target_attributes=attributes, unresolved=unresolved
-        )
+        return dataclasses.replace(object_, target_attributes=attributes)
 
     @staticmethod
     def _original(
@@ -1283,29 +1286,9 @@ class MigrationService:
             )
         return schema
 
-    @staticmethod
-    def _attribute_schema(schema: AnyObjectSchema, tag: str) -> AttributeSchema | None:
-        """Get the attribute schema of a tag of an object schema, a public or
-        else a private attribute.
-
-        Parameters
-        ----------
-        schema: AnyObjectSchema
-            The object schema.
-        tag: str
-            The tag.
-
-        Returns
-        -------
-        AttributeSchema | None
-            The attribute schema, or None where the object schema has none of
-            the tag.
-        """
-        return schema.attributes.get(tag) or schema.private_attributes.get(tag)
-
     def _attribute_issues(
         self, object_: ObjectInMigration, target_root: RootSchemaIndex
-    ) -> Iterable[DatabaseMigrationAttributeIssue]:
+    ) -> Iterable[DatabaseAttributeMigrationIssue]:
         """Make the attribute issues of what an object left unresolved, and of
         what it dropped.
 
@@ -1318,7 +1301,7 @@ class MigrationService:
 
         Returns
         -------
-        Iterable[DatabaseMigrationAttributeIssue]
+        Iterable[DatabaseAttributeMigrationIssue]
             An attribute issue for each unresolved attribute and each dropped
             attribute, with the original given its display value.
 
@@ -1327,25 +1310,24 @@ class MigrationService:
         MigrationError
             If an unresolved attribute is not a tag of the target schema.
         """
-        for tag, unresolved in object_.unresolved.items():
+        for tag, unresolved, schema in object_.unresolved():
             original = None
             if unresolved.original is not None:
                 original = unresolved.original.model_copy(deep=True)
                 self._set_display_value(original)
-            schema = self._attribute_schema(object_.target_schema, tag)
             if schema is None:
                 raise MigrationError(
                     f"The migration left {tag!r} of {object_.source.uid} "
                     f"unresolved, which is not an attribute of the target schema."
                 )
-            yield DatabaseMigrationAttributeIssue(
+            yield DatabaseAttributeMigrationIssue(
                 object_.source.uid,
                 object_.target_schema.uid,
                 original.schema_uid if original is not None else None,
                 schema.uid,
                 original,
                 unresolved.proposed,
-                unresolved.reason,
+                unresolved.problem,
             )
         for attribute in self._dropped(object_):
             original = attribute.model_copy(deep=True)
@@ -1353,7 +1335,7 @@ class MigrationService:
             _, display_name = self._source_attribute_names(original.schema_uid)
             value = original.display_value
             dropped = display_name if value is None else f"'{value}' of {display_name}"
-            yield DatabaseMigrationAttributeIssue(
+            yield DatabaseAttributeMigrationIssue(
                 object_.source.uid,
                 object_.target_schema.uid,
                 original.schema_uid,
@@ -1364,7 +1346,29 @@ class MigrationService:
             )
 
     @staticmethod
-    def _dropped(object_: ObjectInMigration) -> list[AnyAttribute]:
+    def _migrated(
+        attributes: Mapping[str, AnyAttribute | UnresolvedAttribute],
+    ) -> dict[str, AnyAttribute]:
+        """Get the migrated attributes of a mapping, leaving out the unresolved.
+
+        Parameters
+        ----------
+        attributes: Mapping[str, AnyAttribute | UnresolvedAttribute]
+            The attributes of an object on the target schema, by tag.
+
+        Returns
+        -------
+        dict[str, AnyAttribute]
+            The migrated attributes, by tag.
+        """
+        return {
+            tag: attribute
+            for tag, attribute in attributes.items()
+            if not isinstance(attribute, UnresolvedAttribute)
+        }
+
+    @classmethod
+    def _dropped(cls, object_: ObjectInMigration) -> list[AnyAttribute]:
         """Get the dropped attributes of an object: those with a value that the
         migration neither converted nor left unresolved.
 
@@ -1381,11 +1385,11 @@ class MigrationService:
         kept = {
             attribute.uid
             for attribute in (
-                *object_.target_attributes.values(),
-                *object_.target_private_attributes.values(),
+                *cls._migrated(object_.target_attributes).values(),
+                *cls._migrated(object_.target_private_attributes).values(),
                 *(
                     unresolved.original
-                    for unresolved in object_.unresolved.values()
+                    for _, unresolved, _ in object_.unresolved()
                     if unresolved.original is not None
                 ),
             )
@@ -1402,7 +1406,7 @@ class MigrationService:
     @staticmethod
     def _with_resolutions(
         object_: ObjectInMigration,
-        issues: Mapping[tuple[UUID, str], DatabaseMigrationAttributeIssue],
+        issues: Mapping[tuple[UUID, str], DatabaseAttributeMigrationIssue],
     ) -> ObjectInMigration:
         """Put the resolved values at their tags, and nothing at a tag left
         empty.
@@ -1415,7 +1419,7 @@ class MigrationService:
         ----------
         object_: ObjectInMigration
             The object, checked.
-        issues: Mapping[tuple[UUID, str], DatabaseMigrationAttributeIssue]
+        issues: Mapping[tuple[UUID, str], DatabaseAttributeMigrationIssue]
             The resolved attribute issues with a target, by object uid and
             target tag, with one for each unresolved attribute of the object.
 
@@ -1424,24 +1428,29 @@ class MigrationService:
         ObjectInMigration
             The object, with the resolved values and nothing unresolved.
         """
-        attributes = dict(object_.target_attributes)
-        private_attributes = dict(object_.target_private_attributes)
-        for tag, unresolved in object_.unresolved.items():
-            resolved = issues[(object_.source.uid, tag)].resolved
-            if resolved is None:
-                continue
-            replaced = unresolved.original or unresolved.proposed
-            if replaced is not None:
-                resolved = resolved.model_copy(update={"uid": replaced.uid})
-            if tag in object_.target_schema.attributes:
-                attributes[tag] = resolved
-            else:
-                private_attributes[tag] = resolved
+        resolved_mappings: list[dict[str, AnyAttribute | UnresolvedAttribute]] = []
+        for attributes in (
+            object_.target_attributes,
+            object_.target_private_attributes,
+        ):
+            resolved_attributes: dict[str, AnyAttribute | UnresolvedAttribute] = {}
+            for tag, attribute in attributes.items():
+                if not isinstance(attribute, UnresolvedAttribute):
+                    resolved_attributes[tag] = attribute
+                    continue
+                resolved = issues[(object_.source.uid, tag)].resolved
+                if resolved is None:
+                    continue
+                replaced = attribute.original or attribute.proposed
+                if replaced is not None:
+                    resolved = resolved.model_copy(update={"uid": replaced.uid})
+                resolved_attributes[tag] = resolved
+            resolved_mappings.append(resolved_attributes)
+        attributes, private_attributes = resolved_mappings
         return dataclasses.replace(
             object_,
             target_attributes=attributes,
             target_private_attributes=private_attributes,
-            unresolved={},
         )
 
     def _write(
@@ -1492,12 +1501,16 @@ class MigrationService:
         session.flush()
         row.schema_uid = target_schema.uid
         row.attributes = self._add_attributes(
-            session, row, object_.target_attributes, target_schema.attributes, flags
+            session,
+            row,
+            self._migrated(object_.target_attributes),
+            target_schema.attributes,
+            flags,
         )
         row.private_attributes = self._add_attributes(
             session,
             row,
-            object_.target_private_attributes,
+            self._migrated(object_.target_private_attributes),
             target_schema.private_attributes,
             flags,
         )
@@ -1627,7 +1640,7 @@ class MigrationService:
             the dataset, then the items by identifier.
         """
         target_root = self._schema_service.get_root(migration.target_root_schema_uid)
-        objects: dict[UUID, MigrationObject] = {}
+        objects: dict[UUID, ObjectMigrationIssues] = {}
         for issue in migration.attribute_issues:
             self._object(
                 objects,
@@ -1654,28 +1667,22 @@ class MigrationService:
             error=migration.error,
             created=migration.created,
             updated=migration.updated,
-            objects=ordered,
-            attribute_issues=len(migration.attribute_issues),
-            resolved=sum(
-                1
-                for issue in migration.attribute_issues
-                if issue.resolved_at is not None
-            ),
+            issues=ordered,
         )
 
     def _object(
         self,
-        objects: dict[UUID, MigrationObject],
+        objects: dict[UUID, ObjectMigrationIssues],
         target_root: RootSchemaIndex,
         uid: UUID,
         target_schema_uid: UUID,
-    ) -> MigrationObject:
+    ) -> ObjectMigrationIssues:
         """Get the migration object of a uid, added to the objects where it is
         not, without an identifier.
 
         Parameters
         ----------
-        objects: dict[UUID, MigrationObject]
+        objects: dict[UUID, ObjectMigrationIssues]
             The migration objects by uid, added to.
         target_root: RootSchemaIndex
             The root the project is migrated to.
@@ -1686,11 +1693,11 @@ class MigrationService:
 
         Returns
         -------
-        MigrationObject
+        ObjectMigrationIssues
             The migration object of the uid.
         """
         if uid not in objects:
-            objects[uid] = MigrationObject(
+            objects[uid] = ObjectMigrationIssues(
                 uid=uid,
                 kind=self._object_kind(target_root, target_schema_uid),
                 identifier="",
@@ -1757,7 +1764,7 @@ class MigrationService:
         self,
         session: Session,
         project: DatabaseProject,
-        objects: Iterable[MigrationObject],
+        objects: Iterable[ObjectMigrationIssues],
     ) -> dict[UUID, str]:
         """Get the identifiers of migration objects.
 
@@ -1767,7 +1774,7 @@ class MigrationService:
             The session to read them in.
         project: DatabaseProject
             The project.
-        objects: Iterable[MigrationObject]
+        objects: Iterable[ObjectMigrationIssues]
             The migration objects.
 
         Returns
@@ -1795,7 +1802,7 @@ class MigrationService:
     def _issue_attribute_schema(
         self,
         migration: DatabaseProjectMigration,
-        issue: DatabaseMigrationAttributeIssue,
+        issue: DatabaseAttributeMigrationIssue,
     ) -> tuple[str, AttributeSchema]:
         """Get the target tag and attribute schema of an attribute issue.
 
@@ -1803,7 +1810,7 @@ class MigrationService:
         ----------
         migration: DatabaseProjectMigration
             The migration.
-        issue: DatabaseMigrationAttributeIssue
+        issue: DatabaseAttributeMigrationIssue
             An attribute issue of the migration with a target.
 
         Returns
@@ -1835,20 +1842,20 @@ class MigrationService:
     def _attribute_issue_model(
         self,
         migration: DatabaseProjectMigration,
-        issue: DatabaseMigrationAttributeIssue,
-    ) -> MigrationAttributeIssue:
+        issue: DatabaseAttributeMigrationIssue,
+    ) -> AttributeMigrationIssue:
         """Make the model of an attribute issue.
 
         Parameters
         ----------
         migration: DatabaseProjectMigration
             The migration.
-        issue: DatabaseMigrationAttributeIssue
+        issue: DatabaseAttributeMigrationIssue
             An attribute issue of the migration.
 
         Returns
         -------
-        MigrationAttributeIssue
+        AttributeMigrationIssue
             The attribute issue, with its target tag and attribute schema, or
             the tag and display name of its source attribute schema for a
             dropped attribute.
@@ -1866,22 +1873,15 @@ class MigrationService:
         else:
             tag, schema = self._issue_attribute_schema(migration, issue)
             display_name = schema.display_name
-        return MigrationAttributeIssue(
+        return AttributeMigrationIssue(
             uid=issue.uid,
             tag=tag,
-            source_attribute_schema_uid=issue.source_attribute_schema_uid,
             target_attribute_schema_uid=issue.target_attribute_schema_uid,
-            dropped=issue.dropped,
             display_name=display_name,
             original=issue.original,
             proposed=issue.proposed,
             problem=issue.problem,
             resolved_at=issue.resolved_at,
-            left_empty=(
-                not issue.dropped
-                and issue.resolved_at is not None
-                and issue.resolved is None
-            ),
             resolved=issue.resolved,
         )
 

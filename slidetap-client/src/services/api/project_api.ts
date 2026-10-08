@@ -15,7 +15,7 @@
 import type { PrivateAttributeSummary } from 'src/models/private_attribute_summary'
 import type { Project } from 'src/models/project'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
-import type { MigrationAttributeIssue, ProjectMigration } from 'src/models/migration'
+import type { AttributeMigrationIssue, ProjectMigration } from 'src/models/migration'
 import type { ProjectActions } from 'src/models/project_actions'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
@@ -66,7 +66,7 @@ const projectApi = {
   },
 
   /** Resolve an attribute issue of the migration: a value, or null to leave it
-   * empty. */
+   * empty or accept a dropped attribute. */
   resolveMigrationAttributeIssue: async (
     projectUid: string,
     attributeIssueUid: string,
@@ -74,9 +74,9 @@ const projectApi = {
   ) => {
     const response = await put(
       `projects/project/${projectUid}/migration/attribute-issues/${attributeIssueUid}`,
-      { attribute },
+      attribute,
     )
-    return await parseJsonResponse<MigrationAttributeIssue>(response)
+    return await parseJsonResponse<AttributeMigrationIssue>(response)
   },
 
   /** Complete the migration, with every attribute issue resolved, in a task. */

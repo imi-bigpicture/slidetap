@@ -408,7 +408,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         sa.column("updated", sa.DateTime()),
     )
     issue = sa.table(
-        "migration_attribute_issue",
+        "attribute_migration_issue",
         sa.column("uid", sa.Uuid()),
         sa.column("migration_uid", sa.Uuid()),
         sa.column("object_uid", sa.Uuid()),
@@ -490,7 +490,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
     } == {"MIGRATING": "COMPLETED", "IN_PROGRESS": "IN_PROGRESS"}
     tables = sa.inspect(session.connection()).get_table_names()
     assert "project_migration" not in tables
-    assert "migration_attribute_issue" not in tables
+    assert "attribute_migration_issue" not in tables
     command.upgrade(config(), "head")
     assert_up_to_date(session)
 
@@ -524,7 +524,7 @@ def test_an_attribute_issue_of_the_project_is_unique(session: Session):
         sa.column("updated", sa.DateTime()),
     )
     issue = sa.table(
-        "migration_attribute_issue",
+        "attribute_migration_issue",
         sa.column("uid", sa.Uuid()),
         sa.column("migration_uid", sa.Uuid()),
         sa.column("object_uid", sa.Uuid()),

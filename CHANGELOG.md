@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A migration gives every search item of a project its item schema on the root migrated to.
 - `SchemaMigration.migrate_item_schema()` gives the item schema of the target root that an item schema of the source migrates to.
 - A project is migrated in steps, with what the migration could not convert resolved by a curator before it is completed (database migration).
-- `MigratedObject.unresolved`, in `slidetap.model`, holds the `UnresolvedAttribute`s a migration could not convert, for the curator to resolve.
+- `ObjectMigrationResult`, what a migration returns for an object in `slidetap.model`, holds an `UnresolvedAttribute` at the tag of each attribute the migration could not convert, for the curator to resolve.
 - Planning a migration also makes an attribute issue of every top-level attribute the migration leaves invalid that was valid before.
 - An attribute with a value that a migration drops is an attribute issue, which the curator accepts before the migration can be submitted.
 - A resolved value keeps the row, lock, and read-only flag of the attribute it resolves.

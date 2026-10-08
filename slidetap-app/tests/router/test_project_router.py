@@ -15,6 +15,7 @@
 
 import datetime
 from http import HTTPStatus
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -25,8 +26,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from slidetap.model import (
-    MigrationAttributeIssue,
-    MigrationResolution,
+    AttributeMigrationIssue,
     MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
@@ -370,8 +370,7 @@ class TestSlideTapProjectRouter:
         attribute = StringAttribute(
             uid=uuid4(), schema_uid=uuid4(), updated_value="value"
         )
-        resolution = MigrationResolution(attribute=attribute)
-        resolved = MigrationAttributeIssue(
+        resolved = AttributeMigrationIssue(
             uid=issue_uid,
             tag="tag",
             target_attribute_schema_uid=attribute.schema_uid,
@@ -381,7 +380,7 @@ class TestSlideTapProjectRouter:
             resolved_at=RESOLVED_AT,
             resolved=attribute,
         )
-        when = decoy.when(migration_service.resolve(project.uid, issue_uid, resolution))
+        when = decoy.when(migration_service.resolve(project.uid, issue_uid, attribute))
         if refused:
             when.then_raise(NotAllowedActionError("not curating"))
         else:
@@ -390,7 +389,7 @@ class TestSlideTapProjectRouter:
         # Act
         response = test_client.put(
             f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
-            json=resolution.model_dump(mode="json", by_alias=True),
+            json=attribute.model_dump(mode="json", by_alias=True),
         )
 
         # Assert
@@ -398,24 +397,26 @@ class TestSlideTapProjectRouter:
             assert response.status_code == HTTPStatus.CONFLICT
         else:
             assert response.status_code == HTTPStatus.OK
-            assert MigrationAttributeIssue.model_validate(response.json()) == resolved
+            assert AttributeMigrationIssue.model_validate(response.json()) == resolved
 
+    @pytest.mark.parametrize(
+        "body",
+        [{"content": "null", "headers": {"Content-Type": "application/json"}}, {}],
+    )
     def test_an_attribute_issue_is_left_empty(
         self,
         decoy: Decoy,
         test_client: TestClient,
         migration_service: MigrationService,
         project: Project,
+        body: dict[str, Any],
     ):
+        """With a null body, and with none."""
         # Arrange
         issue_uid = uuid4()
         attribute = StringAttribute(uid=uuid4(), schema_uid=uuid4())
-        decoy.when(
-            migration_service.resolve(
-                project.uid, issue_uid, MigrationResolution(attribute=None)
-            )
-        ).then_return(
-            MigrationAttributeIssue(
+        decoy.when(migration_service.resolve(project.uid, issue_uid, None)).then_return(
+            AttributeMigrationIssue(
                 uid=issue_uid,
                 tag="tag",
                 target_attribute_schema_uid=attribute.schema_uid,
@@ -423,19 +424,19 @@ class TestSlideTapProjectRouter:
                 original=attribute,
                 problem="problem",
                 resolved_at=RESOLVED_AT,
-                left_empty=True,
             )
         )
 
         # Act
         response = test_client.put(
             f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
-            json={"attribute": None},
+            **body,
         )
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert response.json()["leftEmpty"] is True
+        assert response.json()["resolvedAt"] is not None
+        assert response.json()["resolved"] is None
 
     def test_a_dropped_attribute_is_accepted(
         self,
@@ -449,34 +450,29 @@ class TestSlideTapProjectRouter:
         attribute = StringAttribute(
             uid=uuid4(), schema_uid=uuid4(), updated_value="value"
         )
-        accepted = MigrationAttributeIssue(
+        accepted = AttributeMigrationIssue(
             uid=issue_uid,
             tag="tag",
-            source_attribute_schema_uid=attribute.schema_uid,
-            dropped=True,
             display_name="Tag",
             original=attribute,
             problem="'value' of Tag is dropped: it has no place in Target 2.0.0.",
             resolved_at=RESOLVED_AT,
         )
-        decoy.when(
-            migration_service.resolve(
-                project.uid, issue_uid, MigrationResolution(attribute=None)
-            )
-        ).then_return(accepted)
+        decoy.when(migration_service.resolve(project.uid, issue_uid, None)).then_return(
+            accepted
+        )
 
         # Act
         response = test_client.put(
             f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
-            json={"attribute": None},
+            content="null",
+            headers={"Content-Type": "application/json"},
         )
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert MigrationAttributeIssue.model_validate(response.json()) == accepted
-        assert response.json()["dropped"] is True
+        assert AttributeMigrationIssue.model_validate(response.json()) == accepted
         assert response.json()["targetAttributeSchemaUid"] is None
-        assert response.json()["sourceAttributeSchemaUid"] == str(attribute.schema_uid)
 
     @pytest.mark.parametrize("refused", [False, True])
     @pytest.mark.asyncio

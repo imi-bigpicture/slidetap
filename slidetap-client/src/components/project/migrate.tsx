@@ -51,8 +51,8 @@ import {
 import {
   MigrationObjectKind,
   MigrationStatus,
-  type MigrationAttributeIssue,
-  type MigrationObject,
+  type AttributeMigrationIssue,
+  type ObjectMigrationIssues,
   type ProjectMigration,
 } from 'src/models/migration'
 import type { Project } from 'src/models/project'
@@ -216,6 +216,8 @@ function MigrationInProgress({
       queryClient.setQueryData(migrationKey, submitted)
     },
   })
+  const issues = migration.issues.flatMap((object) => object.attributeIssues)
+  const resolvedCount = issues.filter((issue) => issue.resolvedAt !== null).length
   const revertButton = (
     <Button
       color="warning"
@@ -254,12 +256,12 @@ function MigrationInProgress({
         <>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography>
-              {migration.resolved} of {migration.attributeIssues} resolved
+              {resolvedCount} of {issues.length} resolved
             </Typography>
             <Button
               variant="contained"
               disabled={
-                migration.resolved < migration.attributeIssues ||
+                !issues.every((issue) => issue.resolvedAt !== null) ||
                 submitMutation.isPending
               }
               onClick={() => submitMutation.mutate()}
@@ -294,19 +296,19 @@ function CurateMigration({
   migration: ProjectMigration
 }): ReactElement {
   const [selectedUid, setSelectedUid] = React.useState<string | undefined>(
-    migration.objects.find((object) =>
+    migration.issues.find((object) =>
       object.attributeIssues.some((issue) => issue.resolvedAt === null),
-    )?.uid ?? migration.objects[0]?.uid,
+    )?.uid ?? migration.issues[0]?.uid,
   )
-  const selected = migration.objects.find((object) => object.uid === selectedUid)
-  if (migration.objects.length === 0) {
+  const selected = migration.issues.find((object) => object.uid === selectedUid)
+  if (migration.issues.length === 0) {
     return <Typography>Everything is converted: nothing is left to resolve.</Typography>
   }
   return (
     <Grid container spacing={1}>
       <Grid size={{ xs: 3 }}>
         <List dense>
-          {migration.objects.map((object) => {
+          {migration.issues.map((object) => {
             const resolved = object.attributeIssues.filter(
               (issue) => issue.resolvedAt !== null,
             ).length
@@ -337,8 +339,8 @@ function CurateMigration({
 /** The target attribute schema of an attribute issue of an object. */
 function issueSchema(
   rootSchema: RootSchema,
-  object: MigrationObject,
-  issue: MigrationAttributeIssue,
+  object: ObjectMigrationIssues,
+  issue: AttributeMigrationIssue,
 ): AttributeSchema | undefined {
   const schema =
     object.kind === MigrationObjectKind.PROJECT
@@ -359,7 +361,7 @@ function CurateObject({
   object,
 }: {
   project: Project
-  object: MigrationObject
+  object: ObjectMigrationIssues
 }): ReactElement {
   const rootSchema = useSchemaContext()
   return (
@@ -368,7 +370,7 @@ function CurateObject({
         {object.identifier} ({object.targetSchemaDisplayName})
       </Typography>
       {object.attributeIssues.map((issue) => {
-        if (issue.dropped) {
+        if (issue.targetAttributeSchemaUid === null) {
           return <AcceptDropped key={issue.uid} project={project} issue={issue} />
         }
         const schema = issueSchema(rootSchema, object, issue)
@@ -392,9 +394,9 @@ function CurateObject({
 /** Resolving an attribute issue, refreshing the migration when it is. */
 function useResolveIssue(
   project: Project,
-  issue: MigrationAttributeIssue,
+  issue: AttributeMigrationIssue,
 ): UseMutationResult<
-  MigrationAttributeIssue,
+  AttributeMigrationIssue,
   Error,
   Attribute<AttributeValueTypes> | null
 > {
@@ -415,7 +417,7 @@ function IssueHeader({
   issue,
   status,
 }: {
-  issue: MigrationAttributeIssue
+  issue: AttributeMigrationIssue
   status: string
 }): ReactElement {
   return (
@@ -444,7 +446,7 @@ function AcceptDropped({
   issue,
 }: {
   project: Project
-  issue: MigrationAttributeIssue
+  issue: AttributeMigrationIssue
 }): ReactElement {
   const resolveMutation = useResolveIssue(project, issue)
   return (
@@ -481,7 +483,7 @@ function CurateIssue({
   schema,
 }: {
   project: Project
-  issue: MigrationAttributeIssue
+  issue: AttributeMigrationIssue
   schema: AttributeSchema
 }): ReactElement {
   const [draft, setDraft] = React.useState<Attribute<AttributeValueTypes>>(
@@ -499,7 +501,7 @@ function CurateIssue({
             status={
               issue.resolvedAt === null
                 ? 'Unresolved'
-                : issue.leftEmpty
+                : issue.resolved === null
                   ? 'Left empty'
                   : 'Set'
             }

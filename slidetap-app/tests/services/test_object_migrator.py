@@ -45,6 +45,7 @@ from slidetap.model import (
     ListAttributeSchema,
     ObjectAttribute,
     ObjectAttributeSchema,
+    ObjectMigrationResult,
     ProjectSchema,
     RejectedValues,
     RootSchema,
@@ -54,6 +55,7 @@ from slidetap.model import (
     StringAttributeSchema,
     UnionAttribute,
     UnionAttributeSchema,
+    UnresolvedAttribute,
 )
 
 
@@ -303,6 +305,18 @@ def schemas() -> Schemas:
 
 @pytest.mark.unittest
 class TestObjectMigrator:
+    @staticmethod
+    def _unresolved(migrated: ObjectMigrationResult) -> dict[str, UnresolvedAttribute]:
+        """Get the unresolved attributes of a result, public and private, by tag."""
+        return {
+            tag: attribute
+            for tag, attribute in (
+                *migrated.attributes.items(),
+                *migrated.private_attributes.items(),
+            )
+            if isinstance(attribute, UnresolvedAttribute)
+        }
+
     def test_attributes_are_moved_renamed_dropped_and_migrated(self, schemas: Schemas):
         # Arrange
         kept = schemas.string(schemas.kept, "kept")
@@ -321,7 +335,7 @@ class TestObjectMigrator:
 
         # Assert
         assert migrated.schema_uid == schemas.target.uid
-        assert migrated.unresolved == {}
+        assert self._unresolved(migrated) == {}
         attributes = migrated.attributes
         assert attributes.keys() == {"sex", "kept", "details", "colours", "new_name"}
         assert attributes["sex"].schema_uid == schemas.target_sex.uid
@@ -432,19 +446,18 @@ class TestObjectMigrator:
         migrated = schemas.migrator().migrate(being)
 
         # Assert
-        assert "sex" not in migrated.attributes
-        unresolved = migrated.unresolved["sex"]
+        unresolved = self._unresolved(migrated)["sex"]
         assert unresolved.original == sex
         assert unresolved.proposed is not None
         assert unresolved.proposed.uid == sex.uid
         assert unresolved.proposed.schema_uid == schemas.target_sex.uid
         assert unresolved.proposed.value is None
-        assert unresolved.reason == "'Other' is no longer an option of Sex."
+        assert unresolved.problem == "'Other' is no longer an option of Sex."
 
     def test_a_nested_value_with_no_target_leaves_the_top_attribute_unresolved(
         self, schemas: Schemas
     ):
-        """With what could be migrated proposed, and each reason once."""
+        """With what could be migrated proposed, and each problem once."""
         # Arrange
         details = schemas.details_attribute("Green")
         colours = schemas.colours_attribute("Red", "Green", "Green")
@@ -454,21 +467,21 @@ class TestObjectMigrator:
         migrated = schemas.migrator().migrate(being)
 
         # Assert
-        assert migrated.attributes == {}
-        assert migrated.unresolved.keys() == {"details", "colours"}
-        proposed_details = migrated.unresolved["details"].proposed
+        assert migrated.attributes.keys() == {"details", "colours"}
+        assert self._unresolved(migrated).keys() == {"details", "colours"}
+        proposed_details = self._unresolved(migrated)["details"].proposed
         assert proposed_details is not None
         assert proposed_details.schema_uid == schemas.target_details.uid
         assert proposed_details.original_value["colour"].value is None
         assert proposed_details.original_value["note"].value == "a note"
-        proposed_colours = migrated.unresolved["colours"].proposed
+        proposed_colours = self._unresolved(migrated)["colours"].proposed
         assert proposed_colours is not None
         assert [colour.value for colour in proposed_colours.original_value] == [
             "RED",
             None,
             None,
         ]
-        assert migrated.unresolved["colours"].reason == (
+        assert self._unresolved(migrated)["colours"].problem == (
             "'Green' is no longer an option of Colour."
         )
 
@@ -484,7 +497,7 @@ class TestObjectMigrator:
         migrated = schemas.migrator().migrate(being)
 
         # Assert
-        assert migrated.unresolved == {}
+        assert self._unresolved(migrated) == {}
         sex = migrated.attributes["sex"]
         assert (sex.original_value, sex.value) == (None, "Female")
 
@@ -500,7 +513,7 @@ class TestObjectMigrator:
         migrated = schemas.migrator().migrate(schemas.being(details=details))
 
         # Assert
-        assert migrated.unresolved == {}
+        assert self._unresolved(migrated) == {}
         migrated_details = migrated.attributes["details"]
         assert migrated_details.original_value["colour"].value is None
         assert migrated_details.updated_value["colour"].value == "RED"
