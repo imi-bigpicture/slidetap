@@ -215,7 +215,13 @@ class ProjectService:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 raise NotFoundError(f"Project {uid} not found")
-            return self._schema_service.support_of(project, session).actions
+            support = self._schema_service.support_of(project, session)
+            activity = (
+                DatabaseService.batch_activity(session, project)
+                if support.has_migration
+                else None
+            )
+            return support.actions(activity)
 
     def update(self, project: Project) -> Project | None:
         with self._database_service.get_session() as session:

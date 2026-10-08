@@ -125,11 +125,11 @@ class MapperService:
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def set_up_mappers(self) -> None:
-        """Give the stored mappers their family, move the mappers the schema
-        migrations move, and inject the mappers of the plugin, in that order:
-        a mapping sheet of the root migrated to finds the mapper it names moved
-        there already, with its mapping items converted, rather than moving it
-        bare.
+        """Give the stored mappers their family, migrate the mappers whose
+        attributes the schema migrations migrate, and inject the mappers of the
+        plugin, in that order: a mapping sheet of the root migrated to finds the
+        mapper it names migrated there already, with its mapping items
+        migrated.
 
         Run once at startup of the web app, before anything else is done with
         the mappers, and not by the workers.
@@ -143,7 +143,7 @@ class MapperService:
         # family, and a mapper without one is in none.
         self._assign_families()
         if self._schema_service.migrations:
-            self._move_mappers(self._schema_service.migrations)
+            self._migrate_mappers(self._schema_service.migrations)
         if self._mapper_injector is not None:
             self._inject(self._mapper_injector)
 
@@ -178,12 +178,17 @@ class MapperService:
             None,
         )
 
-    def _move_mappers(self, migrations: Mapping[UUID, SchemaMigration]) -> None:
-        """Move the mappers of the attributes a migration, by the uid of the root
-        it is from, gives another schema to that schema.
+    def _migrate_mappers(self, migrations: Mapping[UUID, SchemaMigration]) -> None:
+        """Migrate the mappers of the attributes that a migration, by the uid of
+        the root it is from, gives another schema.
 
-        Migrations are to the root of new projects only, so a mapper is moved
+        Migrations are to the root of new projects only, so a mapper is migrated
         once at most.
+
+        Parameters
+        ----------
+        migrations: Mapping[UUID, SchemaMigration]
+            The migrations, by the uid of the root each is from.
 
         Raises
         ------
@@ -194,36 +199,24 @@ class MapperService:
             for mapper in session.scalars(select(DatabaseMapper)).all():
                 for source_uid, migration in migrations.items():
                     source = self._schema_service.get_root(source_uid)
-                    if source.has_attribute(
-                        mapper.attribute_schema_uid
-                    ) and self._move_mapper_named(
-                        session, source_uid, migration, mapper
-                    ):
+                    if not source.has_attribute(mapper.attribute_schema_uid):
+                        continue
+                    try:
+                        migrated = self._migrate_mapper(session, migration, mapper)
+                    except Exception as exception:
+                        raise ValueError(
+                            f"Mapper '{mapper.name}' could not be migrated from "
+                            f"root schema {source_uid} to "
+                            f"{self._schema_service.default_root.uid}: {exception}"
+                        ) from exception
+                    if migrated:
                         break
 
-    def _move_mapper_named(
-        self,
-        session: Session,
-        source_uid: UUID,
-        migration: SchemaMigration,
-        mapper: DatabaseMapper,
-    ) -> bool:
-        """`_move_mapper`, with the mapper named should the migration fail on
-        it, which the application then does not start for."""
-        try:
-            return self._move_mapper(session, migration, mapper)
-        except Exception as exception:
-            raise ValueError(
-                f"Mapper '{mapper.name}' could not be moved by the migration "
-                f"from root schema {source_uid} to "
-                f"{self._schema_service.default_root.uid}: {exception}"
-            ) from exception
-
-    def _move_mapper(
+    def _migrate_mapper(
         self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
     ) -> bool:
-        """Move a mapper to the schemas a migration gives its attributes, and to
-        the family of the root of new projects.
+        """Migrate a mapper to the schemas a migration gives its attributes, and
+        to the family of the root of new projects.
 
         The schemas are found by migrating an empty attribute of each with
         `SchemaMigration.migrate_attribute`; a mapper whose schemas the
@@ -237,7 +230,7 @@ class MapperService:
         Parameters
         ----------
         session: Session
-            The session to move it in.
+            The session to migrate it in.
         migration: SchemaMigration
             The migration from the root of the mapper.
         mapper: DatabaseMapper
@@ -246,12 +239,12 @@ class MapperService:
         Returns
         -------
         bool
-            Whether the mapper was moved.
+            Whether the mapper was migrated.
 
         Raises
         ------
         ValueError
-            If another mapper of its name is in the family it is moved to.
+            If another mapper of its name is in the family it is migrated to.
         """
         attribute_uid = self._target_schema_uid(migration, mapper.attribute_schema_uid)
         root_uid = (
@@ -271,7 +264,7 @@ class MapperService:
             session, attribute_uid, root_uid
         ):
             self._logger.warning(
-                f"Mapper {mapper.name} is not moved to attribute schema "
+                f"Mapper {mapper.name} is not migrated to attribute schema "
                 f"{attribute_uid}, which another mapper maps."
             )
             return False
@@ -281,7 +274,7 @@ class MapperService:
         )
         if named is not None and named.uid != mapper.uid:
             raise ValueError(
-                f"Mapper '{mapper.name}' cannot be moved to family {family_uid}, "
+                f"Mapper '{mapper.name}' cannot be migrated to family {family_uid}, "
                 f"which has another mapper of that name."
             )
         removed: set[UUID] = set()
@@ -340,8 +333,8 @@ class MapperService:
     def _target_schema_uid(
         self, migration: SchemaMigration, attribute_schema_uid: UUID
     ) -> UUID | None:
-        """The schema a migration moves the attributes of a schema to, found by
-        migrating an empty one."""
+        """Return the schema a migration migrates the attributes of a schema to,
+        found by migrating an empty one."""
         try:
             schema = self._schema_service.get_any_attribute(attribute_schema_uid)
         except ValueError:

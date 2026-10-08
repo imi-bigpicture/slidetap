@@ -14,9 +14,7 @@
 
 """What can be done with one project."""
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from functools import cached_property
+from dataclasses import dataclass
 from typing import ClassVar
 from uuid import UUID
 
@@ -71,12 +69,6 @@ class RootSchemaSupport:
     has_migration: bool = False
     """Whether a schema migration moves the projects on its root."""
 
-    activity: Callable[[], BatchActivity] | None = field(
-        default=None, compare=False, repr=False
-    )
-    """Reads what the batches of the project are doing, which is only read
-    where it is asked for: whether the project can be migrated."""
-
     INACTIVE_STATUSES: ClassVar[dict[ProjectStatus, str]] = {
         ProjectStatus.DELETED: "the project is deleted",
         ProjectStatus.MIGRATING: "the project is being migrated",
@@ -113,11 +105,6 @@ class RootSchemaSupport:
     )
     """Batch statuses where the images are stored, or locked to be: a locked
     batch holds what goes into its bundle, and is reopened to be changed."""
-
-    @cached_property
-    def batch_activity(self) -> BatchActivity:
-        """What the batches of the project are doing."""
-        return self.activity() if self.activity is not None else BatchActivity()
 
     @property
     def was_exported(self) -> bool:
@@ -163,14 +150,18 @@ class RootSchemaSupport:
         if reason is not None:
             raise ProjectNotEditableError(self.root_schema_uid, reason)
 
-    def migrate_refusal(self, started: bool = False) -> str | None:
-        """Why the project cannot be migrated, or None where it can.
+    def migrate_refusal(
+        self, activity: BatchActivity, started: bool = False
+    ) -> str | None:
+        """Tell why the project cannot be migrated, or None where it can.
 
         Only a project that was never exported is: what was exported is out
         there on the schema it was exported with, which the project keeps.
 
         Parameters
         ----------
+        activity: BatchActivity
+            What the batches of the project are doing.
         started: bool = False
             Whether the migration is under way, the project set as migrating
             for it, which is then what it has to be.
@@ -184,7 +175,6 @@ class RootSchemaSupport:
             return self.INACTIVE_STATUSES[self.status]
         if self.was_exported:
             return "it was exported, and keeps the schema it was exported with"
-        activity = self.batch_activity
         if activity.stored:
             return (
                 f"the images of batches {', '.join(activity.stored)} are stored, "
@@ -194,15 +184,24 @@ class RootSchemaSupport:
             return f"batches {', '.join(activity.busy)} are being searched or processed"
         return None
 
-    def assert_can_migrate(self, started: bool = False) -> None:
+    def assert_can_migrate(
+        self, activity: BatchActivity, started: bool = False
+    ) -> None:
         """Refuse migrating a project that cannot be, see `migrate_refusal`.
+
+        Parameters
+        ----------
+        activity: BatchActivity
+            What the batches of the project are doing.
+        started: bool = False
+            Whether the migration is under way.
 
         Raises
         ------
         NotAllowedActionError
             If the project cannot be migrated, with why.
         """
-        reason = self.migrate_refusal(started)
+        reason = self.migrate_refusal(activity, started)
         if reason is not None:
             raise NotAllowedActionError(f"The project cannot be migrated: {reason}.")
 
@@ -221,11 +220,23 @@ class RootSchemaSupport:
                 "The project cannot be deleted: the project is being migrated."
             )
 
-    @property
-    def actions(self) -> ProjectActions:
-        """What the project is offered."""
+    def actions(self, activity: BatchActivity | None) -> ProjectActions:
+        """Tell what the project is offered.
+
+        Parameters
+        ----------
+        activity: BatchActivity | None
+            What the batches of the project are doing, needed only where its
+            root has a migration: whether the project can be migrated is told
+            only where it is given.
+        """
+        migrate_refusal = (
+            self.migrate_refusal(activity)
+            if self.has_migration and activity is not None
+            else None
+        )
         return ProjectActions(
             edit=self.can_change,
             has_migration=self.has_migration,
-            migrate_refusal=self.migrate_refusal() if self.has_migration else None,
+            migrate_refusal=migrate_refusal,
         )

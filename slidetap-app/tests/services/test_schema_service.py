@@ -21,6 +21,7 @@ from slidetap_example import ExampleSchema
 
 from slidetap.external_interfaces import SchemaInterface
 from slidetap.model import (
+    BatchActivity,
     EnumAttributeSchema,
     NotFoundError,
     Project,
@@ -319,6 +320,6 @@ class TestEditableRoots:
         support = schema_service.support_of(project)
 
         # Act & Assert
-        assert not any(support.actions.model_dump().values())
+        assert not any(support.actions(BatchActivity()).model_dump().values())
         with pytest.raises(ProjectNotEditableError, match="deleted"):
             support.assert_can_change()

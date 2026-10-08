@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from collections.abc import Mapping
-from functools import cached_property, partial
+from functools import cached_property
 from itertools import chain
 from uuid import UUID
 
@@ -33,7 +33,6 @@ from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
     AttributeSchema,
-    BatchActivity,
     NotFoundError,
     Project,
     RootSchemaIndex,
@@ -195,31 +194,14 @@ class SchemaService:
         """
         project = self._project_of(subject, session)
         root = self.get_root(project.root_schema_uid)
-        has_migration = project.root_schema_uid in self._migrations
-        # Read only where it is asked for, as it queries the batches.
-        activity = (
-            partial(self._batch_activity, project.uid, session)
-            if has_migration
-            else None
-        )
         return RootSchemaSupport(
             root.uid,
             root.display_name,
             editable=root.is_default,
             status=project.status,
             exported=project.exported is not None,
-            has_migration=has_migration,
-            activity=activity,
+            has_migration=project.root_schema_uid in self._migrations,
         )
-
-    def _batch_activity(
-        self, project_uid: UUID, session: Session | None
-    ) -> BatchActivity:
-        """What the batches of a project are doing, read in the session given."""
-        with self._database_service.get_session(session) as session:
-            return DatabaseService.batch_activity(
-                session, self._database_service.get_project(session, project_uid)
-            )
 
     def support_of_attribute(
         self, attribute: DatabaseAttribute, session: Session | None = None

@@ -44,6 +44,7 @@ from slidetap.model import (
     AnnotationSchema,
     AnyAttribute,
     AttributeSchema,
+    BatchActivity,
     Dataset,
     DatasetSchema,
     ImageSchema,
@@ -187,7 +188,7 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             project = self._lock_project(session, project_uid)
-            self._schema_service.support_of(project, session).assert_can_migrate()
+            self._assert_can_migrate(session, project)
             stale = self._get_optional(session, project.uid)
             if stale is not None:
                 session.delete(stale)
@@ -233,9 +234,7 @@ class MigrationService:
                     f"Project {project.uid} has no migration being planned."
                 )
                 return
-            self._schema_service.support_of(project, session).assert_can_migrate(
-                started=True
-            )
+            self._assert_can_migrate(session, project, started=True)
             objects, _ = self._run(session, project)
             for object_ in objects:
                 migration.attribute_issues.extend(self._attribute_issues(object_))
@@ -427,9 +426,7 @@ class MigrationService:
                     f"Project {project.uid} has no migration being completed."
                 )
                 return
-            self._schema_service.support_of(project, session).assert_can_migrate(
-                started=True
-            )
+            self._assert_can_migrate(session, project, started=True)
             objects, search_items = self._run(session, project)
             target_root = self._schema_service.get_root(
                 migration.target_root_schema_uid
@@ -522,6 +519,34 @@ class MigrationService:
                 MigrationState.COMPLETING,
             ):
                 migration.set_state(MigrationState.FAILED, error)
+
+    def _assert_can_migrate(
+        self, session: Session, project: DatabaseProject, started: bool = False
+    ) -> None:
+        """Refuse migrating a project that cannot be, by its root schema
+        support and what its batches are doing.
+
+        Parameters
+        ----------
+        session: Session
+            The session to read the batches of the project in.
+        project: DatabaseProject
+            The project, locked.
+        started: bool = False
+            Whether the migration is under way.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project cannot be migrated, with why.
+        """
+        support = self._schema_service.support_of(project, session)
+        activity = (
+            DatabaseService.batch_activity(session, project)
+            if support.has_migration
+            else BatchActivity()
+        )
+        support.assert_can_migrate(activity, started)
 
     def _lock_project(self, session: Session, project_uid: UUID) -> DatabaseProject:
         """Get a project, its row locked so that what is checked is what is

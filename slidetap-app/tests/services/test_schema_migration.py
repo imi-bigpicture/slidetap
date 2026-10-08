@@ -428,7 +428,8 @@ class _StoredProject:
         """Whether the project can be migrated now, as its root schema support says."""
         with database_service.get_session() as session:
             project = database_service.get_project(session, self.project.uid)
-            return schema_service.support_of(project).migrate_refusal() is None
+            activity = DatabaseService.batch_activity(session, project)
+            return schema_service.support_of(project).migrate_refusal(activity) is None
 
     def _sample(self, schema_uid: UUID, identifier: str) -> Sample:
         return Sample(
@@ -1454,7 +1455,9 @@ class TestMigratingAProject:
         # Act
         with sqlite_database_service.get_session() as session:
             project = sqlite_database_service.get_project(session, stored.project.uid)
-            reason = schema_service.support_of(project).migrate_refusal()
+            reason = schema_service.support_of(project).migrate_refusal(
+                DatabaseService.batch_activity(session, project)
+            )
 
         # Assert
         if migratable:
@@ -1569,7 +1572,7 @@ class TestMigratingIntoNewRequirements:
 
 
 @pytest.mark.integration
-class TestMovingMappers:
+class TestMigratingMappers:
     @pytest.fixture()
     def original(
         self,
@@ -1620,7 +1623,7 @@ class TestMovingMappers:
         mapper_service.set_up_mappers()
         return mapper_service
 
-    def test_a_mapper_is_not_moved_where_the_service_is_only_created(
+    def test_a_mapper_is_not_migrated_where_the_service_is_only_created(
         self,
         sqlite_database_service: DatabaseService,
         mapper_service: MapperService,
@@ -1635,7 +1638,7 @@ class TestMovingMappers:
             # Assert
             assert mapper.attribute_schema_uid == schema.patient.attributes["sex"].uid
 
-    def test_a_mapper_of_a_changed_attribute_is_moved(
+    def test_a_mapper_of_a_changed_attribute_is_migrated(
         self,
         sqlite_database_service: DatabaseService,
         schema_service: SchemaService,
@@ -1659,7 +1662,7 @@ class TestMovingMappers:
         # Assert
         self.assert_moved(sqlite_database_service, original)
 
-    def test_a_mapper_is_moved_before_the_sheet_of_the_target_is_injected(
+    def test_a_mapper_is_migrated_before_the_sheet_of_the_target_is_injected(
         self,
         sqlite_database_service: DatabaseService,
         schema_service: SchemaService,
@@ -1670,7 +1673,7 @@ class TestMovingMappers:
         original: UUID,
     ):
         """A sheet of the target root names the mapper, which would otherwise
-        be moved to it by its name, without its mapping items converted."""
+        be migrated to it by its name, without its mapping items migrated."""
 
         # Arrange
         class _TargetSheet(MapperInjectorInterface):
@@ -1728,7 +1731,7 @@ class TestMovingMappers:
                 migration,
             )
 
-    def test_a_mapper_moved_to_another_family_is_given_that_family(
+    def test_a_mapper_migrated_to_another_family_is_given_that_family(
         self,
         sqlite_database_service: DatabaseService,
         schema: ExampleSchema,
@@ -1751,7 +1754,7 @@ class TestMovingMappers:
             mapper = sqlite_database_service.get_mapper(session, original)
             assert mapper.family_uid == stranger.family_uid
 
-    def test_a_mapper_moved_onto_a_name_taken_in_the_family_is_named(
+    def test_a_mapper_migrated_onto_a_name_taken_in_the_family_is_named(
         self,
         sqlite_database_service: DatabaseService,
         schema: ExampleSchema,
@@ -1834,7 +1837,7 @@ class TestMovingMappers:
 
 @pytest.mark.unittest
 class TestAttributeMigrator:
-    def test_nested_attributes_are_moved_and_the_mapping_kept(
+    def test_nested_attributes_are_migrated_and_the_mapping_kept(
         self, schema: ExampleSchema
     ):
         # Arrange
