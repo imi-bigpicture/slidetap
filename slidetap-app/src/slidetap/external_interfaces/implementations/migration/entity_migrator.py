@@ -20,6 +20,9 @@ from typing import Generic, TypeVar
 from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
     AttributeMigrator,
     MigratedAttribute,
+)
+from slidetap.external_interfaces.implementations.migration.attribute_migrators import (
+    AttributeMigrators,
     UnchangedAttributeMigrator,
 )
 from slidetap.model import (
@@ -41,13 +44,20 @@ class EntityMigrator(Generic[T]):
     root to its schema in the target root.
 
     By default every attribute is moved as it is to the target attribute of
-    its tag. A migrator of a schema that changed overrides `migrate()` and
-    writes out what becomes of each attribute, with the helpers here: move an
-    attribute as it is, move all but some, and migrate one with an attribute
-    migrator, leaving it unresolved where it lost values.
+    its tag, with what it nests migrated by the attribute migrators the
+    migrator is created with. A migrator of a schema that changed otherwise
+    overrides `migrate()` and writes out what becomes of each attribute, with
+    the helpers here: move an attribute as it is, move all but some, and
+    migrate one with an attribute migrator, leaving it unresolved where it
+    lost values.
     """
 
-    def __init__(self, source: AnyEntitySchema, target: AnyEntitySchema):
+    def __init__(
+        self,
+        source: AnyEntitySchema,
+        target: AnyEntitySchema,
+        attribute_migrators: AttributeMigrators | None = None,
+    ):
         """Create a migrator between two schemas of the same kind.
 
         Parameters
@@ -56,10 +66,13 @@ class EntityMigrator(Generic[T]):
             The project, dataset, or item schema of the source root.
         target: AnyEntitySchema
             The schema of the target root it becomes.
+        attribute_migrators: AttributeMigrators | None = None
+            The migrators of the attributes nested in those moved as they are,
+            or None to move what they nest as it is.
         """
         self._source = source
         self._target = target
-        self._unchanged = UnchangedAttributeMigrator()
+        self._unchanged = UnchangedAttributeMigrator(attribute_migrators)
 
     @property
     def source(self) -> AnyEntitySchema:
@@ -100,9 +113,13 @@ class EntityMigrator(Generic[T]):
             ),
         )
 
-    def _move(self, attribute: AnyAttribute, target: AttributeSchema) -> AnyAttribute:
+    def _move(
+        self, attribute: AnyAttribute, target: AttributeSchema
+    ) -> AnyAttribute | UnresolvedAttributeMigration:
         """Move an attribute as it is to a target attribute schema, with what
-        it holds at any depth.
+        it holds at any depth, a nested attribute of a registered schema
+        migrated by its migrator, unresolved where its value in effect lost
+        values.
 
         Parameters
         ----------
@@ -113,10 +130,10 @@ class EntityMigrator(Generic[T]):
 
         Returns
         -------
-        AnyAttribute
-            The attribute on the target attribute schema.
+        AnyAttribute | UnresolvedAttributeMigration
+            The attribute on the target attribute schema, or it unresolved.
         """
-        return self._unchanged.migrate(attribute, target).attribute
+        return self._migrate(attribute, self._unchanged, target)
 
     def _move_all_except(
         self,
@@ -125,7 +142,8 @@ class EntityMigrator(Generic[T]):
         private: bool = False,
     ) -> dict[str, AnyAttribute | UnresolvedAttributeMigration]:
         """Move attributes as they are to the target attributes of their tags,
-        leaving out some.
+        leaving out some, each unresolved where its value in effect lost
+        values.
 
         Parameters
         ----------

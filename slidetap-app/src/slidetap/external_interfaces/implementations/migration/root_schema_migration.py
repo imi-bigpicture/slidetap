@@ -20,10 +20,10 @@ from uuid import UUID
 
 from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
     AttributeMigrator,
-    UnchangedAttributeMigrator,
 )
 from slidetap.external_interfaces.implementations.migration.attribute_migrators import (
     AttributeMigrators,
+    UnchangedAttributeMigrator,
 )
 from slidetap.external_interfaces.implementations.migration.entity_migrator import (
     EntityMigrator,
@@ -103,7 +103,7 @@ class RootSchemaMigration(SchemaMigration):
                     f"{migrator.source.name} ({migrator.source.uid})."
                 )
             self._item_migrators[migrator.source.uid] = migrator
-        self._unchanged = UnchangedAttributeMigrator()
+        self._unchanged = UnchangedAttributeMigrator(attribute_migrators)
 
     @property
     def attribute_migrators(self) -> AttributeMigrators:

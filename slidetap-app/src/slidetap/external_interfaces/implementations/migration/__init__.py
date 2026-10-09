@@ -19,10 +19,10 @@ from slidetap.external_interfaces.implementations.migration.attribute_migrator i
     EnumAttributeMigrator,
     FixedValueAttributeMigrator,
     MigratedAttribute,
-    UnchangedAttributeMigrator,
 )
 from slidetap.external_interfaces.implementations.migration.attribute_migrators import (
     AttributeMigrators,
+    UnchangedAttributeMigrator,
 )
 from slidetap.external_interfaces.implementations.migration.entity_migrator import (
     EntityMigrator,
