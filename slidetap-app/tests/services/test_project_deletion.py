@@ -30,10 +30,17 @@ from slidetap.database import (
     DatabaseAnnotation,
     DatabaseImage,
     DatabaseItem,
+    DatabaseObservation,
     DatabaseSample,
     DatabaseStringAttribute,
 )
-from slidetap.model import BatchCreate, Dataset, ImageFormat, Project
+from slidetap.model import (
+    BatchCreate,
+    Dataset,
+    ImageFormat,
+    Project,
+    ProjectStatus,
+)
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -84,10 +91,12 @@ def batch_uid(
     dataset: Dataset,
     project: Project,
 ) -> UUID:
-    """A project of one batch, stored, with nothing in the batch yet."""
+    """A project of one batch, marked for deletion, with nothing in the batch
+    yet."""
     with sqlite_database_service.get_session() as session:
         sqlite_database_service.add_dataset(session, dataset)
-        sqlite_database_service.add_project(session, project)
+        stored = sqlite_database_service.add_project(session, project)
+        stored.status = ProjectStatus.DELETING
         batch = sqlite_database_service.add_batch(
             session, BatchCreate(name="batch", project_uid=project.uid)
         )
@@ -192,6 +201,59 @@ class TestProjectDeletion:
         # Assert
         assert deleted
         assert items_left(sqlite_database_service) == 0
+
+    def test_an_observation_in_one_batch_on_a_sample_in_another_goes_too(
+        self,
+        project_service: ProjectService,
+        sqlite_database_service: DatabaseService,
+        schema_service: SchemaService,
+        dataset: Dataset,
+        project: Project,
+        batch_uid: UUID,
+    ):
+        """The batches are cleared together, not one after the other.
+
+        An observation points at the sample it is on with a column of its own.
+        Found by a later batch's search, it sits in that batch while the sample
+        stays in the first. Clearing the first batch on its own would leave the
+        observation pointing at a sample that is gone, which the database
+        refuses.
+        """
+        # Arrange
+        sample_schema_uid = next(iter(schema_service.samples))
+        observation_schema_uid = next(iter(schema_service.observations))
+        with sqlite_database_service.get_session() as session:
+            later = sqlite_database_service.add_batch(
+                session, BatchCreate(name="later", project_uid=project.uid)
+            )
+            session.flush()
+            case = DatabaseSample(dataset.uid, batch_uid, sample_schema_uid, "CASE-1")
+            session.add(case)
+            session.add(
+                DatabaseObservation(
+                    dataset.uid,
+                    later.uid,
+                    observation_schema_uid,
+                    "OBSERVATION-1",
+                    item=case,
+                )
+            )
+            session.commit()
+        assert items_left(sqlite_database_service) == 2
+
+        # Act
+        deleted = project_service.delete(project.uid)
+
+        # Assert
+        assert deleted
+        assert items_left(sqlite_database_service) == 0
+        with sqlite_database_service.get_session() as session:
+            assert (
+                session.scalar(
+                    select(func.count()).select_from(DatabaseObservation.__table__)
+                )
+                == 0
+            )
 
     def test_a_project_carrying_attributes_is_deleted(
         self,

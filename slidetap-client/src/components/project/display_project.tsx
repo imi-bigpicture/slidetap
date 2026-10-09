@@ -254,6 +254,12 @@ export default function DisplayProject({
   const batchesQuery = useQuery({
     queryKey: queryKeys.batch.list(projectUid),
     queryFn: async () => await batchApi.getBatches(projectUid),
+    // A batch being deleted is gone once the task that deletes it commits,
+    // and asking again is what notices, and moves the bar off it.
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((each) => each.status === BatchStatus.DELETING)
+        ? 2000
+        : false,
   })
   const batches = batchesQuery.data
   // The first batch where nothing names one, and where what is named is not
@@ -295,6 +301,7 @@ export default function DisplayProject({
         BatchStatus.IMAGE_PRE_PROCESSING,
         BatchStatus.IMAGE_POST_PROCESSING,
         BatchStatus.IMAGE_STORING,
+        BatchStatus.DELETING,
       ]
       return status !== undefined && activeStatuses.includes(status) ? 2000 : false
     },

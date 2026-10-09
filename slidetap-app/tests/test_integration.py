@@ -639,3 +639,75 @@ class TestChangingAProjectsPseudonyms:
         # Assert
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert "completed" in response.json()["detail"]
+
+
+@pytest.mark.integration
+class TestDeletingABatch:
+    """The delete route marks the batch and a worker removes it.
+
+    Against the application as it is assembled, with the worker run against
+    the same in-memory queue the route defers to: what is being pinned is that
+    the route answers at once, that the batch is listed as deleting until the
+    task has run, and that it is gone afterwards.
+    """
+
+    @staticmethod
+    def _create_project_with_batch(test_client: TestClient) -> tuple[str, str]:
+        TestChangingAProjectsPseudonyms._login(test_client)
+        response = test_client.post(
+            "/api/projects/create", json={"name": "deletion project"}
+        )
+        assert response.status_code == HTTPStatus.OK
+        project_uid = response.json()["uid"]
+        response = test_client.post(
+            "/api/batches/create",
+            json={"name": "doomed", "projectUid": project_uid},
+        )
+        assert response.status_code == HTTPStatus.OK
+        return project_uid, response.json()["uid"]
+
+    @staticmethod
+    def _batch_uids(test_client: TestClient, project_uid: str) -> set[str]:
+        response = test_client.get("/api/batches", params={"project_uid": project_uid})
+        assert response.status_code == HTTPStatus.OK
+        return {batch["uid"] for batch in response.json()}
+
+    def test_the_batch_is_deleting_until_the_worker_has_run(
+        self, test_client: TestClient, task_app: tuple[TaskApp, Container]
+    ):
+        # Arrange
+        proc_app, _ = task_app
+        project_uid, batch_uid = self._create_project_with_batch(test_client)
+
+        # Act
+        response = test_client.delete(f"/api/batches/batch/{batch_uid}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {"status": "scheduled"}
+        assert (
+            TestIntegration.get_batch_status(test_client, batch_uid)
+            == BatchStatus.DELETING
+        )
+        TestIntegration._run_worker_until_idle(proc_app)
+        assert batch_uid not in self._batch_uids(test_client, project_uid)
+        assert (
+            TestIntegration.get_project_status(test_client, project_uid)
+            == ProjectStatus.IN_PROGRESS
+        )
+
+    def test_the_default_batch_is_refused(self, test_client: TestClient):
+        # Arrange
+        project_uid, batch_uid = self._create_project_with_batch(test_client)
+        default_uid = next(
+            uid
+            for uid in self._batch_uids(test_client, project_uid)
+            if uid != batch_uid
+        )
+
+        # Act
+        response = test_client.delete(f"/api/batches/batch/{default_uid}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "default" in response.json()["detail"]

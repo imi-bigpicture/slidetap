@@ -636,6 +636,101 @@ def remap_dataset_attributes(
 
 @dishka_task(
     slidetap_tasks,
+    name="delete_batch",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.NORMAL,
+    retry=_TRANSIENT_RETRY,
+)
+def delete_batch(
+    batch_uid: UUID | str,
+    batch_service: FromDishka[BatchService],
+    database_service: FromDishka[DatabaseService],
+    storage_service: FromDishka[StorageService],
+) -> None:
+    """Delete a batch marked as deleting, rows first and then files.
+
+    Idempotent under redelivery: the rows go in one transaction, so a run
+    that was cut short left the batch as it was, still marked, and a run
+    after one that finished finds no batch to delete. A delete that fails
+    marks the batch as failed with the reason, and marking it as deleting
+    again reruns it.
+
+    The files go after the commit, so that a worker dying part-way leaves
+    files without rows, which is only disk, rather than rows without files.
+    """
+    if isinstance(batch_uid, str):
+        batch_uid = UUID(batch_uid)
+    with database_service.get_session() as session:
+        database_batch = database_service.get_optional_batch(session, batch_uid)
+        if database_batch is None:
+            logger.info(f"Batch {batch_uid} is already deleted.")
+            return
+        if not database_batch.deleting:
+            logger.info(
+                f"Batch {batch_uid} is {database_batch.status}, not deleting; "
+                "leaving it."
+            )
+            return
+        project = database_batch.project.model
+    logger.info(f"Deleting batch {batch_uid}")
+    try:
+        image_paths = batch_service.delete(batch_uid)
+    except TransientTaskError:
+        raise
+    except Exception as exception:
+        logger.error(f"Failed to delete batch {batch_uid}", exc_info=True)
+        batch_service.set_as_failed(batch_uid, message=f"Delete failed: {exception}")
+        return
+    storage_service.cleanup_image_files(project, image_paths)
+    logger.info(
+        f"Deleted batch {batch_uid} and the files of {len(image_paths)} images."
+    )
+
+
+@dishka_task(
+    slidetap_tasks,
+    name="delete_project",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.NORMAL,
+    retry=_TRANSIENT_RETRY,
+)
+def delete_project(
+    project_uid: UUID | str,
+    project_service: FromDishka[ProjectService],
+    database_service: FromDishka[DatabaseService],
+) -> None:
+    """Delete a project marked as deleting, with everything it holds.
+
+    Idempotent the same way as :func:`delete_batch`. A delete that fails
+    marks the project as failed, and marking it as deleting again reruns it.
+    """
+    if isinstance(project_uid, str):
+        project_uid = UUID(project_uid)
+    with database_service.get_session() as session:
+        database_project = database_service.get_optional_project(session, project_uid)
+        if database_project is None:
+            logger.info(f"Project {project_uid} is already deleted.")
+            return
+        if not database_project.deleting:
+            logger.info(
+                f"Project {project_uid} is {database_project.status}, not "
+                "deleting; leaving it."
+            )
+            return
+    logger.info(f"Deleting project {project_uid}")
+    try:
+        project_service.delete(project_uid)
+    except TransientTaskError:
+        raise
+    except Exception as exception:
+        logger.error(f"Failed to delete project {project_uid}", exc_info=True)
+        project_service.set_as_failed(
+            project_uid, message=f"Delete failed: {exception}"
+        )
+
+
+@dishka_task(
+    slidetap_tasks,
     name="process_metadata_export",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,

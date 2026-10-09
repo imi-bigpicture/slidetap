@@ -21,4 +21,5 @@ class ProjectStatus(IntEnum):
     EXPORTING = 3
     EXPORT_COMPLETE = 4
     FAILED = 10
-    DELETED = 11
+    DELETING = 11
+    DELETED = 12

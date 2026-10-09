@@ -38,8 +38,9 @@ from slidetap.services import (
     ProjectService,
     ValidationService,
 )
+from slidetap.task import Scheduler
 from slidetap.web.routers.dependencies import create_logger_dependency
-from slidetap.web.routers.responses import RepseudonymizeResponse
+from slidetap.web.routers.responses import RepseudonymizeResponse, StatusResponse
 from slidetap.web.services import (
     ImagePipelineService,
     MetadataExportService,
@@ -199,10 +200,15 @@ async def export(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
+    project_service: FromDishka[ProjectService],
     metadata_export_service: FromDishka[MetadataExportService],
     logger: Logger,
 ) -> Project:
     """Submit project specified by id to storage.
+
+    Refused, with the reason, for a project that is not wholly in the outbox:
+    one that is not completed, one with a batch that is not completed or is
+    being deleted, or one with a selected image that was never stored.
 
     Parameters
     ----------
@@ -216,13 +222,13 @@ async def export(
     """
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
-            raise ValueError("Can only export a completed project.")
-        for batch in database_project.batches:
-            if not batch.completed:
-                raise ValueError("Can only export completed batches.")
-        if not database_project.valid:
-            raise ValueError("Can only export a valid project.")
+        try:
+            project_service.assert_can_export(database_project, session)
+        except NotAllowedActionError as exception:
+            logger.info(f"Refused export of project {project_uid}: {exception}")
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT, detail=str(exception)
+            ) from exception
         logger.info("Exporting project to outbox")
         project = database_project.model
     # An item is named in a bundle by its pseudonym and by nothing else, and
@@ -436,24 +442,40 @@ async def get_project(
 async def delete_project(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
-) -> None:
-    """Delete project specified by id.
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
+) -> StatusResponse:
+    """Schedule the deletion of the project specified by id.
+
+    The project is marked as deleting and the work runs in a background
+    task; the response returns immediately. Refused while the project is
+    being exported or a worker holds one of its batches.
 
     Parameters
     ----------
     project_uid: UUID
         Id of project.
 
+    Returns
+    ----------
+    StatusResponse
+        Scheduled status if successful.
     """
-    deleted = project_service.delete(project_uid)
-    if deleted is None:
+    project = project_service.get_optional(project_uid)
+    if project is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
         )
-    if not deleted:
+    try:
+        project = project_service.set_as_deleting(project_uid)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused deletion of project {project_uid}: {exception}.")
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail="Project not deleted"
-        )
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    logger.info(f"Scheduling deletion of project {project_uid}.")
+    await scheduler.delete_project(project)
+    return StatusResponse(status="scheduled")
 
 
 @project_router.get("/project/{project_uid}/validation")

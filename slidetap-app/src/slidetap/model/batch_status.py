@@ -59,5 +59,19 @@ class BatchStatus(IntEnum):
     FAILED = 11
     """Something went wrong that the batch cannot go on from."""
 
-    DELETED = 12
+    DELETING = 12
+    """Being taken out of the project: its items are being removed."""
+
+    DELETED = 13
     """Taken out of the project."""
+
+
+RUNNING_BATCH_STATUSES = frozenset(
+    {
+        BatchStatus.METADATA_SEARCHING,
+        BatchStatus.IMAGE_PRE_PROCESSING,
+        BatchStatus.IMAGE_POST_PROCESSING,
+        BatchStatus.IMAGE_STORING,
+    }
+)
+"""Statuses in which a worker is writing to the batch."""

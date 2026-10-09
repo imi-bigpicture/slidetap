@@ -28,6 +28,7 @@ about the queue.
 | `retry_metadata_search_item` | `MetadataImportInterface` |
 | `process_metadata_export` | `MetadataExportInterface` |
 | `remap_batch_attributes`, `remap_dataset_attributes` | mapper service only |
+| `delete_batch`, `delete_project` | nothing, database and storage only |
 | `retry_stalled_jobs` | nothing, periodic self-healing |
 
 ## Deferring work from the web application
@@ -36,8 +37,8 @@ The web application never enqueues jobs directly. It goes through
 [`Scheduler`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/task/scheduler.py),
 which `WebAppProvider` supplies, with one method per unit of work
 (`pre_process_images`, `post_process_images`, `metadata_batch_import`,
-`metadata_project_export`, `store_images_in_batch`, and the remap and retry
-entry points). `Scheduler` needs the Procrastinate `App`, which is why a web
+`metadata_project_export`, `store_images_in_batch`, `delete_batch`,
+`delete_project`, and the remap and retry entry points). `Scheduler` needs the Procrastinate `App`, which is why a web
 app must also register `ProcrastinateAppProvider`.
 
 ## Queues and priority

@@ -362,8 +362,15 @@ async def remap_batch(
 async def delete_batch(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
 ) -> StatusResponse:
-    """Delete batch specified by id.
+    """Schedule the deletion of the batch specified by id.
+
+    The batch is marked as deleting and the work runs in a background task;
+    the response returns immediately. The batch is listed as deleting until
+    the task has removed it. Refused for the default batch, for a batch a
+    worker holds, and for a curated batch.
 
     Parameters
     ----------
@@ -372,17 +379,22 @@ async def delete_batch(
 
     Returns
     ----------
-    dict
-        Ok status if successful.
+    StatusResponse
+        Scheduled status if successful.
     """
-    batch = batch_service.delete(batch_uid)
+    batch = batch_service.get_optional(batch_uid)
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
-    if batch.status != BatchStatus.DELETED:
+    try:
+        batch = batch_service.set_as_deleting(batch_uid)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused deletion of batch {batch_uid}: {exception}.")
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail="Batch could not be deleted"
-        )
-    return StatusResponse()
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    logger.info(f"Scheduling deletion of batch {batch_uid}.")
+    await scheduler.delete_batch(batch)
+    return StatusResponse(status="scheduled")
 
 
 @batch_router.get("/batch/{batch_uid}/validation")
