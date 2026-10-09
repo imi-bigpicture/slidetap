@@ -30,10 +30,10 @@ from slidetap.model import (
     BatchCreate,
     BatchStatus,
     ImageStatus,
-    ItemSchema,
     ProjectStatus,
 )
-from slidetap.services.database_service import DatabaseService
+from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
+from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -102,27 +102,78 @@ class BatchService:
             existing_batch.name = batch.name
             return existing_batch.model
 
-    def delete(self, uid: UUID) -> Batch | None:
-        with self._database_service.get_session() as session:
-            batch = self._database_service.get_optional_batch(session, uid)
-            if batch is None:
-                return None
-            batch.status = BatchStatus.DELETED
-            model = batch.model
-            if batch.project.default_batch_uid is None:
+    def delete(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> list[ImagePaths]:
+        """Remove everything the batch holds, and then the batch.
+
+        Only a batch marked as deleting, which is what is set before the task
+        that calls this is deferred. One transaction: a delete that is
+        interrupted leaves the batch as it was, still marked, to be run again.
+
+        An item something in another batch hangs off is not the batch's alone
+        to delete. It is handed to the project's default batch, and validated
+        again once what hung off it from this batch is gone. The rest goes in
+        bulk, dependents first, without the per-item validation a delete would
+        only throw away.
+
+        Returns
+        -------
+        list[ImagePaths]
+            Where the files of the deleted images are, for the caller to remove
+            once the transaction is committed. Rows without files is a state the
+            delete can be run again from; files without rows is not.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if not batch.deleting:
+                raise NotAllowedActionError(
+                    f"Can only delete a {BatchStatus.DELETING.name} batch, "
+                    f"was {batch.status.name}"
+                )
+            batch_uid = batch.uid
+            project_uid = batch.project_uid
+            default_batch_uid = batch.project.default_batch_uid
+            if default_batch_uid is None:
                 raise ValueError("Project does not have a default batch uid.")
-            for schema in self._schema_service.items.values():
-                self._delete_or_change_batch_to_default_for_items(
-                    batch,
-                    schema,
-                    default_batch_uid=batch.project.default_batch_uid,
+            if default_batch_uid == batch_uid:
+                raise NotAllowedActionError("The default batch cannot be deleted.")
+            moved = self._database_service.move_items_held_by_other_batches(
+                session, batch_uid, default_batch_uid
+            )
+            was_valid = {
+                uid: self._validation_service.item_is_valid_for_now(uid, session)
+                for uid in moved
+            }
+            image_paths = self._database_service.image_paths_in_batch(
+                session, batch_uid
+            )
+            deleted = self._database_service.delete_items_of_batches(
+                session, [batch_uid]
+            )
+            self._database_service.delete_batch(session, batch_uid)
+            # What the session holds about the moved items, and about the
+            # project's batches, was read before the rows under them went.
+            session.expunge(batch)
+            session.expire_all()
+            self._validation_service.validate_relations_for(moved, session)
+            for uid in moved:
+                self._review_service.item_validity_changed(
+                    uid,
+                    was_valid[uid],
+                    self._validation_service.item_is_valid_for_now(uid, session),
                     session=session,
                 )
-            project = batch.project
-            session.delete(batch)
+            project = self._database_service.get_project(session, project_uid)
             self._handle_project_status(project)
+            self._logger.info(
+                f"Deleted batch {batch_uid} with {deleted} items, handing "
+                f"{len(moved)} item(s) over to the default batch."
+            )
             session.commit()
-            return model
+            return image_paths
 
     def move_shared_items_to_other_batch(
         self,
@@ -204,42 +255,6 @@ class BatchService:
         if len(batch_uids) == 1:
             return next(iter(batch_uids))
         return self._database_service.get_earliest_batch(session, batch_uids).uid
-
-    def _delete_or_change_batch_to_default_for_items(
-        self,
-        batch: UUID | Batch | DatabaseBatch,
-        schema: ItemSchema,
-        default_batch_uid: UUID,
-        session: Session,
-        only_non_selected=False,
-    ) -> None:
-        batch_uid = self._database_service.get_batch(session, batch).uid
-        items = self._database_service.get_items(
-            batch=batch_uid,
-            schema=schema,
-            selected=False if only_non_selected else None,
-            session=session,
-        )
-        for item in items:
-            if self._held_by_other_batches(item, batch_uid):
-                item.batch_uid = default_batch_uid
-            else:
-                if item.selected:
-                    # If the item is selected and related to items in other batches,
-                    # the relations needs to be re-valuated
-                    was_valid = self._validation_service.item_is_valid_for_now(
-                        item, session
-                    )
-                    item.selected = False
-                    self._validation_service.validate_item_relations(item, session)
-                    self._review_service.item_validity_changed(
-                        item.uid,
-                        was_valid,
-                        self._validation_service.item_is_valid_for_now(item, session),
-                        session=session,
-                    )
-                session.delete(item)
-        session.commit()
 
     @staticmethod
     def assert_can_search(batch: DatabaseBatch) -> None:
@@ -557,6 +572,56 @@ class BatchService:
             for attribute in item.attributes:
                 attribute.locked = locked
 
+    def set_as_deleting(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> Batch:
+        """Mark the batch for deletion, ahead of the task that deletes it.
+
+        Not while a worker holds it: what a search or an image task writes to a
+        batch being deleted is written to nothing. Not once it is curated
+        either. A locked batch is reopened first, so that taking it out of the
+        project is done deliberately, and a batch whose images are in, or on
+        their way to, the outbox is part of what has been handed over.
+
+        Not the default batch, which is where what other batches hang off is
+        handed to, and not a batch of a project that is itself being deleted,
+        which takes the batch with it.
+
+        A batch already marked, or left deleted or failed by a delete that did
+        not finish, can be marked again: that is how such a delete is rerun.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if batch.project.default_batch_uid == batch.uid:
+                raise NotAllowedActionError("The default batch cannot be deleted.")
+            if batch.project.deleting:
+                raise NotAllowedActionError(
+                    f"Cannot delete batch {batch.uid}: its project is being deleted."
+                )
+            status = batch.status.name
+            if batch.status in RUNNING_BATCH_STATUSES:
+                raise NotAllowedActionError(
+                    f"Cannot delete batch {batch.uid} while it is {status}; "
+                    "wait for the current operation to finish."
+                )
+            if batch.status == BatchStatus.LOCKED:
+                raise NotAllowedActionError(
+                    f"Cannot delete batch {batch.uid} while it is {status}; "
+                    "reopen it first."
+                )
+            if batch.status == BatchStatus.COMPLETED:
+                raise NotAllowedActionError(
+                    f"Cannot delete batch {batch.uid} while it is {status}; "
+                    "its images are in the outbox."
+                )
+            batch.status = BatchStatus.DELETING
+            batch.status_message = None
+            self._logger.info(f"Batch {batch.uid} set as deleting.")
+            session.commit()
+            return batch.model
+
     def set_as_failed(
         self,
         batch: UUID | Batch | DatabaseBatch,
@@ -573,6 +638,11 @@ class BatchService:
             return batch.model
 
     def _handle_project_status(self, project: DatabaseProject):
+        # A project on its way out is not brought back by what happens to its
+        # batches: a batch of it deleted first would otherwise leave the rest
+        # curated, and the project completed instead of deleting.
+        if project.deleting:
+            return
         batches = project.batches
         # Curated counts as done for the project: the images are written when
         # the project is completed, so waiting for them here would be waiting

@@ -28,7 +28,9 @@ export enum BatchStatus {
   IMAGE_STORING = 9,
   COMPLETED = 10,
   FAILED = 11,
-  DELETED = 12,
+  /** Being taken out of the project; its items are being removed. */
+  DELETING = 12,
+  DELETED = 13,
 }
 
 export const BatchStatusStrings = {
@@ -43,6 +45,7 @@ export const BatchStatusStrings = {
   [BatchStatus.IMAGE_STORING]: 'Storing Images',
   [BatchStatus.COMPLETED]: 'Completed',
   [BatchStatus.FAILED]: 'Failed',
+  [BatchStatus.DELETING]: 'Deleting',
   [BatchStatus.DELETED]: 'Deleted',
 }
 
@@ -58,5 +61,6 @@ export const BatchStatusList = [
   BatchStatus.IMAGE_STORING,
   BatchStatus.COMPLETED,
   BatchStatus.FAILED,
+  BatchStatus.DELETING,
   BatchStatus.DELETED,
 ]

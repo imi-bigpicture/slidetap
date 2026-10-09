@@ -178,6 +178,10 @@ class DatabaseProject(Base):
         return self.status == ProjectStatus.FAILED
 
     @hybrid_property
+    def deleting(self) -> bool:
+        return self.status == ProjectStatus.DELETING
+
+    @hybrid_property
     def deleted(self) -> bool:
         return self.status == ProjectStatus.DELETED
 
@@ -371,6 +375,10 @@ class DatabaseBatch(Base):
     def failed(self) -> bool:
         """Return True if project have status 'FAILED'."""
         return self.status == BatchStatus.FAILED
+
+    @hybrid_property
+    def deleting(self) -> bool:
+        return self.status == BatchStatus.DELETING
 
     @hybrid_property
     def deleted(self) -> bool:

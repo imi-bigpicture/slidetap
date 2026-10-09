@@ -24,6 +24,8 @@ from procrastinate.exceptions import AlreadyEnqueued
 
 from slidetap.model import Batch, Image, Project
 from slidetap.task.tasks import (
+    delete_batch,
+    delete_project,
     download_and_pre_process_image,
     post_process_image,
     process_metadata_export,
@@ -197,6 +199,49 @@ class Scheduler:
         except Exception:
             self._logger.error(
                 f"Error scheduling remap for batch {batch_uid}", exc_info=True
+            )
+
+    async def delete_batch(self, batch: Batch) -> None:
+        """Defer the deletion of a batch marked as deleting.
+
+        ``lock=f"delete-project-{project_uid}"`` serialises deletes within a
+        project, whether of a batch or of the project itself.
+
+        ``queueing_lock=f"delete-batch-{batch_uid}"`` dedupes: marking the
+        batch again while its delete is queued raises :exc:`AlreadyEnqueued`,
+        which is logged and swallowed, since the delete is on its way either
+        way. Any other deferral failure is raised to the caller: the batch
+        stays marked, and marking it again defers it again.
+        """
+        self._logger.info(f"Deleting batch {batch.uid}")
+        try:
+            await delete_batch.configure(
+                lock=f"delete-project-{batch.project_uid}",
+                queueing_lock=f"delete-batch-{batch.uid}",
+            ).defer_async(batch_uid=str(batch.uid))
+        except AlreadyEnqueued:
+            self._logger.info(
+                f"Deletion of batch {batch.uid} is already queued; ignoring "
+                "duplicate trigger."
+            )
+
+    async def delete_project(self, project: Project) -> None:
+        """Defer the deletion of a project marked as deleting.
+
+        Same lock as :meth:`delete_batch`, and a
+        ``queueing_lock=f"delete-project-{project_uid}"`` that dedupes the
+        same way.
+        """
+        self._logger.info(f"Deleting project {project.uid}")
+        try:
+            await delete_project.configure(
+                lock=f"delete-project-{project.uid}",
+                queueing_lock=f"delete-project-{project.uid}",
+            ).defer_async(project_uid=str(project.uid))
+        except AlreadyEnqueued:
+            self._logger.info(
+                f"Deletion of project {project.uid} is already queued; ignoring "
+                "duplicate trigger."
             )
 
     async def remap_dataset_attributes(self, dataset_uid: UUID):

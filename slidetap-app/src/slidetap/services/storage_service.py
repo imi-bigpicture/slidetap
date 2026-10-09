@@ -18,7 +18,7 @@ import json
 import logging
 import re
 import shutil
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -29,7 +29,7 @@ from slidetap.config import StorageConfig
 from slidetap.database import DatabaseDataset, DatabaseProject
 from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Dataset, Image, Project
-from slidetap.services.database_service import DatabaseService
+from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.file_operations import FileOperations
 
 
@@ -160,6 +160,39 @@ class StorageService:
         """Cleanup image storage path for download."""
         project_folder = self._project_download(project)
         self._remove_path(project_folder.joinpath(image.identifier))
+
+    def cleanup_image_files(
+        self, project: Project, images: Iterable[ImagePaths]
+    ) -> None:
+        """Remove what was downloaded and processed for images that are gone.
+
+        Only under the project's download and processing folders. What is in
+        the outbox has been handed over, and a path recorded on an image that
+        points anywhere else is not SlideTap's to remove.
+
+        Parameters
+        ----------
+        project: Project
+            Project the images belonged to.
+        images: Iterable[ImagePaths]
+            Where each image's files are, as recorded on the image. The
+            identifier names the image's download folder.
+        """
+        download = self._project_download(project)
+        own_folders = (download, self._project_processing(project))
+        for image in images:
+            self._remove_path(download.joinpath(image.identifier))
+            for recorded in (image.folder_path, image.thumbnail_path):
+                if recorded is None:
+                    continue
+                path = Path(recorded)
+                if not any(path.is_relative_to(folder) for folder in own_folders):
+                    self._logger.info(
+                        f"Leaving {path} of image {image.identifier} alone: not "
+                        "under the project's download or processing folder."
+                    )
+                    continue
+                self._remove_path(path)
 
     def store_pseudonyms(self, project: Project, pseudonyms: dict[str, dict[str, Any]]):
         """Store pseudonyms for project."""

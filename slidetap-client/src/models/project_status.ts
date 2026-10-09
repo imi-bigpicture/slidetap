@@ -12,29 +12,34 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+/** Mirrors `slidetap.model.ProjectStatus`, whose values are what the API sends. */
 export enum ProjectStatus {
   IN_PROGRESS = 1,
   COMPLETED = 2,
   EXPORTING = 3,
   EXPORT_COMPLETE = 4,
   FAILED = 10,
-  DELETED = 11
-  }
+  /** Being removed; its batches and items are being deleted. */
+  DELETING = 11,
+  DELETED = 12,
+}
 
-  export const ProjectStatusStrings = {
-    [ProjectStatus.IN_PROGRESS]: "In Progress",
-    [ProjectStatus.COMPLETED]: "Completed",
-    [ProjectStatus.EXPORTING]: "Exporting",
-    [ProjectStatus.EXPORT_COMPLETE]: "Export Complete",
-    [ProjectStatus.FAILED]: "Failed",
-    [ProjectStatus.DELETED]: "Deleted"
-  }
+export const ProjectStatusStrings = {
+  [ProjectStatus.IN_PROGRESS]: 'In Progress',
+  [ProjectStatus.COMPLETED]: 'Completed',
+  [ProjectStatus.EXPORTING]: 'Exporting',
+  [ProjectStatus.EXPORT_COMPLETE]: 'Export Complete',
+  [ProjectStatus.FAILED]: 'Failed',
+  [ProjectStatus.DELETING]: 'Deleting',
+  [ProjectStatus.DELETED]: 'Deleted',
+}
 
 export const ProjectStatusList = [
-    ProjectStatus.IN_PROGRESS,
-    ProjectStatus.COMPLETED,
-    ProjectStatus.EXPORTING,
-    ProjectStatus.EXPORT_COMPLETE,
-    ProjectStatus.FAILED,
-    ProjectStatus.DELETED
+  ProjectStatus.IN_PROGRESS,
+  ProjectStatus.COMPLETED,
+  ProjectStatus.EXPORTING,
+  ProjectStatus.EXPORT_COMPLETE,
+  ProjectStatus.FAILED,
+  ProjectStatus.DELETING,
+  ProjectStatus.DELETED,
 ]

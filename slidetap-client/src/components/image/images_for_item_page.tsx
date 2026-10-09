@@ -237,80 +237,89 @@ export default function ImagesForItem({
               and one outline within another is a border either way. What marks
               a group is its name over its own thumbnails, and a rule between
               it and the next. */}
-          {groups.map((group, index) => (
-            <Box
-              key={group.identifier}
-              sx={{
-                display: 'inline-block',
-                pl: index === 0 ? 0 : 1.5,
-                borderLeft: index === 0 ? 0 : 1,
-                borderColor: 'divider',
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                color="text.secondary"
-                noWrap
-                sx={{ px: 0.5, pb: 0.5 }}
+          {groups.map((group, index) => {
+            const heading =
+              group.label +
+              beside(shownValues(group.attributes, layout?.groupAttributes ?? []))
+            return (
+              <Box
+                key={group.identifier}
+                sx={{
+                  display: 'inline-block',
+                  pl: index === 0 ? 0 : 1.5,
+                  borderLeft: index === 0 ? 0 : 1,
+                  borderColor: 'divider',
+                }}
               >
-                {group.label}
-                {beside(shownValues(group.attributes, layout?.groupAttributes ?? []))}
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5 }}>
-                {group.images
-                  .slice()
-                  .sort((a, b) =>
-                    order(a.image).localeCompare(order(b.image), undefined, {
-                      numeric: true,
-                    }),
-                  )
-                  .map(({ image, attributes }) => {
-                    const values = shownValues(
-                      attributes,
-                      layout?.imageAttributes ?? [],
+                {/* Cut off rather than let through: a value beside the name can
+                    be a line of free text, and a group as wide as that is a
+                    stretch of empty strip beside its thumbnails. The whole of
+                    it is on hover. */}
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  noWrap
+                  title={heading}
+                  sx={{ px: 0.5, pb: 0.5, maxWidth: 320 }}
+                >
+                  {heading}
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5 }}>
+                  {group.images
+                    .slice()
+                    .sort((a, b) =>
+                      order(a.image).localeCompare(order(b.image), undefined, {
+                        numeric: true,
+                      }),
                     )
-                    return (
-                      <Card key={image.uid}>
-                        <CardActionArea
-                          sx={{
-                            width: 150,
-                            cursor: 'pointer',
-                            boxShadow:
-                              selectedImageUid === image.uid
-                                ? '0px 0px 0px 2px #1976d2 inset'
-                                : 'none',
-                            p: 0.5,
-                          }}
-                          onClick={() => setChosenImageUid(image.uid)}
-                        >
-                          <ThumbnailCardMedia
-                            image={image}
-                            size={{ width: 200, height: 200 }}
-                          />
-                          {/* Two lines rather than one: an identifier and a
+                    .map(({ image, attributes }) => {
+                      const values = shownValues(
+                        attributes,
+                        layout?.imageAttributes ?? [],
+                      )
+                      return (
+                        <Card key={image.uid}>
+                          <CardActionArea
+                            sx={{
+                              width: 150,
+                              cursor: 'pointer',
+                              boxShadow:
+                                selectedImageUid === image.uid
+                                  ? '0px 0px 0px 2px #1976d2 inset'
+                                  : 'none',
+                              p: 0.5,
+                            }}
+                            onClick={() => setChosenImageUid(image.uid)}
+                          >
+                            <ThumbnailCardMedia
+                              image={image}
+                              size={{ width: 200, height: 200 }}
+                            />
+                            {/* Two lines rather than one: an identifier and a
                             stain code do not fit across a thumbnail, and
                             neither is worth cutting off. */}
-                          <CardContent sx={{ p: 0.5 }}>
-                            <Typography variant="body2" noWrap>
-                              {getDisplayIdentifier(image, pseudonymMode)}
-                            </Typography>
-                            {values.length > 0 && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                noWrap
-                              >
-                                {values.join(' · ')}
+                            <CardContent sx={{ p: 0.5 }}>
+                              <Typography variant="body2" noWrap>
+                                {getDisplayIdentifier(image, pseudonymMode)}
                               </Typography>
-                            )}
-                          </CardContent>
-                        </CardActionArea>
-                      </Card>
-                    )
-                  })}
+                              {values.length > 0 && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  noWrap
+                                >
+                                  {values.join(' · ')}
+                                </Typography>
+                              )}
+                            </CardContent>
+                          </CardActionArea>
+                        </Card>
+                      )
+                    })}
+                </Box>
               </Box>
-            </Box>
-          ))}
+            )
+          })}
         </Box>
       </Paper>
     </Box>
