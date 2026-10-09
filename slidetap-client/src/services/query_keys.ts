@@ -57,6 +57,8 @@ export const queryKeys = {
       [...queryKeys.project.details(), projectUid] as const,
     validation: (projectUid: string) =>
       [...queryKeys.project.detail(projectUid), 'validation'] as const,
+    privateAttributes: (projectUid: string) =>
+      [...queryKeys.project.detail(projectUid), 'privateAttributes'] as const,
   },
 
   // Batches

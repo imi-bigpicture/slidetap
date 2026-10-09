@@ -22,6 +22,9 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  List,
+  ListItem,
+  ListItemText,
   Stack,
   TextField,
   Tooltip,
@@ -35,6 +38,7 @@ import AttributeDetails from 'src/components/attribute/attribute_details'
 import { useError } from 'src/contexts/error/error_context'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { PrivateAttributeSummary } from 'src/models/private_attribute_summary'
 import type { Project } from 'src/models/project'
 import { ProjectStatus } from 'src/models/project_status'
 import { ApiError } from 'src/services/api/api_methods'
@@ -50,8 +54,31 @@ interface ProjectSettingsProps {
   setProject: (project: Project) => void
 }
 
-/** Which of the four the dialog is asking about, or neither. */
-type PendingPseudonymAction = 'new' | 'clear' | 'identifiers' | 'seed' | null
+/** Which of the five the dialog is asking about, or neither. */
+type PendingPseudonymAction =
+  | 'new'
+  | 'clear'
+  | 'identifiers'
+  | 'seed'
+  | 'privateAttributes'
+  | null
+
+/** The private attributes by owning item schema and attribute name, never their values. */
+function PrivateAttributeList({
+  summary,
+}: {
+  summary: PrivateAttributeSummary
+}): ReactElement {
+  return (
+    <List dense disablePadding>
+      {summary.attributes.map((entry) => (
+        <ListItem key={`${entry.owner}/${entry.attribute}`} disableGutters>
+          <ListItemText primary={`${entry.owner}: ${entry.attribute}`} />
+        </ListItem>
+      ))}
+    </List>
+  )
+}
 
 /** What the server said it would not do, rather than that something failed. */
 function refusal(error: Error | null): string | undefined {
@@ -119,6 +146,26 @@ export default function ProjectSettings({
     },
     onSuccess: invalidateItems,
   })
+  const removePrivateAttributesMutation = useMutation({
+    mutationFn: (projectUid: string) => {
+      return projectApi.removePrivateAttributes(projectUid)
+    },
+    onSuccess: () => {
+      invalidateItems()
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.project.privateAttributes(project.uid),
+      })
+    },
+  })
+  // Read when the dialog asks, so that it lists what is there now.
+  const privateAttributesQuery = useQuery({
+    queryKey: queryKeys.project.privateAttributes(project.uid),
+    queryFn: async () => {
+      return await projectApi.getPrivateAttributes(project.uid)
+    },
+    enabled: pending === 'privateAttributes',
+    staleTime: 0,
+  })
   const clearSeedMutation = useMutation({
     mutationFn: (projectUid: string) => {
       return projectApi.clearSeed(projectUid)
@@ -138,6 +185,8 @@ export default function ProjectSettings({
       pseudonymizeIdentifiersMutation.mutate(project.uid)
     } else if (action === 'seed') {
       clearSeedMutation.mutate(project.uid)
+    } else if (action === 'privateAttributes') {
+      removePrivateAttributesMutation.mutate(project.uid)
     }
   }
   const isCompleted = project.status === ProjectStatus.COMPLETED
@@ -145,6 +194,7 @@ export default function ProjectSettings({
     repseudonymizeMutation.isPending ||
     clearPseudonymsMutation.isPending ||
     pseudonymizeIdentifiersMutation.isPending ||
+    removePrivateAttributesMutation.isPending ||
     clearSeedMutation.isPending
 
   const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -232,9 +282,11 @@ export default function ProjectSettings({
                 them off instead leaves the items standing for nothing that has gone
                 out, and the project cannot be submitted again. Images already written
                 to the outbox carry the pseudonyms they were written with either way.
-                Clearing the importer seed stops any future import into this dataset
-                from deriving item uids the way past ones were, without touching a
-                single existing item.
+                Removing the private attributes deletes what the items were imported
+                with that never goes out, such as reports, from the dataset and its
+                items. Clearing the importer seed stops any future import into this
+                dataset from deriving item uids the way past ones were, without
+                touching a single existing item.
               </Typography>
               <Tooltip
                 title={
@@ -274,6 +326,15 @@ export default function ProjectSettings({
                     color="error"
                     disabled={!isCompleted || pseudonymsBusy}
                     onClick={() => {
+                      setPending('privateAttributes')
+                    }}
+                  >
+                    Remove private attributes
+                  </Button>
+                  <Button
+                    color="error"
+                    disabled={!isCompleted || pseudonymsBusy}
+                    onClick={() => {
                       setPending('seed')
                     }}
                   >
@@ -299,6 +360,12 @@ export default function ProjectSettings({
                   pseudonym as their identifier. What they were called before is gone.
                 </Alert>
               )}
+              {removePrivateAttributesMutation.isSuccess && (
+                <Alert severity="success">
+                  Removed from the dataset:
+                  <PrivateAttributeList summary={removePrivateAttributesMutation.data} />
+                </Alert>
+              )}
               {clearSeedMutation.isSuccess && (
                 <Alert severity="success">
                   The importer seed is cleared. Future imports into this dataset fall
@@ -314,6 +381,11 @@ export default function ProjectSettings({
               {pseudonymizeIdentifiersMutation.isError && (
                 <Alert severity="error">
                   {refusal(pseudonymizeIdentifiersMutation.error)}
+                </Alert>
+              )}
+              {removePrivateAttributesMutation.isError && (
+                <Alert severity="error">
+                  {refusal(removePrivateAttributesMutation.error)}
                 </Alert>
               )}
               {clearSeedMutation.isError && (
@@ -338,7 +410,9 @@ export default function ProjectSettings({
               ? 'Replace identifiers with pseudonyms?'
               : pending === 'seed'
                 ? 'Clear the importer seed?'
-                : 'Give the dataset new pseudonyms?'}
+                : pending === 'privateAttributes'
+                  ? 'Remove the private attributes?'
+                  : 'Give the dataset new pseudonyms?'}
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -364,6 +438,15 @@ export default function ProjectSettings({
                 touched -- only a future import into this dataset falls back to
                 whatever the importer does without a seed.
               </>
+            ) : pending === 'privateAttributes' ? (
+              <>
+                Every private attribute of <strong>{project.name}</strong> and of its
+                items is deleted, and there is no way back. Nothing that goes out is
+                affected, as private attributes are never written into the dataset
+                that is handed over.
+                {privateAttributesQuery.data?.attributes.length === 0 &&
+                  ' This dataset has no private attributes.'}
+              </>
             ) : (
               <>
                 Every item of <strong>{project.name}</strong> is given a pseudonym it
@@ -373,6 +456,17 @@ export default function ProjectSettings({
               </>
             )}
           </DialogContentText>
+          {pending === 'privateAttributes' && (
+            <Spinner loading={privateAttributesQuery.isFetching}>
+              {privateAttributesQuery.isError ? (
+                <Alert severity="error">{refusal(privateAttributesQuery.error)}</Alert>
+              ) : (
+                privateAttributesQuery.data !== undefined && (
+                  <PrivateAttributeList summary={privateAttributesQuery.data} />
+                )
+              )}
+            </Spinner>
+          )}
         </DialogContent>
         <DialogActions>
           <Button
@@ -383,10 +477,11 @@ export default function ProjectSettings({
             Cancel
           </Button>
           <Button
-            color={
-              pending === 'clear' || pending === 'identifiers' || pending === 'seed'
-                ? 'error'
-                : 'primary'
+            color={pending === 'new' ? 'primary' : 'error'}
+            disabled={
+              pending === 'privateAttributes' &&
+              (privateAttributesQuery.isFetching ||
+                (privateAttributesQuery.data?.attributes.length ?? 0) === 0)
             }
             onClick={handleConfirmed}
           >
@@ -396,7 +491,9 @@ export default function ProjectSettings({
                 ? 'Replace identifiers'
                 : pending === 'seed'
                   ? 'Clear seed'
-                  : 'New pseudonyms'}
+                  : pending === 'privateAttributes'
+                    ? 'Remove private attributes'
+                    : 'New pseudonyms'}
           </Button>
         </DialogActions>
       </Dialog>

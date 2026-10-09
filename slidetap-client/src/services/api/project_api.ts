@@ -12,6 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import type { PrivateAttributeSummary } from 'src/models/private_attribute_summary'
 import type { Project } from 'src/models/project'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
@@ -65,6 +66,16 @@ const projectApi = {
       `projects/project/${projectUid}/pseudonymize_identifiers`,
     )
     return await parseJsonResponse<{ changed: number }>(response)
+  },
+  getPrivateAttributes: async (projectUid: string) => {
+    const response = await get(`projects/project/${projectUid}/private_attributes`)
+    return await parseJsonResponse<PrivateAttributeSummary>(response)
+  },
+  removePrivateAttributes: async (projectUid: string) => {
+    const response = await post(
+      `projects/project/${projectUid}/remove_private_attributes`,
+    )
+    return await parseJsonResponse<PrivateAttributeSummary>(response)
   },
   clearSeed: async (projectUid: string) => {
     const response = await post(`projects/project/${projectUid}/clear_seed`)

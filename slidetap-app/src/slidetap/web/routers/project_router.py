@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from slidetap.database import NotAllowedActionError
 from slidetap.model import Project
 from slidetap.model.batch import BatchCreate
+from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
     BatchService,
@@ -370,6 +371,71 @@ async def pseudonymize_identifiers(
         f"with their pseudonym."
     )
     return RepseudonymizeResponse(changed=replaced)
+
+
+@project_router.get("/project/{project_uid}/private_attributes")
+async def get_private_attributes(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+) -> PrivateAttributeSummary:
+    """What private attributes the project's dataset and its items hold.
+
+    Counted by item schema and attribute schema, without any values: what
+    removing them would delete.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    PrivateAttributeSummary
+        The private attributes by owner and attribute schema.
+    """
+    with database_service.get_session() as session:
+        dataset_uid = database_service.get_project(session, project_uid).dataset_uid
+    return item_service.private_attribute_summary(dataset_uid)
+
+
+@project_router.post("/project/{project_uid}/remove_private_attributes")
+async def remove_private_attributes(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> PrivateAttributeSummary:
+    """Delete every private attribute of the project's dataset and its items.
+
+    Only for a completed project, as the pseudonym operations are: what is to
+    go out is settled, and nothing that is still being curated loses what it
+    was imported with.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    PrivateAttributeSummary
+        What was removed, by owner and attribute schema.
+    """
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Can only remove the private attributes of a completed project.",
+            )
+        dataset_uid = database_project.dataset_uid
+    removed = item_service.remove_private_attributes(dataset_uid)
+    logger.info(
+        f"Removed the private attributes of {len(removed.attributes)} schemas from "
+        f"the dataset of project {project_uid}."
+    )
+    return removed
 
 
 @project_router.post("/project/{project_uid}/clear_seed")

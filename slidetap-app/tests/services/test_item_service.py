@@ -26,7 +26,12 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseImage, DatabaseSample, NotAllowedActionError
+from slidetap.database import (
+    DatabaseImage,
+    DatabaseSample,
+    DatabaseStringAttribute,
+    NotAllowedActionError,
+)
 from slidetap.external_interfaces import PseudonymFactoryInterface
 from slidetap.model import (
     Dataset,
@@ -42,6 +47,10 @@ from slidetap.model import (
     Sample,
 )
 from slidetap.model.batch import BatchCreate
+from slidetap.model.private_attribute_summary import (
+    PrivateAttributeKind,
+    PrivateAttributeSummary,
+)
 from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 from slidetap.model.schema.hierarchy_layout import HierarchyLevelLayout
 from slidetap.services import (
@@ -1328,3 +1337,135 @@ class TestGivingADatasetNewPseudonyms:
         with pytest.raises(NotAllowedActionError):
             item_service.pseudonymize_identifiers(dataset.uid)
         assert self._identifiers(sqlite_database_service, uids) == ["SLIDE-0"]
+
+
+class TestRemovingADatasetsPrivateAttributes:
+    """What ``remove_private_attributes`` leaves the dataset holding."""
+
+    @pytest.fixture()
+    def batch_uid(
+        self,
+        sqlite_database_service: DatabaseService,
+        dataset: Dataset,
+        project: Project,
+    ) -> UUID:
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_dataset(session, dataset)
+            sqlite_database_service.add_project(session, project)
+            return sqlite_database_service.add_batch(
+                session, BatchCreate(name="batch", project_uid=project.uid)
+            ).uid
+
+    @staticmethod
+    def _add_slide(
+        sqlite_database_service: DatabaseService,
+        dataset: Dataset,
+        batch_uid: UUID,
+        schema: RootSchema,
+        index: int,
+    ) -> UUID:
+        """A slide with one public attribute and a private report."""
+        slide_schema_uid = next(
+            sample.uid for sample in schema.samples.values() if sample.name == "slide"
+        )
+        report_schema_uid = next(
+            attribute.uid
+            for attribute in SchemaService(schema).private_attributes.values()
+            if attribute.name == "report"
+        )
+        item = Sample(
+            uid=uuid4(),
+            identifier=f"SLIDE-{index}",
+            dataset_uid=dataset.uid,
+            batch_uid=batch_uid,
+            schema_uid=slide_schema_uid,
+        )
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_item(
+                session,
+                item,
+                [DatabaseStringAttribute("public", uuid4(), original_value="kept")],
+                [
+                    DatabaseStringAttribute(
+                        "report", report_schema_uid, original_value="gone"
+                    )
+                ],
+            )
+            session.commit()
+        return item.uid
+
+    def test_every_private_attribute_is_removed_and_the_others_kept(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+    ):
+        # Arrange
+        item_service = TestGivingADatasetNewPseudonyms._item_service(
+            sqlite_database_service, schema, None
+        )
+        uids = [
+            self._add_slide(sqlite_database_service, dataset, batch_uid, schema, index)
+            for index in range(2)
+        ]
+
+        # Act
+        removed = item_service.remove_private_attributes(dataset.uid)
+
+        # Assert
+        assert removed == PrivateAttributeSummary(
+            attributes=[PrivateAttributeKind(owner="Slide", attribute="Report")]
+        )
+        with sqlite_database_service.get_session() as session:
+            for uid in uids:
+                slide = sqlite_database_service.get_item(session, uid)
+                assert slide.private_attributes == set()
+                assert [attribute.tag for attribute in slide.attributes] == ["public"]
+
+    def test_the_summary_lists_without_removing(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+    ):
+        # Arrange
+        item_service = TestGivingADatasetNewPseudonyms._item_service(
+            sqlite_database_service, schema, None
+        )
+        uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
+
+        # Act
+        summary = item_service.private_attribute_summary(dataset.uid)
+
+        # Assert
+        assert summary == PrivateAttributeSummary(
+            attributes=[PrivateAttributeKind(owner="Slide", attribute="Report")]
+        )
+        with sqlite_database_service.get_session() as session:
+            slide = sqlite_database_service.get_item(session, uid)
+            assert len(slide.private_attributes) == 1
+
+    def test_a_dataset_without_private_attributes_removes_nothing(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+    ):
+        # Arrange
+        item_service = TestGivingADatasetNewPseudonyms._item_service(
+            sqlite_database_service, schema, None
+        )
+        uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
+        item_service.remove_private_attributes(dataset.uid)
+
+        # Act
+        removed = item_service.remove_private_attributes(dataset.uid)
+
+        # Assert
+        assert removed == PrivateAttributeSummary()
+        with sqlite_database_service.get_session() as session:
+            slide = sqlite_database_service.get_item(session, uid)
+            assert len(slide.attributes) == 1
