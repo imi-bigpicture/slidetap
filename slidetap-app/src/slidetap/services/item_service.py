@@ -83,6 +83,10 @@ from slidetap.model.item_select import (
     SelectionTree,
     SelectionTreeNode,
 )
+from slidetap.model.private_attribute_summary import (
+    PrivateAttributeKind,
+    PrivateAttributeSummary,
+)
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLayout,
     HierarchyLevelLayout,
@@ -1883,6 +1887,66 @@ class ItemService:
                 item.identifier = pseudonym
                 replaced += 1
             return replaced
+
+    def private_attribute_summary(
+        self, dataset_uid: UUID, session: Session | None = None
+    ) -> PrivateAttributeSummary:
+        """What private attributes the dataset and its items hold, by schema.
+
+        One entry per item schema and attribute schema, named by their display
+        names. No value is read: this is shown to say what removing them would
+        delete without showing what they say.
+        """
+        with self._database_service.get_session(session) as session:
+            rows = self._database_service.get_private_attribute_schemas_in_dataset(
+                session, dataset_uid
+            )
+            kinds = [
+                PrivateAttributeKind(
+                    owner=self._private_attribute_owner_name(item_schema_uid),
+                    attribute=self._private_attribute_name(attribute_schema_uid),
+                )
+                for item_schema_uid, attribute_schema_uid in rows
+            ]
+            kinds.sort(key=lambda kind: (kind.owner, kind.attribute))
+            return PrivateAttributeSummary(attributes=kinds)
+
+    def _private_attribute_owner_name(self, item_schema_uid: UUID | None) -> str:
+        if item_schema_uid is None:
+            return self._schema_service.dataset.display_name
+        item_schema = self._schema_service.items.get(item_schema_uid)
+        return item_schema.display_name if item_schema else str(item_schema_uid)
+
+    def _private_attribute_name(self, attribute_schema_uid: UUID) -> str:
+        attribute_schema = self._schema_service.private_attributes.get(
+            attribute_schema_uid
+        )
+        return (
+            attribute_schema.display_name
+            if attribute_schema
+            else str(attribute_schema_uid)
+        )
+
+    def remove_private_attributes(
+        self, dataset_uid: UUID, session: Session | None = None
+    ) -> PrivateAttributeSummary:
+        """Delete every private attribute of the dataset and of its items.
+
+        Private attributes are what an item was imported with that is never
+        written into a bundle, such as the report a diagnosis was read from.
+        Removing them leaves the dataset holding only what can go out. The
+        project's own private attributes are not touched. There is no way back.
+
+        Returns what was removed, as :py:meth:`private_attribute_summary`
+        counted it.
+        """
+        with self._database_service.get_session(session) as session:
+            removed = self.private_attribute_summary(dataset_uid, session)
+            for attribute in self._database_service.get_private_attributes_in_dataset(
+                session, dataset_uid
+            ).all():
+                session.delete(attribute)
+            return removed
 
     def move_to_parent(
         self,

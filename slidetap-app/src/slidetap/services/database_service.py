@@ -48,7 +48,7 @@ from sqlalchemy import (
     true,
     update,
 )
-from sqlalchemy.engine import CursorResult
+from sqlalchemy.engine import CursorResult, ScalarResult
 from sqlalchemy.orm import (
     InstrumentedAttribute,
     Mapped,
@@ -503,6 +503,56 @@ class DatabaseService:
             )
         )
         return count or 0
+
+    def get_private_attributes_in_dataset(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+    ) -> ScalarResult[DatabaseAttribute]:
+        """Every private attribute of the dataset and of its items."""
+        item_uids = select(DatabaseItem.uid).where(
+            DatabaseItem.dataset_uid == dataset_uid
+        )
+        return session.scalars(
+            select(DatabaseAttribute).where(
+                or_(
+                    DatabaseAttribute.private_attribute_item_uid.in_(item_uids),
+                    DatabaseAttribute.private_attribute_dataset_uid == dataset_uid,
+                )
+            )
+        )
+
+    def get_private_attribute_schemas_in_dataset(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+    ) -> list[tuple[UUID | None, UUID]]:
+        """Which private attribute schemas the dataset and its items hold.
+
+        One row per owner schema and attribute schema: the item schema uid, or
+        None for the dataset's own, and the attribute schema uid.
+        """
+        item_rows = session.execute(
+            select(DatabaseItem.schema_uid, DatabaseAttribute.schema_uid)
+            .distinct()
+            .join(
+                DatabaseItem,
+                DatabaseAttribute.private_attribute_item_uid == DatabaseItem.uid,
+            )
+            .where(DatabaseItem.dataset_uid == dataset_uid)
+        )
+        dataset_rows = session.scalars(
+            select(DatabaseAttribute.schema_uid)
+            .distinct()
+            .where(DatabaseAttribute.private_attribute_dataset_uid == dataset_uid)
+        )
+        return [
+            *(
+                (item_schema_uid, attribute_schema_uid)
+                for item_schema_uid, attribute_schema_uid in item_rows
+            ),
+            *((None, attribute_schema_uid) for attribute_schema_uid in dataset_rows),
+        ]
 
     def walk_item_descendants(
         self,

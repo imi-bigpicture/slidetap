@@ -618,6 +618,7 @@ class TestChangingAProjectsPseudonyms:
             "clear_pseudonyms",
             "pseudonymize_identifiers",
             "clear_seed",
+            "remove_private_attributes",
         ],
     )
     def test_a_project_still_being_curated_is_refused(
