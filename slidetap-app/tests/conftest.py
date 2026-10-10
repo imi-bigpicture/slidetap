@@ -15,6 +15,7 @@
 import datetime
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import TypeVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -28,16 +29,35 @@ from slidetap.external_interfaces import (
     SchemaInterface,
     SchemaMigration,
 )
+from slidetap.external_interfaces.implementations.migration import EntityMigrator
 from slidetap.model import (
     Batch,
     BatchStatus,
     Code,
     CodeAttribute,
     Dataset,
+    EntityMigrationResult,
+    Item,
     Project,
     RootSchema,
 )
 from slidetap.services import DatabaseService, SchemaService
+
+T = TypeVar("T", bound=Project | Dataset | Item)
+
+
+class MovingMigrator(EntityMigrator[T]):
+    """Moves every attribute as it is to the target attribute of its tag."""
+
+    def migrate(self, entity: T) -> EntityMigrationResult:
+        """Move every attribute of an entity to the target schema."""
+        return EntityMigrationResult(
+            schema_uid=self.target.uid,
+            attributes=self._move_all_except(entity.attributes),
+            private_attributes=self._move_all_except(
+                entity.private_attributes, private=True
+            ),
+        )
 
 
 @pytest.fixture

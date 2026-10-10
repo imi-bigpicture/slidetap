@@ -111,7 +111,7 @@ from slidetap.services.migration.project_migration_planner import (
     ProjectMigrationPlanner,
 )
 from slidetap.task.tasks import complete_schema_migration, plan_schema_migration
-from tests.conftest import OTHER_ROOT_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+from tests.conftest import OTHER_ROOT_SCHEMA_UID, OTHER_SEX_SCHEMA_UID, MovingMigrator
 
 _V = TypeVar("_V")
 
@@ -179,11 +179,14 @@ class _SexMigration(RootSchemaMigration):
     ):
         sex = schema.patient.attributes["sex"]
         sex_migrator = EnumAttributeMigrator(_ExampleSex, _OtherSex)
-        attribute_migrators = AttributeMigrators()
-        attribute_migrators.register(
-            sex,
-            sex_migrator,
-            other_schema.samples[schema.patient_schema_uid].attributes["sex"],
+        attribute_migrators = AttributeMigrators(
+            [
+                (
+                    sex,
+                    sex_migrator,
+                    other_schema.samples[schema.patient_schema_uid].attributes["sex"],
+                )
+            ]
         )
         source_items = {**schema.samples, **schema.images, **schema.observations}
         other_items = {
@@ -195,16 +198,16 @@ class _SexMigration(RootSchemaMigration):
             schema,
             other_schema,
             attribute_migrators,
-            project_migrator=EntityMigrator[Project](
+            project_migrator=MovingMigrator[Project](
                 schema.project, other_schema.project
             ),
-            dataset_migrator=EntityMigrator[Dataset](
+            dataset_migrator=MovingMigrator[Dataset](
                 schema.dataset, other_schema.dataset
             ),
             item_migrators=[
                 _PatientMigrator(schema, other_schema, sex_migrator),
                 *(
-                    EntityMigrator[Item](item, other_items[uid])
+                    MovingMigrator[Item](item, other_items[uid])
                     for uid, item in source_items.items()
                     if uid != schema.patient_schema_uid
                     and (item_schemas is None or uid in item_schemas)

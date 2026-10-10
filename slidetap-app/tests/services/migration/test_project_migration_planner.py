@@ -61,7 +61,7 @@ from slidetap.services.migration.project_migration_planner import (
     ProjectMigrationPlan,
     ProjectMigrationPlanner,
 )
-from tests.conftest import OTHER_SEX_SCHEMA_UID
+from tests.conftest import OTHER_SEX_SCHEMA_UID, MovingMigrator
 
 GRADE_SCHEMA_UID = UUID("2b8e4c1d-6f3a-4b5e-9c7d-1a2b3c4d5e6f")
 
@@ -120,11 +120,14 @@ class _SexMigration(RootSchemaMigration):
     def __init__(self, schema: ExampleSchema, other_schema: RootSchema):
         sex = schema.patient.attributes["sex"]
         sex_migrator = EnumAttributeMigrator(_ExampleSex, _OtherSex)
-        attribute_migrators = AttributeMigrators()
-        attribute_migrators.register(
-            sex,
-            sex_migrator,
-            other_schema.samples[schema.patient_schema_uid].attributes["sex"],
+        attribute_migrators = AttributeMigrators(
+            [
+                (
+                    sex,
+                    sex_migrator,
+                    other_schema.samples[schema.patient_schema_uid].attributes["sex"],
+                )
+            ]
         )
         other_items = {
             **other_schema.samples,
@@ -135,16 +138,16 @@ class _SexMigration(RootSchemaMigration):
             schema,
             other_schema,
             attribute_migrators,
-            project_migrator=EntityMigrator[Project](
+            project_migrator=MovingMigrator[Project](
                 schema.project, other_schema.project
             ),
-            dataset_migrator=EntityMigrator[Dataset](
+            dataset_migrator=MovingMigrator[Dataset](
                 schema.dataset, other_schema.dataset
             ),
             item_migrators=[
                 _PatientMigrator(schema, other_schema, sex_migrator),
                 *(
-                    EntityMigrator[Item](item, other_items[uid])
+                    MovingMigrator[Item](item, other_items[uid])
                     for uid, item in {
                         **schema.samples,
                         **schema.images,

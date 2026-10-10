@@ -18,13 +18,18 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from slidetap.model import (
     AnyAttribute,
+    AnyAttributeSchema,
     AttributeSchema,
+    AttributeValueType,
     EnumAttribute,
+    ListAttributeSchema,
+    ObjectAttributeSchema,
     RejectedValues,
+    UnionAttributeSchema,
 )
 
 
@@ -125,6 +130,134 @@ class AttributeMigrator(metaclass=ABCMeta):
         ):
             return "original_value"
         return None
+
+
+class UnchangedAttributeMigrator(AttributeMigrator):
+    """Moves an attribute to a target attribute schema that holds the same
+    values, at any depth.
+
+    What an attribute holds is kept: its three values, what it was left to map,
+    what was refused of it, how it is shown, and its mapping item. What refers
+    to a schema is moved: the schema uid of the attribute, and of every
+    attribute nested in its values. A nested attribute is moved to the
+    attribute of the same tag in an object, to the attribute of a list, and to
+    the member of the same value type in a union.
+    """
+
+    def migrate(
+        self, attribute: AnyAttribute, target: AttributeSchema
+    ) -> MigratedAttribute:
+        """Move an attribute to the target schema.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute to move. Not changed.
+        target: AttributeSchema
+            The attribute schema of the target root to move it to.
+
+        Returns
+        -------
+        MigratedAttribute
+            The attribute on the target schema, with what it nests moved to the
+            nested schemas of the target, and nothing lost.
+
+        Raises
+        ------
+        ValueError
+            If the target, or a schema it nests, is of another value type, as
+            the values of the attribute could not be held by it.
+        """
+        return MigratedAttribute(self._move(attribute, target))
+
+    def _move(self, attribute: AnyAttribute, target: AttributeSchema) -> AnyAttribute:
+        """Move an attribute and what it nests to a target schema.
+
+        Raises
+        ------
+        ValueError
+            If the target is of another value type.
+        """
+        if attribute.attribute_value_type != self._value_type(target):
+            raise ValueError(
+                f"Cannot move attribute {attribute.uid} of value type "
+                f"{attribute.attribute_value_type.name} to schema {target.uid} of "
+                f"value type {self._value_type(target).name}."
+            )
+        update: dict[str, Any] = {
+            "schema_uid": target.uid,
+            "original_value": self._move_value(attribute.original_value, target),
+            "updated_value": self._move_value(attribute.updated_value, target),
+            "mapped_value": self._move_value(attribute.mapped_value, target),
+        }
+        return attribute.model_copy(update=update, deep=True)
+
+    def _move_value(self, value: Any, target: AttributeSchema) -> Any:
+        """Move what a value of an attribute nests to the nested schemas of the
+        target."""
+        if value is None:
+            return None
+        if isinstance(target, ObjectAttributeSchema) and isinstance(value, Mapping):
+            return {
+                tag: self._move(nested, self._nested_of_object(target, tag))
+                for tag, nested in value.items()
+            }
+        if isinstance(target, ListAttributeSchema) and isinstance(value, Sequence):
+            return [self._move(nested, target.attribute) for nested in value]
+        if isinstance(target, UnionAttributeSchema):
+            return self._move(value, self._member_of_union(target, value))
+        return value
+
+    @staticmethod
+    def _nested_of_object(target: ObjectAttributeSchema, tag: str) -> AttributeSchema:
+        """Return the attribute schema of a tag in an object attribute schema.
+
+        Raises
+        ------
+        ValueError
+            If the object attribute schema has no attribute of the tag.
+        """
+        nested = target.attributes.get(tag)
+        if nested is None:
+            raise ValueError(
+                f"Object attribute schema {target.uid} has no attribute {tag!r} to "
+                f"move a nested attribute to."
+            )
+        return nested
+
+    @staticmethod
+    def _member_of_union(
+        target: UnionAttributeSchema, value: AnyAttribute
+    ) -> AttributeSchema:
+        """Return the member a union's value is moved to: the one of its own
+        schema where the target has it, else the first of its value type.
+
+        Raises
+        ------
+        ValueError
+            If the union has no member of the value type of the value.
+        """
+        members = [
+            member
+            for member in target.attributes
+            if UnchangedAttributeMigrator._value_type(member)
+            == value.attribute_value_type
+        ]
+        if not members:
+            raise ValueError(
+                f"Union attribute schema {target.uid} has no member of value type "
+                f"{value.attribute_value_type.name}."
+            )
+        for member in members:
+            if member.uid == value.schema_uid:
+                return member
+        return members[0]
+
+    @staticmethod
+    def _value_type(schema: AttributeSchema) -> AttributeValueType:
+        """Return the value type of a schema, which every concrete schema
+        declares."""
+        return cast(AnyAttributeSchema, schema).attribute_value_type
 
 
 class EnumAttributeMigrator(AttributeMigrator):

@@ -21,8 +21,7 @@ sex and a details colour of other values, the renamed string, and one that is
 new.
 """
 
-import re
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -62,6 +61,7 @@ from slidetap.model import (
     UnionAttributeSchema,
     UnresolvedAttributeMigration,
 )
+from tests.conftest import MovingMigrator
 
 
 class Sex(Enum):
@@ -92,9 +92,6 @@ COLOUR_MIGRATOR = EnumAttributeMigrator(
     Colour, TargetColour, {Colour.GREEN: None, Colour.NAVY: TargetColour.BLUE}
 )
 SEX_MIGRATOR = EnumAttributeMigrator(Sex, TargetSex)
-SHADE_MIGRATOR = EnumAttributeMigrator(
-    Colour, TargetColour, {Colour.GREEN: None, Colour.NAVY: None}
-)
 
 
 class Schemas:
@@ -359,17 +356,6 @@ class BeingMigrator(EntityMigrator[Item]):
         )
 
 
-class Registries:
-    @staticmethod
-    def palette(schemas: Schemas) -> AttributeMigrators:
-        """The shade migrated by the shade migrator, and the rest of the
-        palette registered as unchanged."""
-        registry = AttributeMigrators()
-        registry.register(schemas.shade, SHADE_MIGRATOR, schemas.target_shade)
-        registry.register_unchanged(schemas.palette, schemas.target_palette)
-        return registry
-
-
 @pytest.fixture()
 def schemas() -> Schemas:
     return Schemas()
@@ -426,55 +412,6 @@ class TestUnchangedAttributeMigrator:
         # Act & Assert
         with pytest.raises(ValueError, match="value type"):
             UnchangedAttributeMigrator().migrate(kept, schemas.target_sex)
-
-    def test_a_nested_registered_attribute_is_migrated_by_its_migrator(
-        self, schemas: Schemas
-    ):
-        """In every value, with only what the value in effect lost reported."""
-        # Arrange
-        palette = ObjectAttribute(
-            uid=uuid4(),
-            schema_uid=schemas.palette.uid,
-            original_value=schemas.tints_value("original", "Navy"),
-            updated_value=schemas.tints_value("updated", "Green"),
-            mapped_value=schemas.tints_value("mapped", "Red"),
-        )
-        migrator = UnchangedAttributeMigrator(Registries.palette(schemas))
-
-        # Act
-        result = migrator.migrate(palette, schemas.target_palette)
-
-        # Assert
-        moved = result.attribute
-        assert result.lost == ("'Green' is no longer an option of Shade.",)
-        assert moved.schema_uid == schemas.target_palette.uid
-        for layer, label, shade in (
-            ("original_value", "original", None),
-            ("updated_value", "updated", None),
-            ("mapped_value", "mapped", "RED"),
-        ):
-            tints = getattr(moved, layer)["tints"]
-            assert tints.schema_uid == schemas.target_tints.uid
-            label_tint, shade_tint = tints.original_value
-            assert label_tint.schema_uid == schemas.target_tint.uid
-            assert label_tint.original_value.schema_uid == schemas.label.uid
-            assert label_tint.original_value.original_value == label
-            assert shade_tint.schema_uid == schemas.target_tint.uid
-            assert shade_tint.original_value.schema_uid == schemas.target_shade.uid
-            assert shade_tint.original_value.original_value == shade
-
-    def test_the_attribute_itself_is_moved_though_registered(self, schemas: Schemas):
-        # Arrange
-        shade = schemas.enum(schemas.shade, original_value="Green")
-        migrator = UnchangedAttributeMigrator(Registries.palette(schemas))
-
-        # Act
-        result = migrator.migrate(shade, schemas.target_shade)
-
-        # Assert
-        assert result.lost == ()
-        assert result.attribute.schema_uid == schemas.target_shade.uid
-        assert result.attribute.value == "Green"
 
 
 @pytest.mark.unittest
@@ -561,7 +498,12 @@ class TestFixedValueAttributeMigrator:
 
 @pytest.mark.unittest
 class TestEntityMigrator:
-    def test_every_attribute_is_moved_as_it_is_by_default(self, schemas: Schemas):
+    def test_a_migrator_must_write_out_its_migration(self, schemas: Schemas):
+        # Act & Assert
+        with pytest.raises(TypeError, match="abstract"):
+            EntityMigrator[Item](schemas.source, schemas.target)  # type: ignore
+
+    def test_every_attribute_is_moved_as_it_is_to_its_tag(self, schemas: Schemas):
         # Arrange
         source = schemas.source.model_copy(
             update={"attributes": {"kept": schemas.kept, "palette": schemas.palette}}
@@ -581,7 +523,7 @@ class TestEntityMigrator:
         being = schemas.being({"secret": secret}, kept=kept, palette=palette)
 
         # Act
-        migrated = EntityMigrator[Item](source, target).migrate(being)
+        migrated = MovingMigrator[Item](source, target).migrate(being)
 
         # Assert
         assert migrated is not None
@@ -597,7 +539,7 @@ class TestEntityMigrator:
 
         # Act & Assert
         with pytest.raises(ValueError, match="'gone'"):
-            EntityMigrator[Item](schemas.source, schemas.target).migrate(being)
+            MovingMigrator[Item](schemas.source, schemas.target).migrate(being)
 
     def test_attributes_are_moved_renamed_dropped_and_migrated(self, schemas: Schemas):
         # Arrange
@@ -685,42 +627,12 @@ class TestEntityMigrator:
         assert moved.updated_value["colour"].value == "RED"
         assert moved.original_value["colour"].value is None
 
-    def test_a_nested_registered_attribute_is_migrated_when_moved(
-        self, schemas: Schemas
-    ):
-        """And the attribute moved left unresolved where its value lost one."""
-        # Arrange
-        source = schemas.source.model_copy(
-            update={"attributes": {"palette": schemas.palette}}
-        )
-        target = schemas.target.model_copy(
-            update={"attributes": {"palette": schemas.target_palette}}
-        )
-        palette = ObjectAttribute(
-            uid=uuid4(),
-            schema_uid=schemas.palette.uid,
-            original_value=schemas.tints_value("label", "Green"),
-        )
-        migrator = EntityMigrator[Item](source, target, Registries.palette(schemas))
-
-        # Act
-        migrated = migrator.migrate(schemas.being(palette=palette))
-
-        # Assert
-        assert migrated is not None
-        unresolved = migrated.attributes["palette"]
-        assert isinstance(unresolved, UnresolvedAttributeMigration)
-        assert unresolved.problem == "'Green' is no longer an option of Shade."
-        assert unresolved.proposed is not None
-        assert unresolved.proposed.schema_uid == schemas.target_palette.uid
-
 
 @pytest.mark.unittest
 class TestAttributeMigrators:
     def test_a_registered_schema_gives_its_migrator_and_target(self, schemas: Schemas):
         # Arrange
-        registry = AttributeMigrators()
-        registry.register(schemas.sex, SEX_MIGRATOR, schemas.target_sex)
+        registry = AttributeMigrators([(schemas.sex, SEX_MIGRATOR, schemas.target_sex)])
 
         # Act
         found = registry.get(schemas.sex.uid)
@@ -730,88 +642,15 @@ class TestAttributeMigrators:
         assert schemas.sex.uid in registry
         assert registry.get(schemas.kept.uid) is None
 
-    def test_a_schema_registered_twice_is_refused(self, schemas: Schemas):
-        # Arrange
-        registry = AttributeMigrators()
-        registry.register(schemas.sex, SEX_MIGRATOR, schemas.target_sex)
-
+    def test_a_schema_given_twice_is_refused(self, schemas: Schemas):
         # Act & Assert
-        with pytest.raises(ValueError, match="registered already"):
-            registry.register(schemas.sex, SEX_MIGRATOR, schemas.target_sex)
-
-    def test_unchanged_registers_each_schema_of_a_new_uid_with_its_target(
-        self, schemas: Schemas
-    ):
-        """Down the object, the list, and the union, but not the label of the
-        same uid in both."""
-        # Arrange
-        registry = AttributeMigrators()
-
-        # Act
-        registry.register_unchanged(schemas.palette, schemas.target_palette)
-
-        # Assert
-        for source, target in (
-            (schemas.palette, schemas.target_palette),
-            (schemas.tints, schemas.target_tints),
-            (schemas.tint, schemas.target_tint),
-            (schemas.shade, schemas.target_shade),
-        ):
-            found = registry.get(source.uid)
-            assert found is not None
-            migrator, registered_target = found
-            assert isinstance(migrator, UnchangedAttributeMigrator)
-            assert registered_target == target
-        assert schemas.label.uid not in registry
-
-    def test_unchanged_keeps_a_migrator_registered_before(self, schemas: Schemas):
-        # Arrange
-        registry = AttributeMigrators()
-        registry.register(schemas.shade, SHADE_MIGRATOR, schemas.target_shade)
-
-        # Act
-        registry.register_unchanged(schemas.palette, schemas.target_palette)
-
-        # Assert
-        assert registry.get(schemas.shade.uid) == (SHADE_MIGRATOR, schemas.target_shade)
-        assert schemas.tint.uid in registry
-
-    @pytest.mark.parametrize(
-        ("target", "message"),
-        [
-            (
-                lambda schemas: Schemas._object("palette", schemas.label),
-                "palette as unchanged: the target has no attribute 'tints'",
-            ),
-            (
-                lambda schemas: Schemas._object(
-                    "palette", Schemas._list("tints", schemas.label)
-                ),
-                "palette.tints.tint as unchanged: it is a UnionAttributeSchema",
-            ),
-            (
-                lambda schemas: Schemas._object(
-                    "palette",
-                    Schemas._list("tints", Schemas._union("tint", schemas.label)),
-                ),
-                "palette.tints.tint as unchanged: the union has 2 members",
-            ),
-        ],
-    )
-    def test_unchanged_refuses_another_structure_naming_the_path(
-        self,
-        schemas: Schemas,
-        target: Callable[[Schemas], AttributeSchema],
-        message: str,
-    ):
-        """And registers nothing."""
-        # Arrange
-        registry = AttributeMigrators()
-
-        # Act & Assert
-        with pytest.raises(ValueError, match=re.escape(message)):
-            registry.register_unchanged(schemas.palette, target(schemas))
-        assert schemas.palette.uid not in registry
+        with pytest.raises(ValueError, match="given twice"):
+            AttributeMigrators(
+                [
+                    (schemas.sex, SEX_MIGRATOR, schemas.target_sex),
+                    (schemas.sex, SEX_MIGRATOR, schemas.target_sex),
+                ]
+            )
 
 
 class Migrations:
@@ -821,15 +660,18 @@ class Migrations:
     def create(
         schemas: Schemas, item_migrators: Sequence[EntityMigrator[Item]] | None = None
     ) -> RootSchemaMigration:
-        registry = AttributeMigrators()
         being_migrator = BeingMigrator(schemas)
-        registry.register(schemas.sex, SEX_MIGRATOR, schemas.target_sex)
-        registry.register(
-            schemas.details, being_migrator.details_migrator, schemas.target_details
-        )
-        registry.register(schemas.colour, COLOUR_MIGRATOR, schemas.target_colour)
-        registry.register(
-            schemas.old_name, UnchangedAttributeMigrator(), schemas.new_name
+        registry = AttributeMigrators(
+            [
+                (schemas.sex, SEX_MIGRATOR, schemas.target_sex),
+                (
+                    schemas.details,
+                    being_migrator.details_migrator,
+                    schemas.target_details,
+                ),
+                (schemas.colour, COLOUR_MIGRATOR, schemas.target_colour),
+                (schemas.old_name, UnchangedAttributeMigrator(), schemas.new_name),
+            ]
         )
         return RootSchemaMigration(
             schemas.root(schemas.source),
@@ -963,27 +805,3 @@ class TestRootSchemaMigration:
 
         # Assert
         assert found == (None if target is None else getattr(schemas, target))
-
-    def test_an_attribute_nested_in_a_registered_container_is_migrated(
-        self, schemas: Schemas
-    ):
-        """As is its schema, both of a schema registered as unchanged."""
-        # Arrange
-        migration = RootSchemaMigration(
-            schemas.root(schemas.source),
-            schemas.root(schemas.target),
-            Registries.palette(schemas),
-        )
-        tints = schemas.tints_value("label", "Red")["tints"]
-
-        # Act
-        migrated = migration.migrate_attribute(tints)
-        migrated_schema = migration.migrate_attribute_schema(schemas.tint)
-
-        # Assert
-        assert migrated is not None
-        assert migrated.schema_uid == schemas.target_tints.uid
-        _, shade_tint = migrated.original_value
-        assert shade_tint.schema_uid == schemas.target_tint.uid
-        assert shade_tint.original_value.value == "RED"
-        assert migrated_schema == schemas.target_tint
