@@ -47,9 +47,6 @@ from slidetap.database import (
     DatabaseUnmappedValue,
 )
 from slidetap.external_interfaces import MapperInjectorInterface, SchemaInterface
-from slidetap.external_interfaces.implementations.migration import (
-    UnchangedAttributeMigrator,
-)
 from slidetap.model import (
     AnyAttribute,
     AttributeMigrationIssue,
@@ -1998,53 +1995,7 @@ class TestMigratingMappers:
 
 
 @pytest.mark.unittest
-class TestAttributeMigrator:
-    def test_nested_attributes_are_migrated_and_the_mapping_kept(
-        self, schema: ExampleSchema
-    ):
-        # Arrange
-        staining = schema.slide.attributes["staining"]
-        moved_to = staining.model_copy(
-            update={
-                "uid": uuid4(),
-                "attribute": staining.attribute.model_copy(  # type: ignore
-                    update={"uid": uuid4()}
-                ),
-            }
-        )
-        attribute = ListAttribute(
-            uid=uuid4(),
-            schema_uid=staining.uid,
-            mapping_item_uid=uuid4(),
-            original_value=[
-                CodeAttribute(
-                    uid=uuid4(),
-                    schema_uid=staining.attribute.uid,  # type: ignore
-                    original_value=Code(code="HE", scheme="scheme", meaning="HE"),
-                )
-            ],
-        )
-
-        # Act
-        migrated = UnchangedAttributeMigrator().migrate(attribute, moved_to).attribute
-
-        # Assert
-        assert migrated.uid == attribute.uid
-        assert migrated.schema_uid == moved_to.uid
-        assert migrated.mapping_item_uid == attribute.mapping_item_uid
-        assert migrated.original_value is not None
-        assert migrated.original_value[0].schema_uid == moved_to.attribute.uid
-        assert attribute.original_value is not None
-        assert attribute.original_value[0].schema_uid == staining.attribute.uid  # type: ignore
-
-    def test_another_value_type_is_refused(self, schema: ExampleSchema):
-        attribute = StringAttribute(uid=uuid4(), schema_uid=uuid4())
-
-        with pytest.raises(ValueError):
-            UnchangedAttributeMigrator().migrate(
-                attribute, schema.patient.attributes["sex"]
-            )
-
+class TestAttributeWithoutMappingItems:
     def test_removed_mapping_items_are_referred_to_by_nothing(self):
         """Nested in a value as well as at the top."""
         # Arrange

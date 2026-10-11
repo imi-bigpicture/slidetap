@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Implementations of external interfaces, and helpers for implementing them."""
+"""Implementations of external interfaces."""
 
 from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
@@ -21,21 +21,9 @@ from slidetap.external_interfaces.implementations.json_file_auth import (
 from slidetap.external_interfaces.implementations.json_mapper_injector import (
     JsonMapperInjector,
 )
-from slidetap.external_interfaces.implementations.migration import (
-    AttributeMigrator,
-    EnumAttributeMigrator,
-    FixedValueAttributeMigrator,
-    MigratedAttribute,
-    UnchangedAttributeMigrator,
-)
 
 __all__ = [
-    "AttributeMigrator",
-    "EnumAttributeMigrator",
-    "FixedValueAttributeMigrator",
     "JsonFileAuthConfig",
     "JsonFileAuthInterface",
     "JsonMapperInjector",
-    "MigratedAttribute",
-    "UnchangedAttributeMigrator",
 ]

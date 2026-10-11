@@ -29,11 +29,6 @@ from slidetap.external_interfaces import (
     SchemaInterface,
     SchemaMigration,
 )
-from slidetap.external_interfaces.implementations.migration import (
-    AttributeMigrator,
-    EnumAttributeMigrator,
-    UnchangedAttributeMigrator,
-)
 from slidetap.model import (
     AnyAttribute,
     AnyEntitySchema,
@@ -44,6 +39,7 @@ from slidetap.model import (
     CodeAttribute,
     Dataset,
     EntityMigrationResult,
+    EnumAttribute,
     Item,
     ItemSchema,
     Project,
@@ -68,13 +64,20 @@ class OtherSex(Enum):
 
 class SexMigration(SchemaMigration):
     """Moves projects from the example root to a second root of its family, as
-    `other_schema` gives it, migrating the sex of the patient with an enum
-    migrator, which leaves a sex with no counterpart unresolved, and moving
-    every other attribute as it is.
+    `other_schema` gives it, migrating the sex of the patient to the member of
+    the same name, which leaves a sex with no counterpart unresolved, and
+    moving every other attribute as it is.
 
     It migrates the project, the dataset, and the items of every item schema,
     or of the item schemas it is given, with the patient among them.
     """
+
+    _sexes: dict[str | None, str] = {
+        member.value: OtherSex[member.name].value
+        for member in ExampleSex
+        if member.name in OtherSex.__members__
+    }
+    """The sex of the second root of each sex of the example root that has one."""
 
     def __init__(
         self,
@@ -85,8 +88,6 @@ class SexMigration(SchemaMigration):
         patient_uid = schema.patient_schema_uid
         self._sex = schema.patient.attributes["sex"]
         self._other_sex = other_schema.samples[patient_uid].attributes["sex"]
-        self._sex_migrator = EnumAttributeMigrator(ExampleSex, OtherSex)
-        self._unchanged = UnchangedAttributeMigrator()
         self._other_schema = other_schema
         self._other_root = RootSchemaIndex(other_schema, is_default=False)
         other_items = {
@@ -120,7 +121,7 @@ class SexMigration(SchemaMigration):
         target = self._attribute_schema(attribute.schema_uid)
         if target is None:
             return None
-        return self._migrator(attribute).migrate(attribute, target).attribute
+        return self._migrate(attribute, target)[0]
 
     def migrate_attribute_schema(
         self, schema: AttributeSchema
@@ -155,23 +156,47 @@ class SexMigration(SchemaMigration):
                     f"Attribute {attribute.uid} is held as {tag!r}, which the "
                     "target schema does not have."
                 )
-            migrated = self._migrator(attribute).migrate(attribute, target)
+            migrated, problem = self._migrate(attribute, target)
             moved[tag] = (
                 UnresolvedAttributeMigration(
-                    original=attribute,
-                    proposed=migrated.attribute,
-                    problem=" ".join(migrated.lost),
+                    original=attribute, proposed=migrated, problem=problem
                 )
-                if migrated.lost
-                else migrated.attribute
+                if problem is not None
+                else migrated
             )
         return moved
 
-    def _migrator(self, attribute: AnyAttribute) -> AttributeMigrator:
-        """Get the migrator of an attribute: of the sex, or moving it as it is."""
-        if attribute.schema_uid == self._sex.uid:
-            return self._sex_migrator
-        return self._unchanged
+    def _migrate(
+        self, attribute: AnyAttribute, target: AttributeSchema
+    ) -> tuple[AnyAttribute, str | None]:
+        """Migrate an attribute to its target, and say why the sex in effect
+        was lost, if it was.
+
+        Every attribute but the sex keeps its schema, which the second root
+        shares. Each value of the sex becomes the member of the same name, or
+        nothing where there is none; where that clears the sex in effect, the
+        values below it are refused so that none of them takes its place.
+        """
+        if attribute.schema_uid != self._sex.uid:
+            return attribute.model_copy(update={"schema_uid": target.uid}), None
+        assert isinstance(attribute, EnumAttribute)
+        rejected = attribute.rejected
+        problem: str | None = None
+        if attribute.value is not None and self._sexes.get(attribute.value) is None:
+            rejected |= attribute.values_below_effective
+            problem = (
+                f"'{attribute.value}' is no longer an option of {target.display_name}."
+            )
+        migrated = attribute.model_copy(
+            update={
+                "schema_uid": target.uid,
+                "original_value": self._sexes.get(attribute.original_value),
+                "updated_value": self._sexes.get(attribute.updated_value),
+                "mapped_value": self._sexes.get(attribute.mapped_value),
+                "rejected": rejected,
+            }
+        )
+        return migrated, problem
 
     def _item_schema(self, schema_uid: UUID) -> ItemSchema:
         """Get the target of a migrated item schema."""

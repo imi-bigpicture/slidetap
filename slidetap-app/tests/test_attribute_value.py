@@ -23,7 +23,7 @@ from uuid import uuid4
 
 import pytest
 
-from slidetap.model import RejectedValues, StringAttribute
+from slidetap.model import AttributeValueLayer, RejectedValues, StringAttribute
 
 
 @pytest.fixture
@@ -112,3 +112,52 @@ class TestAttributeValue:
         # Assert
         assert refused.mapped_value == "from the mapper"
         assert refused.original_value == "from the report"
+
+
+class TestAttributeEffectiveLayer:
+    @pytest.mark.parametrize(
+        ["update", "expected_layer", "expected_below"],
+        [
+            (
+                {"updated_value": "typed by a curator"},
+                AttributeValueLayer.UPDATED,
+                RejectedValues.MAPPABLE | RejectedValues.ORIGINAL,
+            ),
+            ({}, AttributeValueLayer.MAPPED, RejectedValues.ORIGINAL),
+            (
+                {"rejected": RejectedValues.MAPPABLE},
+                AttributeValueLayer.ORIGINAL,
+                RejectedValues.NONE,
+            ),
+            (
+                {"mapped_value": None},
+                AttributeValueLayer.ORIGINAL,
+                RejectedValues.NONE,
+            ),
+            (
+                {"rejected": RejectedValues.ORIGINAL | RejectedValues.MAPPABLE},
+                None,
+                RejectedValues.NONE,
+            ),
+        ],
+    )
+    def test_the_layer_in_effect_and_the_values_below_it(
+        self,
+        attribute: StringAttribute,
+        update: dict[str, object],
+        expected_layer: AttributeValueLayer | None,
+        expected_below: RejectedValues,
+    ):
+        # Arrange
+        changed = attribute.model_copy(update=update)
+
+        # Act
+        layer = changed.effective_layer
+        below = changed.values_below_effective
+
+        # Assert
+        assert layer == expected_layer
+        assert below == expected_below
+        assert changed.value == (
+            None if layer is None else getattr(changed, layer.value)
+        )

@@ -45,9 +45,6 @@ class SchemaMigration(metaclass=ABCMeta):
     Only the items on `migrated_item_schemas` are given to the migration; every
     other item schema must be the same in the target root, and its items are
     left as they are. The project and the dataset are always given.
-
-    The attribute migrators of `slidetap.external_interfaces.implementations`,
-    such as `EnumAttributeMigrator`, migrate an attribute for an implementation.
     """
 
     @property

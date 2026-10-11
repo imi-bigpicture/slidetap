@@ -41,11 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mappers stored without a family are given it by `slidetap-mappers set-up`, and one whose attribute no provided root has is adopted by name.
 - `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
 - `slidetap-mappers set-up` sets up the stored mappers with the container from `create_container()` in the `container` module of the package named by `SLIDETAP_TASK_APP`.
-- `UnchangedAttributeMigrator`, in `slidetap.external_interfaces.implementations.migration` with the other migration helpers, moves an attribute to the attribute schema of another root.
 - A `SchemaMigration` names the item schemas it migrates, and only their items are read and rewritten; every other item schema must be the same in the target root, checked at startup.
 - A migration returns None for a project, dataset, or item that is the same on the target root, which is left untouched, refused at planning where its schema changed.
-- `EnumAttributeMigrator` and `FixedValueAttributeMigrator` migrate an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.
-- `AttributeMigrator.migrate()` returns a `MigratedAttribute`, the migrated attribute with why its value in effect lost values.
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.
@@ -64,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Convert view in the client, listed only where a root has a migration, that starts a conversion and goes through what it could not convert, item by item.
 - A `NotFoundError` raised by a service is answered with 404 on every endpoint.
 - `ProjectService.get_completed()` and `get_exportable()` give a project where it is completed, or can be exported.
+- `Attribute.effective_layer` says which value of an attribute is in effect, as an `AttributeValueLayer`, and `values_below_effective` which values are below it.
 
 ### Changed
 
