@@ -42,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
 - `slidetap-mappers set-up` sets up the stored mappers with the container from `create_container()` in the `container` module of the package named by `SLIDETAP_TASK_APP`.
 - `UnchangedAttributeMigrator`, in `slidetap.external_interfaces.implementations.migration` with the other migration helpers, moves an attribute to the attribute schema of another root.
-- `RootSchemaMigration` implements a migration from an `EntityMigrator` of the project, the dataset, and each changed item schema, each writing out what becomes of the attributes, and the `AttributeMigrators` built from the migrator of each changed attribute schema.
 - A `SchemaMigration` names the item schemas it migrates, and only their items are read and rewritten; every other item schema must be the same in the target root, checked at startup.
 - A migration returns None for a project, dataset, or item that is the same on the target root, which is left untouched, refused at planning where its schema changed.
 - `EnumAttributeMigrator` and `FixedValueAttributeMigrator` migrate an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.

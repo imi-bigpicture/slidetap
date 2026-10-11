@@ -13,9 +13,9 @@
 #    limitations under the License.
 
 import datetime
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
+from enum import Enum
 from pathlib import Path
-from typing import TypeVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -29,8 +29,15 @@ from slidetap.external_interfaces import (
     SchemaInterface,
     SchemaMigration,
 )
-from slidetap.external_interfaces.implementations.migration import EntityMigrator
+from slidetap.external_interfaces.implementations.migration import (
+    AttributeMigrator,
+    EnumAttributeMigrator,
+    UnchangedAttributeMigrator,
+)
 from slidetap.model import (
+    AnyAttribute,
+    AnyEntitySchema,
+    AttributeSchema,
     Batch,
     BatchStatus,
     Code,
@@ -38,26 +45,149 @@ from slidetap.model import (
     Dataset,
     EntityMigrationResult,
     Item,
+    ItemSchema,
     Project,
     RootSchema,
+    RootSchemaIndex,
+    UnresolvedAttributeMigration,
 )
 from slidetap.services import DatabaseService, SchemaService
 
-T = TypeVar("T", bound=Project | Dataset | Item)
+
+class ExampleSex(Enum):
+    MALE = "M"
+    FEMALE = "F"
+    OTHER = "Other"
+    UNKNOWN = "Unknown"
 
 
-class MovingMigrator(EntityMigrator[T]):
-    """Moves every attribute as it is to the target attribute of its tag."""
+class OtherSex(Enum):
+    MALE = "Male"
+    FEMALE = "Female"
 
-    def migrate(self, entity: T) -> EntityMigrationResult:
-        """Move every attribute of an entity to the target schema."""
+
+class SexMigration(SchemaMigration):
+    """Moves projects from the example root to a second root of its family, as
+    `other_schema` gives it, migrating the sex of the patient with an enum
+    migrator, which leaves a sex with no counterpart unresolved, and moving
+    every other attribute as it is.
+
+    It migrates the project, the dataset, and the items of every item schema,
+    or of the item schemas it is given, with the patient among them.
+    """
+
+    def __init__(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        item_schemas: Collection[UUID] | None = None,
+    ):
+        patient_uid = schema.patient_schema_uid
+        self._sex = schema.patient.attributes["sex"]
+        self._other_sex = other_schema.samples[patient_uid].attributes["sex"]
+        self._sex_migrator = EnumAttributeMigrator(ExampleSex, OtherSex)
+        self._unchanged = UnchangedAttributeMigrator()
+        self._other_schema = other_schema
+        self._other_root = RootSchemaIndex(other_schema, is_default=False)
+        other_items = {
+            **other_schema.samples,
+            **other_schema.images,
+            **other_schema.observations,
+        }
+        self._item_schemas: dict[UUID, ItemSchema] = {
+            uid: other_items[uid]
+            for uid in {**schema.samples, **schema.images, **schema.observations}
+            if uid == patient_uid or item_schemas is None or uid in item_schemas
+        }
+
+    @property
+    def migrated_item_schemas(self) -> Collection[UUID]:
+        return self._item_schemas.keys()
+
+    def migrate_project(self, project: Project) -> EntityMigrationResult | None:
+        return self._move(project, self._other_schema.project)
+
+    def migrate_dataset(self, dataset: Dataset) -> EntityMigrationResult | None:
+        return self._move(dataset, self._other_schema.dataset)
+
+    def migrate_item(self, item: Item) -> EntityMigrationResult | None:
+        return self._move(item, self._item_schema(item.schema_uid))
+
+    def migrate_item_schema(self, schema: ItemSchema) -> ItemSchema:
+        return self._item_schema(schema.uid)
+
+    def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
+        target = self._attribute_schema(attribute.schema_uid)
+        if target is None:
+            return None
+        return self._migrator(attribute).migrate(attribute, target).attribute
+
+    def migrate_attribute_schema(
+        self, schema: AttributeSchema
+    ) -> AttributeSchema | None:
+        return self._attribute_schema(schema.uid)
+
+    def _move(
+        self, entity: Project | Dataset | Item, target: AnyEntitySchema
+    ) -> EntityMigrationResult:
+        """Move the attributes of an entity to the target schema, the sex by
+        its migrator."""
         return EntityMigrationResult(
-            schema_uid=self.target.uid,
-            attributes=self._move_all_except(entity.attributes),
-            private_attributes=self._move_all_except(
-                entity.private_attributes, private=True
+            schema_uid=target.uid,
+            attributes=self._move_attributes(entity.attributes, target.attributes),
+            private_attributes=self._move_attributes(
+                entity.private_attributes, target.private_attributes
             ),
         )
+
+    def _move_attributes(
+        self,
+        attributes: Mapping[str, AnyAttribute],
+        targets: Mapping[str, AttributeSchema],
+    ) -> dict[str, AnyAttribute | UnresolvedAttributeMigration]:
+        """Move attributes to the target attributes of their tags, unresolved
+        where a value in effect is lost."""
+        moved: dict[str, AnyAttribute | UnresolvedAttributeMigration] = {}
+        for tag, attribute in attributes.items():
+            target = targets.get(tag)
+            if target is None:
+                raise ValueError(
+                    f"Attribute {attribute.uid} is held as {tag!r}, which the "
+                    "target schema does not have."
+                )
+            migrated = self._migrator(attribute).migrate(attribute, target)
+            moved[tag] = (
+                UnresolvedAttributeMigration(
+                    original=attribute,
+                    proposed=migrated.attribute,
+                    problem=" ".join(migrated.lost),
+                )
+                if migrated.lost
+                else migrated.attribute
+            )
+        return moved
+
+    def _migrator(self, attribute: AnyAttribute) -> AttributeMigrator:
+        """Get the migrator of an attribute: of the sex, or moving it as it is."""
+        if attribute.schema_uid == self._sex.uid:
+            return self._sex_migrator
+        return self._unchanged
+
+    def _item_schema(self, schema_uid: UUID) -> ItemSchema:
+        """Get the target of a migrated item schema."""
+        target = self._item_schemas.get(schema_uid)
+        if target is None:
+            raise ValueError(f"Item schema {schema_uid} is not migrated.")
+        return target
+
+    def _attribute_schema(self, schema_uid: UUID) -> AttributeSchema | None:
+        """Get the target of an attribute schema: of the sex, or the same
+        schema where the second root has it."""
+        if schema_uid == self._sex.uid:
+            return self._other_sex
+        return self._other_root.attributes.get(
+            schema_uid
+        ) or self._other_root.private_attributes.get(schema_uid)
 
 
 @pytest.fixture

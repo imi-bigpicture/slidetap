@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Helpers for implementing schema migrations."""
+"""Attribute migrators for implementing schema migrations."""
 
 from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
     AttributeMigrator,
@@ -21,23 +21,11 @@ from slidetap.external_interfaces.implementations.migration.attribute_migrator i
     MigratedAttribute,
     UnchangedAttributeMigrator,
 )
-from slidetap.external_interfaces.implementations.migration.attribute_migrators import (
-    AttributeMigrators,
-)
-from slidetap.external_interfaces.implementations.migration.entity_migrator import (
-    EntityMigrator,
-)
-from slidetap.external_interfaces.implementations.migration.root_schema_migration import (  # noqa: E501
-    RootSchemaMigration,
-)
 
 __all__ = [
     "AttributeMigrator",
-    "AttributeMigrators",
-    "EntityMigrator",
     "EnumAttributeMigrator",
     "FixedValueAttributeMigrator",
     "MigratedAttribute",
-    "RootSchemaMigration",
     "UnchangedAttributeMigrator",
 ]

@@ -22,7 +22,6 @@ in `tests.conftest.other_schema`, and with a grade the case requires.
 import dataclasses
 import datetime
 from collections.abc import Callable, Iterable
-from enum import Enum
 from uuid import UUID, uuid4
 
 import pytest
@@ -30,12 +29,6 @@ from decoy import Decoy
 from slidetap_example import ExampleSchema
 
 from slidetap.database import DatabaseMigrationEntity
-from slidetap.external_interfaces.implementations.migration import (
-    AttributeMigrators,
-    EntityMigrator,
-    EnumAttributeMigrator,
-    RootSchemaMigration,
-)
 from slidetap.model import (
     Code,
     CodeAttribute,
@@ -61,55 +54,12 @@ from slidetap.services.migration.project_migration_planner import (
     ProjectMigrationPlan,
     ProjectMigrationPlanner,
 )
-from tests.conftest import OTHER_SEX_SCHEMA_UID, MovingMigrator
+from tests.conftest import OTHER_SEX_SCHEMA_UID, SexMigration
 
 GRADE_SCHEMA_UID = UUID("2b8e4c1d-6f3a-4b5e-9c7d-1a2b3c4d5e6f")
 
 
-class _ExampleSex(Enum):
-    MALE = "M"
-    FEMALE = "F"
-    OTHER = "Other"
-    UNKNOWN = "Unknown"
-
-
-class _OtherSex(Enum):
-    MALE = "Male"
-    FEMALE = "Female"
-
-
-class _PatientMigrator(EntityMigrator[Item]):
-    """Migrates the sex of the patient with its migrator, and moves the rest as
-    it is."""
-
-    def __init__(
-        self,
-        schema: ExampleSchema,
-        target_schema: RootSchema,
-        sex_migrator: EnumAttributeMigrator,
-    ):
-        super().__init__(
-            schema.patient, target_schema.samples[schema.patient_schema_uid]
-        )
-        self._sex_migrator = sex_migrator
-
-    def migrate(self, entity: Item) -> EntityMigrationResult:
-        attributes = self._move_all_except(entity.attributes, "sex")
-        sex = entity.attributes.get("sex")
-        if sex is not None:
-            attributes["sex"] = self._migrate(
-                sex, self._sex_migrator, self.target.attributes["sex"]
-            )
-        return EntityMigrationResult(
-            schema_uid=self.target.uid,
-            attributes=attributes,
-            private_attributes=self._move_all_except(
-                entity.private_attributes, private=True
-            ),
-        )
-
-
-class _SexMigration(RootSchemaMigration):
+class _SexMigration(SexMigration):
     """Migrates the sex of the patient with an enum migrator, which leaves a
     sex with no counterpart unresolved, and moves everything else as it is.
 
@@ -118,45 +68,7 @@ class _SexMigration(RootSchemaMigration):
     """
 
     def __init__(self, schema: ExampleSchema, other_schema: RootSchema):
-        sex = schema.patient.attributes["sex"]
-        sex_migrator = EnumAttributeMigrator(_ExampleSex, _OtherSex)
-        attribute_migrators = AttributeMigrators(
-            [
-                (
-                    sex,
-                    sex_migrator,
-                    other_schema.samples[schema.patient_schema_uid].attributes["sex"],
-                )
-            ]
-        )
-        other_items = {
-            **other_schema.samples,
-            **other_schema.images,
-            **other_schema.observations,
-        }
-        super().__init__(
-            schema,
-            other_schema,
-            attribute_migrators,
-            project_migrator=MovingMigrator[Project](
-                schema.project, other_schema.project
-            ),
-            dataset_migrator=MovingMigrator[Dataset](
-                schema.dataset, other_schema.dataset
-            ),
-            item_migrators=[
-                _PatientMigrator(schema, other_schema, sex_migrator),
-                *(
-                    MovingMigrator[Item](item, other_items[uid])
-                    for uid, item in {
-                        **schema.samples,
-                        **schema.images,
-                        **schema.observations,
-                    }.items()
-                    if uid != schema.patient_schema_uid
-                ),
-            ],
-        )
+        super().__init__(schema, other_schema)
         self._schema = schema
         self.dropped_tags: set[str] = set()
         """Tags left out."""

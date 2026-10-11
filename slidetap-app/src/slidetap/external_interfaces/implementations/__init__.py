@@ -23,25 +23,19 @@ from slidetap.external_interfaces.implementations.json_mapper_injector import (
 )
 from slidetap.external_interfaces.implementations.migration import (
     AttributeMigrator,
-    AttributeMigrators,
-    EntityMigrator,
     EnumAttributeMigrator,
     FixedValueAttributeMigrator,
     MigratedAttribute,
-    RootSchemaMigration,
     UnchangedAttributeMigrator,
 )
 
 __all__ = [
     "AttributeMigrator",
-    "RootSchemaMigration",
     "EnumAttributeMigrator",
     "FixedValueAttributeMigrator",
     "JsonFileAuthConfig",
     "JsonFileAuthInterface",
     "JsonMapperInjector",
     "MigratedAttribute",
-    "AttributeMigrators",
-    "EntityMigrator",
     "UnchangedAttributeMigrator",
 ]
