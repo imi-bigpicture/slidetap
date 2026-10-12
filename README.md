@@ -79,6 +79,10 @@ sudo docker compose build
 sudo docker compose up
 ```
 
+After the migrations, and before the applications start, the stored mappers are
+set up by `slidetap-mappers set-up`, which the compose stack runs in the same
+one-shot service.
+
 ## Acknowledgement
 
 *SlideTap*: Copyright 2024 Sectra AB, licensed under Apache 2.0.
