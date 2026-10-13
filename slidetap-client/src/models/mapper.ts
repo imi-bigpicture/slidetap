@@ -63,3 +63,10 @@ export interface UnmappedValue {
   /** The mapper a key would be added to, or null where none covers it. */
   mapperUid: string | null
 }
+
+/** What remapping the items carrying one unmapped value did. */
+export interface UnmappedValueRemap {
+  remappedItems: number
+  /** Items left alone, as their batch is being processed. */
+  skippedItems: number
+}

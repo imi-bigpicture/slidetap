@@ -15,6 +15,7 @@
 import {
   AccountTree,
   Add,
+  AutoFixHigh,
   Delete,
   Edit,
   FileCopy,
@@ -48,6 +49,8 @@ const actionsIcons = {
   [Action.OPEN_REVIEW]: <RateReview />,
   [Action.HIERARCHY]: <AccountTree />,
   [Action.REOPEN]: <LockOpen />,
+  // The same wand as the curate table's remap of the selected items.
+  [Action.REMAP]: <AutoFixHigh />,
 }
 
 export default actionsIcons

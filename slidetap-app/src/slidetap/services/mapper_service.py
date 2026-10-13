@@ -51,6 +51,7 @@ from slidetap.model import (
     RejectedValues,
     UnionAttribute,
     UnmappedValue,
+    UnmappedValueRemap,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService
@@ -1142,6 +1143,46 @@ class MapperService:
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
 
+    def remap_unmapped_value(
+        self,
+        project_uid: UUID,
+        attribute_schema_uid: UUID,
+        value: str,
+        batch_uid: UUID | None = None,
+        session: Session | None = None,
+    ) -> UnmappedValueRemap:
+        """Re-apply the project's mappers to the attributes carrying one value
+        with no mapping, as a row of `get_unmapped_values` lists it.
+
+        For a key added after the items were imported, without remapping every
+        item for the sake of the ones carrying it. Items in a batch that is
+        being processed are left out, as a remap of their batch would refuse
+        them, and counted as such.
+        """
+        with self._database_service.get_session(session) as session:
+            project = self._database_service.get_project(session, project_uid)
+            project_mappers = self._mappers_in_groups(project.mapper_groups)
+            if not project_mappers:
+                return UnmappedValueRemap(remapped_items=0, skipped_items=0)
+            attributes_by_item: dict[UUID, list[DatabaseAttribute]] = {}
+            for attribute in self._database_service.get_attributes_with_unmapped_value(
+                session, project_uid, attribute_schema_uid, value, batch_uid
+            ):
+                if attribute.attribute_item_uid is not None:
+                    attributes_by_item.setdefault(
+                        attribute.attribute_item_uid, []
+                    ).append(attribute)
+            remapped = skipped = 0
+            for item_uid, attributes in attributes_by_item.items():
+                item = self._database_service.get_item(session, item_uid)
+                if item.batch.status not in self._STABLE_BATCH_STATUSES:
+                    skipped += 1
+                    continue
+                self._remap_item_attributes(session, item, project_mappers, attributes)
+                session.commit()
+                remapped += 1
+            return UnmappedValueRemap(remapped_items=remapped, skipped_items=skipped)
+
     def _require_stable_batch(self, status: BatchStatus, batch_uid: UUID) -> None:
         if status not in self._STABLE_BATCH_STATUSES:
             raise NotAllowedActionError(
@@ -1172,12 +1213,16 @@ class MapperService:
         session: Session,
         item: DatabaseItem,
         project_mappers: Sequence[DatabaseMapper],
+        attributes: Iterable[DatabaseAttribute] | None = None,
     ) -> None:
+        """Remap the item's attributes, or only the given ones of them."""
         # Read before the remap, and once for the item rather than once per
         # attribute: what is worth recording is the item crossing between valid
         # and not, not that it was validated once for every attribute it has.
         was_valid = self._validation_service.item_is_valid_for_now(item, session)
-        for database_attribute in item.attributes:
+        for database_attribute in (
+            attributes if attributes is not None else item.attributes
+        ):
             self._remap_one_attribute(session, database_attribute, project_mappers)
             self._validation_service.validate_item_attributes(item, session=session)
         self._review_service.item_validity_changed(

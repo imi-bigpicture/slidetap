@@ -13,7 +13,7 @@
 //    limitations under the License.
 import { FileDownload } from '@mui/icons-material'
 import { Button, Typography } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import SplitPanel from 'src/components/split_panel'
 import { BasicDataTable } from 'src/components/table/basic_data_table'
@@ -24,6 +24,7 @@ import type { Project } from 'src/models/project'
 import mapperApi from 'src/services/api/mapper_api'
 import { queryKeys } from 'src/services/query_keys'
 import MappingDetails from 'src/components/mapper/mapping_details'
+import { useError } from 'src/contexts/error/error_context'
 
 interface UnmappedProps {
   project: Project
@@ -51,6 +52,8 @@ interface ExportedAttribute {
 export default function Unmapped({ project, batch }: UnmappedProps): ReactElement {
   const [addMappingOpen, setAddMappingOpen] = React.useState(false)
   const [mappingFor, setMappingFor] = React.useState<UnmappedRow>()
+  const queryClient = useQueryClient()
+  const { showError, showSuccess, showWarning } = useError()
 
   const unmappedQuery = useQuery({
     queryKey: queryKeys.mapper.unmapped(project.uid, batch?.uid),
@@ -105,6 +108,40 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
     document.body.removeChild(link)
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
+
+  /** For a key added after the items were imported: the items carrying the
+   * wording are mapped again, rather than every item in the project. */
+  const remapMutation = useMutation({
+    mutationFn: async (row: UnmappedRow) =>
+      await mapperApi.remapUnmappedValue(
+        project.uid,
+        row.attributeSchemaUid,
+        row.value,
+        batch?.uid,
+      ),
+    onSuccess: (result, row) => {
+      const remapped = `Remapped ${result.remappedItems} items with "${row.value}".`
+      if (result.skippedItems > 0) {
+        showWarning(
+          `${remapped} ${result.skippedItems} items in batches being processed ` +
+            'were left; remap them when the batches are done.',
+        )
+      } else {
+        showSuccess(remapped)
+      }
+    },
+    onError: (error) => {
+      showError('Failed to remap', error)
+    },
+    onSettled: () => {
+      // A wording now mapped leaves this list, and the items it was on have
+      // new values and possibly a new validity.
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.mapper.all, 'unmapped'],
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+  })
 
   const handleAddMapping = (row: UnmappedRow): void => {
     setMappingFor(row)
@@ -191,6 +228,11 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
             action: Action.NEW,
             onAction: handleAddMapping,
             enabled: (row) => row.mapperUid !== null,
+          },
+          {
+            action: Action.REMAP,
+            onAction: (row) => remapMutation.mutate(row),
+            enabled: (row) => row.mapperUid !== null && !remapMutation.isPending,
           },
         ]}
       />

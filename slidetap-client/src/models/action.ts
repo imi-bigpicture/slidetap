@@ -29,6 +29,7 @@ export enum Action {
   OPEN_REVIEW = 14,
   HIERARCHY = 15,
   REOPEN = 16,
+  REMAP = 17,
 }
 
 export const ActionStrings = {
@@ -50,6 +51,7 @@ export const ActionStrings = {
   [Action.OPEN_REVIEW]: 'Open in review',
   [Action.HIERARCHY]: 'Hierarchy',
   [Action.REOPEN]: 'Reopen',
+  [Action.REMAP]: 'Remap',
 }
 
 export enum ItemDetailAction {

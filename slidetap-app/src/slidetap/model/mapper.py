@@ -78,3 +78,20 @@ class UnmappedValue(FrozenBaseModel):
     None where no mapper covers the attribute at all, which is worth seeing:
     such a value has nowhere to be mapped and nothing else would report it.
     """
+
+
+class UnmappedValueKey(FrozenBaseModel):
+    """Which unmapped value is meant: the attribute and the wording, as a row of
+    the unmapped values is told apart."""
+
+    attribute_schema_uid: UUID
+    value: str
+
+
+class UnmappedValueRemap(FrozenBaseModel):
+    """What remapping the attributes carrying one unmapped value did."""
+
+    remapped_items: int
+    """Items whose attributes were remapped."""
+    skipped_items: int
+    """Items left alone, as their batch is being processed."""

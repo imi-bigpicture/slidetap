@@ -34,6 +34,8 @@ from slidetap.model.mapper import (
     MappingItem,
     MappingItemCreate,
     UnmappedValue,
+    UnmappedValueKey,
+    UnmappedValueRemap,
 )
 from slidetap.services import MapperService
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -206,6 +208,40 @@ async def get_unmapped_values(
         Values with no mapping, most-carried first
     """
     return mapper_service.get_unmapped_values(project_uid, batch_uid)
+
+
+@mapper_router.post("/project/{project_uid}/unmapped/remap")
+async def remap_unmapped_value(
+    project_uid: UUID,
+    key: UnmappedValueKey,
+    mapper_service: FromDishka[MapperService],
+    logger: Logger,
+    batch_uid: UUID | None = None,
+) -> UnmappedValueRemap:
+    """Re-apply the project's mappers to the items carrying one unmapped value.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        ID of project
+    key: UnmappedValueKey
+        The attribute and the value, as the unmapped values list them
+    batch_uid: UUID | None
+        Only items in this batch, when given
+
+    Returns
+    ----------
+    UnmappedValueRemap
+        How many items were remapped, and how many were left as their batch
+        is being processed
+    """
+    logger.info(
+        f"Remapping {key.value!r} of attribute {key.attribute_schema_uid} "
+        f"in project {project_uid}."
+    )
+    return mapper_service.remap_unmapped_value(
+        project_uid, key.attribute_schema_uid, key.value, batch_uid
+    )
 
 
 @mapper_router.post("/mappings/create")

@@ -61,7 +61,14 @@ from slidetap.model.item import (
 )
 from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_value_type import ItemValueType
-from slidetap.model.mapper import Mapper, MapperGroup, MappingItem, UnmappedValue
+from slidetap.model.mapper import (
+    Mapper,
+    MapperGroup,
+    MappingItem,
+    UnmappedValue,
+    UnmappedValueKey,
+    UnmappedValueRemap,
+)
 from slidetap.model.measurement import Measurement
 from slidetap.model.metadata_import_status import MetadataImportStatus
 from slidetap.model.metadata_search_item import MetadataSearchItem
@@ -219,6 +226,8 @@ __all__ = [
     "MapperGroup",
     "MappingItem",
     "UnmappedValue",
+    "UnmappedValueKey",
+    "UnmappedValueRemap",
     "Measurement",
     "MeasurementAttribute",
     "MeasurementAttributeSchema",

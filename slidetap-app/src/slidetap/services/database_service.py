@@ -1937,6 +1937,44 @@ class DatabaseService:
             ).all()
         ]
 
+    def get_attributes_with_unmapped_value(
+        self,
+        session: Session,
+        project_uid: UUID,
+        attribute_schema_uid: UUID,
+        value: str,
+        batch_uid: UUID | None = None,
+    ) -> Sequence[DatabaseAttribute]:
+        """The attributes on items in a project that carry a value with no
+        mapping, as one row of `unmapped_value_counts` counts them.
+
+        The attributes hanging directly off the items, since only those are
+        rows: a value nested inside one is mapped by mapping the attribute it
+        is nested in.
+        """
+        return session.scalars(
+            select(DatabaseAttribute)
+            .join(
+                DatabaseItem,
+                DatabaseItem.uid == DatabaseAttribute.attribute_item_uid,
+            )
+            .join(DatabaseBatch, DatabaseBatch.uid == DatabaseItem.batch_uid)
+            .where(
+                DatabaseAttribute.uid.in_(
+                    select(DatabaseUnmappedValue.root_attribute_uid).where(
+                        DatabaseUnmappedValue.schema_uid == attribute_schema_uid,
+                        DatabaseUnmappedValue.value == value,
+                    )
+                ),
+                DatabaseBatch.project_uid == project_uid,
+                (
+                    DatabaseItem.batch_uid == batch_uid
+                    if batch_uid is not None
+                    else true()
+                ),
+            )
+        ).all()
+
     def add_attribute(
         self,
         session: Session,
