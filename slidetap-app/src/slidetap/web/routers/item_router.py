@@ -585,7 +585,7 @@ async def get_items_get(
         table_request.sorting,
         table_request.included,
         table_request.validity,
-        table_request.status_filter,
+        status_filter=table_request.status_filter,
     )
     count = item_service.get_count_for_schema(
         item_schema_uid,
@@ -598,7 +598,7 @@ async def get_items_get(
         table_request.tag_filter,
         table_request.included,
         table_request.validity,
-        table_request.status_filter,
+        status_filter=table_request.status_filter,
     )
     return ItemsResponse(items=list(items), count=count)
 
