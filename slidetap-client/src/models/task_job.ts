@@ -21,6 +21,11 @@ export interface TaskJob {
   priority: number
   attempts: number
   scheduledAt: string | null
+  deferredAt: string | null
+  /** When a worker last took the job. */
+  startedAt: string | null
+  /** Nothing for a job that has not finished, or was retried after it did. */
+  finishedAt: string | null
   args: Record<string, unknown>
   lock: string | null
   workerId: number | null

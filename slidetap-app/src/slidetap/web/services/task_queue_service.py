@@ -13,9 +13,10 @@
 #    limitations under the License.
 
 import asyncio
+import datetime
 import logging
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, LiteralString
 
 from procrastinate import App as TaskApp
 from procrastinate.jobs import Job
@@ -43,6 +44,24 @@ done, and reading them to show the newest few is the whole table for a page
 nobody scrolls. How many there are is what the counts are for. The rest are
 bounded by what is pending or went wrong, which is what somebody opening this
 page came to see.
+"""
+
+JOB_TIMES_QUERY: LiteralString = """
+SELECT
+    job_id,
+    min(at) FILTER (WHERE type = 'deferred') AS deferred_at,
+    max(at) FILTER (WHERE type = 'started') AS started_at,
+    max(at) FILTER (
+        WHERE type IN ('succeeded', 'failed', 'cancelled', 'aborted')
+    ) AS finished_at
+FROM procrastinate_events
+WHERE job_id = ANY(%(job_ids)s)
+GROUP BY job_id
+"""
+"""When each of the given jobs was deferred, last started and finished.
+
+Read from the events Procrastinate records on every change of status, as the
+jobs themselves carry no times but the one they were scheduled for.
 """
 
 
@@ -115,7 +134,13 @@ class TaskQueueService:
         # deferred: the listings come back oldest first, and each covers one
         # status, so neither is the order the page reads them in.
         jobs.sort(key=lambda job: job.id, reverse=True)
-        return jobs[: min(limit, MAX_JOB_LIMIT)]
+        jobs = jobs[: min(limit, MAX_JOB_LIMIT)]
+        # Read after the cut, so that only the jobs returned are looked up.
+        times = await self._get_job_times([job.id for job in jobs])
+        return [
+            job.model_copy(update=times[job.id]) if job.id in times else job
+            for job in jobs
+        ]
 
     async def get_task_counts(self) -> list[TaskCounts]:
         """Get every task the queue has held, with a count of each status."""
@@ -132,6 +157,47 @@ class TaskQueueService:
             self._counts(row)
             for row in await self._task_app.job_manager.list_queues_async()
         ]
+
+    async def _get_job_times(
+        self, job_ids: Sequence[int]
+    ) -> dict[int, dict[str, datetime.datetime | None]]:
+        """When each job was deferred, started and finished, by job id.
+
+        The times are an addition to the listing rather than part of it, so a
+        queue they cannot be read from, such as the in-memory one used in
+        tests, gives the jobs without them rather than no jobs at all.
+        """
+        if len(job_ids) == 0:
+            return {}
+        try:
+            rows = await self._task_app.connector.execute_query_all_async(
+                JOB_TIMES_QUERY, job_ids=list(job_ids)
+            )
+        except Exception:
+            self._logger.warning("Could not read job times.", exc_info=True)
+            return {}
+        return {row["job_id"]: self._times(row) for row in rows}
+
+    @staticmethod
+    def _times(row: dict[str, Any]) -> dict[str, datetime.datetime | None]:
+        """The times of one job, from its row of :data:`JOB_TIMES_QUERY`.
+
+        A job retried by hand after it failed is started again after it
+        finished, and until it finishes again it has not.
+        """
+        started_at = row["started_at"]
+        finished_at = row["finished_at"]
+        if (
+            started_at is not None
+            and finished_at is not None
+            and finished_at < started_at
+        ):
+            finished_at = None
+        return {
+            "deferred_at": row["deferred_at"],
+            "started_at": started_at,
+            "finished_at": finished_at,
+        }
 
     @staticmethod
     def _job(job: Job, job_id: int, status: TaskJobStatus) -> TaskJob:

@@ -61,6 +61,17 @@ class TaskJob(CamelCaseBaseModel):
     when the job ran, it is the time before which it must not.
     """
 
+    deferred_at: datetime.datetime | None = None
+    """When the job was put in the queue."""
+
+    started_at: datetime.datetime | None = None
+    """When a worker last took the job, for one tried more than once the try
+    that is running or that ended it."""
+
+    finished_at: datetime.datetime | None = None
+    """When the job succeeded, failed, was cancelled or was aborted. Nothing
+    for one that has not, or that was retried after it did."""
+
     args: dict[str, Any]
     """What the task was called with."""
 

@@ -81,10 +81,40 @@ function shortTaskName(taskName: string | null): string {
   return separator === -1 ? taskName : taskName.slice(separator + 1)
 }
 
-function formatScheduledAt(scheduledAt: string | null): string {
-  if (scheduledAt === null || scheduledAt === undefined) return ''
-  const parsed = new Date(scheduledAt)
-  return Number.isNaN(parsed.getTime()) ? scheduledAt : parsed.toLocaleString()
+function formatTime(time: string | null): string {
+  if (time === null || time === undefined) return ''
+  const parsed = new Date(time)
+  return Number.isNaN(parsed.getTime()) ? time : parsed.toLocaleString()
+}
+
+/** How long the job has run, in milliseconds: until it finished, or until now
+ * for one still running. Nothing for one that has not started, or that ended
+ * without a time to end on. */
+function durationOf(job: TaskJob, now: number): number | null {
+  if (job.startedAt === null || job.startedAt === undefined) return null
+  const started = new Date(job.startedAt).getTime()
+  let ended: number
+  if (job.finishedAt !== null && job.finishedAt !== undefined) {
+    ended = new Date(job.finishedAt).getTime()
+  } else if (job.status === 'doing') {
+    ended = now
+  } else {
+    return null
+  }
+  if (Number.isNaN(started) || Number.isNaN(ended)) return null
+  return Math.max(0, ended - started)
+}
+
+/** A duration as hours, minutes and seconds, e.g. 1:05:09 or 0:42. */
+function formatDuration(milliseconds: number | null): string {
+  if (milliseconds === null) return ''
+  const totalSeconds = Math.floor(milliseconds / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0')
+  return hours > 0
+    ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds}`
+    : `${minutes}:${seconds}`
 }
 
 /** The arguments the job was deferred with, on one line.
@@ -215,7 +245,31 @@ export default function DisplayTasks(): ReactElement {
           {
             id: 'scheduledAt',
             header: 'Scheduled',
-            accessorFn: (job) => formatScheduledAt(job.scheduledAt),
+            accessorFn: (job) => formatTime(job.scheduledAt),
+          },
+          {
+            id: 'deferredAt',
+            header: 'Deferred',
+            accessorFn: (job) => formatTime(job.deferredAt),
+          },
+          {
+            id: 'startedAt',
+            header: 'Started',
+            accessorFn: (job) => formatTime(job.startedAt),
+          },
+          {
+            id: 'finishedAt',
+            header: 'Finished',
+            accessorFn: (job) => formatTime(job.finishedAt),
+          },
+          {
+            id: 'duration',
+            header: 'Duration',
+            // Counted to when the list was last read, so a running job's
+            // duration moves with the refetch rather than on a timer of its own.
+            accessorFn: (job) =>
+              formatDuration(durationOf(job, jobsQuery.dataUpdatedAt)),
+            size: 100,
           },
           {
             id: 'args',
