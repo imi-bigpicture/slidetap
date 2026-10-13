@@ -9,7 +9,7 @@ The family of the mappers already stored is the plugin's to know, and is given
 to them when the application starts.
 
 Revision ID: 5c1d8e3a7b42
-Revises: e9c4b27a1f53
+Revises: e7c2b9a4d513
 Create Date: 2026-10-01 09:00:00.000000
 
 """
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "5c1d8e3a7b42"
-down_revision: Union[str, None] = "e9c4b27a1f53"
+down_revision: Union[str, None] = "e7c2b9a4d513"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
