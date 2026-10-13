@@ -1454,7 +1454,9 @@ class TestRemovingADatasetsPrivateAttributes:
         )
         report_schema_uid = next(
             attribute.uid
-            for attribute in SchemaService(schema).private_attributes.values()
+            for attribute in RootSchemaIndex(
+                schema, is_default=True
+            ).private_attributes.values()
             if attribute.name == "report"
         )
         item = Sample(
@@ -1484,10 +1486,11 @@ class TestRemovingADatasetsPrivateAttributes:
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None
+            sqlite_database_service, schema, None, schema_service_of
         )
         uids = [
             self._add_slide(sqlite_database_service, dataset, batch_uid, schema, index)
@@ -1513,10 +1516,11 @@ class TestRemovingADatasetsPrivateAttributes:
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None
+            sqlite_database_service, schema, None, schema_service_of
         )
         uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
 
@@ -1537,10 +1541,11 @@ class TestRemovingADatasetsPrivateAttributes:
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None
+            sqlite_database_service, schema, None, schema_service_of
         )
         uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
         item_service.remove_private_attributes(dataset.uid)

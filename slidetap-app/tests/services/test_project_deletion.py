@@ -225,8 +225,8 @@ class TestProjectDeletion:
         refuses.
         """
         # Arrange
-        sample_schema_uid = next(iter(schema_service.samples))
-        observation_schema_uid = next(iter(schema_service.observations))
+        sample_schema_uid = next(iter(schema_service.default_root.samples))
+        observation_schema_uid = next(iter(schema_service.default_root.observations))
         with sqlite_database_service.get_session() as session:
             later = sqlite_database_service.add_batch(
                 session, BatchCreate(name="later", project_uid=project.uid)

@@ -1997,29 +1997,34 @@ class ItemService:
         delete without showing what they say.
         """
         with self._database_service.get_session(session) as session:
+            root = self._schema_service.root_of_dataset(dataset_uid, session)
             rows = self._database_service.get_private_attribute_schemas_in_dataset(
                 session, dataset_uid
             )
             kinds = [
                 PrivateAttributeKind(
-                    owner=self._private_attribute_owner_name(item_schema_uid),
-                    attribute=self._private_attribute_name(attribute_schema_uid),
+                    owner=self._private_attribute_owner_name(root, item_schema_uid),
+                    attribute=self._private_attribute_name(root, attribute_schema_uid),
                 )
                 for item_schema_uid, attribute_schema_uid in rows
             ]
             kinds.sort(key=lambda kind: (kind.owner, kind.attribute))
             return PrivateAttributeSummary(attributes=kinds)
 
-    def _private_attribute_owner_name(self, item_schema_uid: UUID | None) -> str:
+    @staticmethod
+    def _private_attribute_owner_name(
+        root: RootSchemaIndex, item_schema_uid: UUID | None
+    ) -> str:
         if item_schema_uid is None:
-            return self._schema_service.dataset.display_name
-        item_schema = self._schema_service.items.get(item_schema_uid)
+            return root.dataset.display_name
+        item_schema = root.items.get(item_schema_uid)
         return item_schema.display_name if item_schema else str(item_schema_uid)
 
-    def _private_attribute_name(self, attribute_schema_uid: UUID) -> str:
-        attribute_schema = self._schema_service.private_attributes.get(
-            attribute_schema_uid
-        )
+    @staticmethod
+    def _private_attribute_name(
+        root: RootSchemaIndex, attribute_schema_uid: UUID
+    ) -> str:
+        attribute_schema = root.private_attributes.get(attribute_schema_uid)
         return (
             attribute_schema.display_name
             if attribute_schema
