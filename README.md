@@ -90,7 +90,9 @@ version of a metadata standard, while the projects created before stay on the
 root schema they were created with. Those projects can be viewed but not
 changed. Where the application also has a migration from their root schema to
 that of new projects, a project can be converted to it in the **Convert** tab of
-the project.
+the project. Only a project that is to be worked on further needs converting: one
+that is done, such as an exported one, can stay on its root schema, and is shown
+as it is.
 
 ### Back up the database first
 
