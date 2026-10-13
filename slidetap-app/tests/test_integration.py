@@ -590,7 +590,8 @@ class TestIntegration:
 @pytest.mark.integration
 class TestChangingAProjectsPseudonyms:
     """The routes that give a dataset a new set of pseudonyms, take them off,
-    or move them onto the items' identifiers.
+    move them onto the items' identifiers, clear the importer seed, or remove
+    the private attributes.
 
     Against the application as it is assembled, rather than against the service
     they call: what is being pinned is that the routes are reachable and refuse
@@ -611,6 +612,14 @@ class TestChangingAProjectsPseudonyms:
         test_client.cookies["csrf_token"] = csrf_token
         test_client.cookies["access_token"] = access_token
 
+    def _create_project(self, test_client: TestClient) -> str:
+        self._login(test_client)
+        response = test_client.post(
+            "/api/projects/create", json={"name": "pseudonym project"}
+        )
+        assert response.status_code == HTTPStatus.OK
+        return response.json()["uid"]
+
     @pytest.mark.parametrize(
         "action",
         [
@@ -624,22 +633,17 @@ class TestChangingAProjectsPseudonyms:
     def test_a_project_still_being_curated_is_refused(
         self, test_client: TestClient, action: str
     ):
-        """Completing is the point at which what is to go out is settled, and
-        what happens to the pseudonyms is decided against what has gone out."""
+        """A project still being curated would take in new items that are not
+        unlinked, or lose what it was imported with while it is curated."""
         # Arrange
-        self._login(test_client)
-        response = test_client.post(
-            "/api/projects/create", json={"name": "pseudonym project"}
-        )
-        assert response.status_code == HTTPStatus.OK
-        project_uid = response.json()["uid"]
+        project_uid = self._create_project(test_client)
 
         # Act
         response = test_client.post(f"/api/projects/project/{project_uid}/{action}")
 
         # Assert
         assert response.status_code == HTTPStatus.BAD_REQUEST
-        assert "completed" in response.json()["detail"]
+        assert "completed, exported or failed" in response.json()["detail"]
 
 
 @pytest.mark.integration

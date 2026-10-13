@@ -189,7 +189,11 @@ export default function ProjectSettings({
       removePrivateAttributesMutation.mutate(project.uid)
     }
   }
-  const isCompleted = project.status === ProjectStatus.COMPLETED
+  const isSettled = [
+    ProjectStatus.COMPLETED,
+    ProjectStatus.EXPORT_COMPLETE,
+    ProjectStatus.FAILED,
+  ].includes(project.status)
   const pseudonymsBusy =
     repseudonymizeMutation.isPending ||
     clearPseudonymsMutation.isPending ||
@@ -278,7 +282,9 @@ export default function ProjectSettings({
                 The dataset goes out under the pseudonyms its items were given when
                 they were imported, the same ones every time it is submitted. New ones
                 are for a dataset that has to go out unlinkable to what went out
-                before; submit it afterwards to write the metadata under them. Taking
+                before; submit a completed project afterwards to write the metadata
+                under them. An exported or failed project cannot be submitted again, so
+                there new ones only cut the link to what went out. Taking
                 them off instead leaves the items standing for nothing that has gone
                 out, and the project cannot be submitted again. Images already written
                 to the outbox carry the pseudonyms they were written with either way.
@@ -290,14 +296,14 @@ export default function ProjectSettings({
               </Typography>
               <Tooltip
                 title={
-                  isCompleted
+                  isSettled
                     ? undefined
-                    : 'Only a completed project can have its pseudonyms changed'
+                    : 'Only a completed, exported or failed project can have its pseudonyms changed'
                 }
               >
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                   <Button
-                    disabled={!isCompleted || pseudonymsBusy}
+                    disabled={!isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('new')
                     }}
@@ -306,7 +312,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isCompleted || pseudonymsBusy}
+                    disabled={!isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('clear')
                     }}
@@ -315,7 +321,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isCompleted || pseudonymsBusy}
+                    disabled={!isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('identifiers')
                     }}
@@ -324,7 +330,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isCompleted || pseudonymsBusy}
+                    disabled={!isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('privateAttributes')
                     }}
@@ -333,7 +339,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isCompleted || pseudonymsBusy}
+                    disabled={!isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('seed')
                     }}
@@ -345,7 +351,10 @@ export default function ProjectSettings({
               {repseudonymizeMutation.isSuccess && (
                 <Alert severity="success">
                   {repseudonymizeMutation.data.changed} items were given a new
-                  pseudonym. Submit the project to write the metadata under them.
+                  pseudonym.{' '}
+                  {project.status === ProjectStatus.COMPLETED
+                    ? 'Submit the project to write the metadata under them.'
+                    : 'The project cannot be submitted again, so they will not go out.'}
                 </Alert>
               )}
               {clearPseudonymsMutation.isSuccess && (

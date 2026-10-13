@@ -254,6 +254,7 @@ async def repseudonymize(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
+    project_service: FromDishka[ProjectService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Give every item of the project's dataset a new pseudonym.
@@ -263,9 +264,8 @@ async def repseudonymize(
     and read by everything that writes it out, so a new set is given here and
     written out by exporting the project again.
 
-    Only for a completed project: it is the point at which what is to go out is
-    settled, and the export that follows is what puts the new pseudonyms in the
-    bundle.
+    Only for a completed, exported or failed project. An export that follows
+    is what puts the new pseudonyms in a bundle.
 
     Parameters
     ----------
@@ -279,11 +279,12 @@ async def repseudonymize(
     """
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
+        try:
+            project_service.assert_settled(database_project)
+        except NotAllowedActionError as exception:
             raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only give a completed project new pseudonyms.",
-            )
+                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+            ) from exception
         dataset_uid = database_project.dataset_uid
     try:
         changed = item_service.repseudonymize(dataset_uid)
@@ -301,6 +302,7 @@ async def clear_pseudonyms(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
+    project_service: FromDishka[ProjectService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Take the pseudonyms off the project's dataset.
@@ -310,7 +312,7 @@ async def clear_pseudonyms(
     Afterwards the project cannot be exported, which is what the export refuses
     on, and there is nothing that puts the pseudonyms back.
 
-    Only for a completed project, as giving it new ones is.
+    Only for a completed, exported or failed project, as giving it new ones is.
 
     Parameters
     ----------
@@ -324,11 +326,12 @@ async def clear_pseudonyms(
     """
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
+        try:
+            project_service.assert_settled(database_project)
+        except NotAllowedActionError as exception:
             raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only clear the pseudonyms of a completed project.",
-            )
+                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+            ) from exception
         dataset_uid = database_project.dataset_uid
     cleared = item_service.clear_pseudonyms(dataset_uid)
     logger.info(f"Took the pseudonym off {cleared} items of project {project_uid}.")
@@ -340,11 +343,13 @@ async def pseudonymize_identifiers(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
+    project_service: FromDishka[ProjectService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Overwrite the identifier of every item that has a pseudonym with it.
 
-    The opposite of ``clear_pseudonyms``. Only for a completed project, as
+    The opposite of ``clear_pseudonyms``: the link is cut on the side of the
+    identifiers instead. Only for a completed, exported or failed project, as
     the other two pseudonym operations are.
 
     Parameters
@@ -359,11 +364,12 @@ async def pseudonymize_identifiers(
     """
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
+        try:
+            project_service.assert_settled(database_project)
+        except NotAllowedActionError as exception:
             raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only pseudonymize the identifiers of a completed project.",
-            )
+                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+            ) from exception
         dataset_uid = database_project.dataset_uid
     try:
         replaced = item_service.pseudonymize_identifiers(dataset_uid)
@@ -410,13 +416,13 @@ async def remove_private_attributes(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
+    project_service: FromDishka[ProjectService],
     logger: Logger,
 ) -> PrivateAttributeSummary:
     """Delete every private attribute of the project's dataset and its items.
 
-    Only for a completed project, as the pseudonym operations are: what is to
-    go out is settled, and nothing that is still being curated loses what it
-    was imported with.
+    Only for a completed, exported or failed project: nothing that is still
+    being curated loses what it was imported with.
 
     Parameters
     ----------
@@ -430,11 +436,12 @@ async def remove_private_attributes(
     """
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
+        try:
+            project_service.assert_settled(database_project)
+        except NotAllowedActionError as exception:
             raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only remove the private attributes of a completed project.",
-            )
+                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+            ) from exception
         dataset_uid = database_project.dataset_uid
     removed = item_service.remove_private_attributes(dataset_uid)
     logger.info(
@@ -453,9 +460,10 @@ async def clear_seed(
 ) -> Project:
     """Take the importer seed off the project.
 
-    Only for a completed project. There is no way back: nothing remints a
-    cleared seed, and any future import into this project's dataset falls
-    back to whatever the importer does without one.
+    Only for a completed, exported or failed project: like clearing the
+    pseudonyms, it cuts a link back to where the items came from. There is no way back:
+    nothing remints a cleared seed, and any future import into this project's
+    dataset falls back to whatever the importer does without one.
 
     Parameters
     ----------
@@ -469,11 +477,12 @@ async def clear_seed(
     """
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
+        try:
+            project_service.assert_settled(database_project)
+        except NotAllowedActionError as exception:
             raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only clear the importer seed of a completed project.",
-            )
+                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+            ) from exception
     project = project_service.clear_seed(project_uid)
     logger.info(f"Cleared the importer seed of project {project_uid}.")
     return project

@@ -262,6 +262,19 @@ class ProjectService:
             session.commit()
             return project.model
 
+    def assert_settled(self, project: DatabaseProject) -> None:
+        """Refuse a pseudonym or private attribute operation on an unsettled project.
+
+        The operations are for a completed, exported or failed project. One still
+        being curated would take in new items that are not unlinked, and one being
+        exported or deleted is read or written by something else meanwhile.
+        """
+        if not (project.completed or project.export_complete or project.failed):
+            raise NotAllowedActionError(
+                "Only a completed, exported or failed project can be changed this "
+                f"way, was {project.status.name}."
+            )
+
     def assert_can_export(self, project: DatabaseProject, session: Session) -> None:
         """Refuse to export a project that is not wholly in the outbox.
 
