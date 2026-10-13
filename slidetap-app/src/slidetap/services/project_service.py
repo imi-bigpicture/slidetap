@@ -400,7 +400,9 @@ class ProjectService:
             raise NotAllowedActionError(
                 f"Cannot export project {project.uid}: its attributes are not valid."
             )
-        for image_schema in self._schema_service.images.values():
+        for image_schema in self._schema_service.root_of(
+            project, session
+        ).images.values():
             selected = self._database_service.get_item_count(
                 session, image_schema, dataset=project.dataset_uid, selected=True
             )
