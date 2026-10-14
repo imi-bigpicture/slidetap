@@ -30,7 +30,9 @@ import {
   ProjectStatusList,
   ProjectStatusStrings,
 } from 'src/models/project_status'
+import { rootDisplayName, type RootSchemaSummary } from 'src/models/schema/root_schema'
 import projectApi from 'src/services/api/project_api'
+import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 
@@ -50,13 +52,23 @@ function ListProjects(): ReactElement {
         (p) =>
           p.status === ProjectStatus.IN_PROGRESS ||
           p.status === ProjectStatus.EXPORTING ||
-          p.status === ProjectStatus.DELETING,
+          p.status === ProjectStatus.DELETING ||
+          p.status === ProjectStatus.MIGRATING,
       )
         ? 2000
         : false
     },
     placeholderData: keepPreviousData,
   })
+  const rootsQuery = useQuery({
+    queryKey: queryKeys.schema.roots(),
+    queryFn: async () => {
+      return await schemaApi.getRootSchemas()
+    },
+  })
+  const roots = new Map(
+    (rootsQuery.data ?? []).map((root): [string, RootSchemaSummary] => [root.uid, root]),
+  )
 
   const handleViewProject = (project: Project): void => {
     navigate(`/project/${project.uid}`)
@@ -108,6 +120,15 @@ function ListProjects(): ReactElement {
             filter: { variant: 'date-range' },
           },
           {
+            id: 'schema',
+            header: 'Schema',
+            accessorFn: (project: Project) => {
+              const root = roots.get(project.rootSchemaUid)
+              return root !== undefined ? rootDisplayName(root) : ''
+            },
+            filter: { variant: 'text' },
+          },
+          {
             id: 'status',
             header: 'Status',
             accessorKey: 'status',
@@ -120,6 +141,7 @@ function ListProjects(): ReactElement {
                   [ProjectStatus.COMPLETED]: 'success',
                   [ProjectStatus.EXPORTING]: 'primary',
                   [ProjectStatus.EXPORT_COMPLETE]: 'success',
+                  [ProjectStatus.MIGRATING]: 'primary',
                   [ProjectStatus.FAILED]: 'error',
                   [ProjectStatus.DELETING]: 'warning',
                   [ProjectStatus.DELETED]: 'secondary',

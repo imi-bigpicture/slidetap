@@ -82,7 +82,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[dict[str, Any]]):
         image_pre_processor: ExampleImagePreProcessor,
     ):
         self._schema_service = schema_service
-        self._schema = schema_service.root
+        self._schema = schema_service.default_root.schema
         self._image_pre_processor = image_pre_processor
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 

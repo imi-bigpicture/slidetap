@@ -18,6 +18,7 @@ stack run.
 | `ExampleMetadataExportInterface` | `interfaces/metadata_export.py` | Writes the selected items of the dataset as a single `metadata.json` |
 | `ExampleImageExportInterface` | `interfaces/image_export.py` | Runs the DICOM conversion pipeline for each exported image |
 | `ExampleMapperInjector` | `mapper_injector.py` | Seeds mappers for collection, fixation, sampling, embedding, and stain |
+| `create_container()` | `container.py` | The container shared by the web app, the task app, and `slidetap-mappers set-up` |
 | Authentication | `web_app_factory.py` | `JsonFileAuthInterface`, the ready-made file-backed auth that ships with SlideTap |
 
 Pseudonym generation and item naming are not implemented here, so the SlideTap
@@ -65,6 +66,12 @@ database that has not had them applied:
 ```console
 > uv run slidetap-db upgrade
 > uv run slidetap-task-init-schema
+```
+
+Then set up the mappers, which injects the example's mapper sheets:
+
+```console
+> SLIDETAP_TASK_APP=slidetap_example uv run slidetap-mappers set-up
 ```
 
 Then, in separate terminals:

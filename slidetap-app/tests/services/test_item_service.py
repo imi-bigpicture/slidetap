@@ -18,19 +18,20 @@ Run against a real database, since what is being pinned is what a sequence of
 writes leaves behind, which is the part that broke.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import nullcontext
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
+    DatabaseDataset,
     DatabaseImage,
+    DatabaseProject,
     DatabaseSample,
     DatabaseStringAttribute,
-    NotAllowedActionError,
 )
 from slidetap.external_interfaces import PseudonymFactoryInterface
 from slidetap.model import (
@@ -41,9 +42,11 @@ from slidetap.model import (
     Item,
     ItemValueType,
     MetadataSearchResult,
+    NotAllowedActionError,
     Project,
     ReviewIssueSource,
     RootSchema,
+    RootSchemaIndex,
     Sample,
 )
 from slidetap.model.batch import BatchCreate
@@ -97,10 +100,13 @@ class TestAddSearchResultForAnExistingPatient:
 
     @pytest.fixture()
     def item_service(
-        self, sqlite_database_service: DatabaseService, schema: RootSchema
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         """The real thing on a real database, unlike the mocked one above."""
-        schema_service = SchemaService(schema)
+        schema_service = schema_service_of(schema)
         validation_service = ValidationService(schema_service, sqlite_database_service)
         review_service = ReviewService(
             schema_service, validation_service, sqlite_database_service
@@ -442,11 +448,16 @@ class TestMovingAnAttributeBetweenItems:
         validation_service: ValidationService,
         review_service: ReviewService,
     ) -> ItemService:
+        schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
+        decoy.when(
+            schema_service.can_change(matchers.Anything(), matchers.Anything())
+        ).then_return(True)
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
             decoy.mock(cls=MapperService),
-            decoy.mock(cls=SchemaService),
+            schema_service,
             validation_service,
             database_service,
             review_service,
@@ -561,13 +572,22 @@ class TestMovingAnItemToAnotherParent:
         decoy.when(database_service.get_sample(session, slide.uid)).then_return(slide)
         decoy.when(slide.schema_uid).then_return(slide_model.schema_uid)
         decoy.when(slide.model).then_return(slide_model)
-        schema_service = decoy.mock(cls=SchemaService)
-        decoy.when(schema_service.items).then_return({image_schema_uid: image_schema})
+        root = decoy.mock(cls=RootSchemaIndex)
+        decoy.when(root.items).then_return({image_schema_uid: image_schema})
         # One slide holds the image, which is what the parent check reads to
         # decide the move is allowed at all.
-        decoy.when(schema_service.parent_schema_caps(image_schema)).then_return(
+        decoy.when(root.parent_schema_caps(image_schema)).then_return(
             {slide_model.schema_uid: 1}
         )
+        schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.can_change(parked_image)).then_return(True)
+        decoy.when(
+            schema_service.can_change(parked_image, matchers.Anything())
+        ).then_return(True)
+        decoy.when(schema_service.root_of(parked_image)).then_return(root)
+        decoy.when(
+            schema_service.root_of(parked_image, matchers.Anything())
+        ).then_return(root)
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
@@ -722,8 +742,10 @@ class TestWhetherARowIsStillInTheProject:
     """
 
     @pytest.fixture()
-    def schema_service(self, schema: RootSchema) -> SchemaService:
-        return SchemaService(schema)
+    def schema_service(
+        self, schema: RootSchema, schema_service_of: Callable[..., SchemaService]
+    ) -> SchemaService:
+        return schema_service_of(schema)
 
     @pytest.fixture()
     def sample_schema_uid(self, schema: RootSchema) -> UUID:
@@ -768,6 +790,7 @@ class TestWhetherARowIsStillInTheProject:
         database_service: DatabaseService,
         validation_service: ValidationService,
         session: Session,
+        schema: RootSchema,
         sample_schema_uid: UUID,
         selected: bool,
         locked: bool,
@@ -784,6 +807,11 @@ class TestWhetherARowIsStillInTheProject:
         decoy.when(item.valid).then_return(False)
         decoy.when(item.selected).then_return(selected)
         decoy.when(item.locked).then_return(locked)
+        project = decoy.mock(cls=DatabaseProject)
+        decoy.when(project.root_schema_uid).then_return(schema.uid)
+        dataset = decoy.mock(cls=DatabaseDataset)
+        decoy.when(dataset.project).then_return(project)
+        decoy.when(item.dataset).then_return(dataset)
         decoy.when(database_service.get_children(item)).then_return([])
         decoy.when(validation_service.item_is_pending(item, session)).then_return(False)
 
@@ -890,8 +918,9 @@ class TestGivingADatasetNewPseudonyms:
         sqlite_database_service: DatabaseService,
         schema: RootSchema,
         pseudonym_factory: PseudonymFactoryInterface | None,
+        schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
-        schema_service = SchemaService(schema)
+        schema_service = schema_service_of(schema)
         validation_service = ValidationService(schema_service, sqlite_database_service)
         review_service = ReviewService(
             schema_service, validation_service, sqlite_database_service
@@ -967,10 +996,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -996,12 +1029,16 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         """It is already invalid where the schema requires one, and flagged as
         such; minting one here would settle that with nothing decided."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -1025,10 +1062,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _SilentPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _SilentPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
@@ -1048,13 +1089,17 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         """Two items would be given the same pseudonym, which is what the
         dataset cannot hold: it says so instead, and what it had written is
         rolled back rather than left half done."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _ConstantPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _ConstantPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -1079,9 +1124,12 @@ class TestGivingADatasetNewPseudonyms:
         sqlite_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
-        item_service = self._item_service(sqlite_database_service, schema, None)
+        item_service = self._item_service(
+            sqlite_database_service, schema, None, schema_service_of
+        )
 
         # Act & Assert
         with pytest.raises(ValueError):
@@ -1094,12 +1142,16 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         """The item stands for nothing that has gone out, and says so: a slide
         needs a pseudonym, and is not valid without one."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -1128,10 +1180,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         self._add_slides(
             sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
@@ -1150,11 +1206,15 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         """There is no way back, which is what the export has to refuse on."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
@@ -1175,10 +1235,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         self._add_slides(
             sqlite_database_service,
@@ -1202,11 +1266,15 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         """It is not written into the bundle, so it cannot go in unnamed."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
@@ -1227,10 +1295,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -1257,10 +1329,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
@@ -1281,10 +1357,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -1309,10 +1389,14 @@ class TestGivingADatasetNewPseudonyms:
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, _CountingPseudonymFactory()
+            sqlite_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
         )
         uids = self._add_slides(
             sqlite_database_service,
@@ -1370,7 +1454,9 @@ class TestRemovingADatasetsPrivateAttributes:
         )
         report_schema_uid = next(
             attribute.uid
-            for attribute in SchemaService(schema).private_attributes.values()
+            for attribute in RootSchemaIndex(
+                schema, is_default=True
+            ).private_attributes.values()
             if attribute.name == "report"
         )
         item = Sample(
@@ -1400,10 +1486,11 @@ class TestRemovingADatasetsPrivateAttributes:
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None
+            sqlite_database_service, schema, None, schema_service_of
         )
         uids = [
             self._add_slide(sqlite_database_service, dataset, batch_uid, schema, index)
@@ -1429,10 +1516,11 @@ class TestRemovingADatasetsPrivateAttributes:
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None
+            sqlite_database_service, schema, None, schema_service_of
         )
         uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
 
@@ -1453,10 +1541,11 @@ class TestRemovingADatasetsPrivateAttributes:
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None
+            sqlite_database_service, schema, None, schema_service_of
         )
         uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
         item_service.remove_private_attributes(dataset.uid)

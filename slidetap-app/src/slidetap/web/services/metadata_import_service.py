@@ -17,6 +17,7 @@
 import logging
 from uuid import UUID
 
+from slidetap.database import DatabaseMetadataSearchItem, DatabaseProject
 from slidetap.external_interfaces import (
     FileParseError,
     MetadataImportInterface,
@@ -24,7 +25,7 @@ from slidetap.external_interfaces import (
 )
 from slidetap.model import (
     Batch,
-    Dataset,
+    BatchCreate,
     File,
     MetadataImportStatus,
     MetadataSearchItem,
@@ -33,7 +34,9 @@ from slidetap.model import (
 from slidetap.services import (
     BatchService,
     DatabaseService,
+    DatasetService,
     MetadataSearchItemService,
+    ProjectService,
     SchemaService,
 )
 from slidetap.task import Scheduler
@@ -44,6 +47,8 @@ class MetadataImportService:
         self,
         scheduler: Scheduler,
         batch_service: BatchService,
+        dataset_service: DatasetService,
+        project_service: ProjectService,
         database_service: DatabaseService,
         schema_service: SchemaService,
         search_item_service: MetadataSearchItemService,
@@ -51,6 +56,8 @@ class MetadataImportService:
     ):
         self._scheduler = scheduler
         self._batch_service = batch_service
+        self._dataset_service = dataset_service
+        self._project_service = project_service
         self._database_service = database_service
         self._schema_service = schema_service
         self._search_item_service = search_item_service
@@ -61,19 +68,38 @@ class MetadataImportService:
     def supports_retry(self) -> bool:
         return self._metadata_import_interface.supports_retry
 
-    def create_project(self, name: str, dataset_uid: UUID) -> Project:
-        return self._metadata_import_interface.create_project(name, dataset_uid)
-
-    def create_dataset(self, name: str) -> Dataset:
-        return self._metadata_import_interface.create_dataset(name)
+    def create_project(self, name: str) -> Project:
+        """Create a project from the metadata import, with its dataset and its
+        default batch, applying the default mapper groups."""
+        with self._database_service.get_session() as session:
+            mapper_groups = list(
+                self._database_service.get_default_mapper_groups(session)
+            )
+            dataset = self._dataset_service.create(
+                self._metadata_import_interface.create_dataset(name),
+                [mapper.uid for group in mapper_groups for mapper in group.mappers],
+                session=session,
+            )
+            project = self._metadata_import_interface.create_project(name, dataset.uid)
+            project.mapper_groups = [group.uid for group in mapper_groups]
+            project = self._project_service.create(project, session=session)
+            self._batch_service.create(
+                BatchCreate(name="Default", project_uid=project.uid, is_default=True),
+                session=session,
+            )
+            self._logger.info(
+                f"Created project {project.uid} {project.name} with mapper groups "
+                f"{[group.name for group in mapper_groups]}."
+            )
+            return project
 
     async def search(self, batch_uid: UUID, file: File) -> Batch:
         """Start metadata search for a batch using uploaded file."""
         # Before the document is read, so the answer is about the batch.
         with self._database_service.get_session() as session:
-            self._batch_service.assert_can_search(
-                self._database_service.get_batch(session, batch_uid)
-            )
+            database_batch = self._database_service.get_batch(session, batch_uid)
+            self._schema_service.assert_can_change(database_batch, session)
+            self._batch_service.assert_can_search(database_batch)
         # Before the batch is emptied below, so that a document the importer
         # refuses leaves the batch as it was rather than cleared out.
         try:
@@ -87,13 +113,20 @@ class MetadataImportService:
                 session,
                 batch_uid,
             )
+            # Asked again with the project locked: what the project can be
+            # given may have changed while the document was read.
+            session.get_one(
+                DatabaseProject, database_batch.project_uid, with_for_update=True
+            )
+            self._schema_service.assert_can_change(database_batch, session)
             self._batch_service.reset(database_batch, session)
             # What another batch hangs off is handed to that batch first, so
             # that clearing this one out below leaves the other one whole.
             self._batch_service.move_shared_items_to_other_batch(
                 database_batch, session
             )
-            for item_schema in self._schema_service.items.values():
+            root = self._schema_service.root_of(database_batch.project, session)
+            for item_schema in root.items.values():
                 self._database_service.delete_items(
                     session,
                     item_schema,
@@ -126,8 +159,6 @@ class MetadataImportService:
         if not self._metadata_import_interface.supports_retry:
             raise ValueError("This importer does not support per-item retry.")
         with self._database_service.get_session() as session:
-            from slidetap.database import DatabaseMetadataSearchItem
-
             row = session.get(DatabaseMetadataSearchItem, search_item_uid)
             if row is None:
                 raise ValueError(f"Search item {search_item_uid} does not exist.")
@@ -137,6 +168,8 @@ class MetadataImportService:
                     f"(was {row.status.name})."
                 )
             batch = self._database_service.get_batch(session, row.batch_uid)
+            if batch is not None:
+                self._schema_service.assert_can_change(batch, session)
             if batch is not None and batch.metadata_searching:
                 raise ValueError(
                     f"Batch {row.batch_uid} is currently searching; "
@@ -148,4 +181,11 @@ class MetadataImportService:
 
     def exclude_search_item(self, search_item_uid: UUID) -> None:
         """Delete a FAILED search item, removing it from the user's view."""
-        self._search_item_service.delete(search_item_uid)
+        with self._database_service.get_session() as session:
+            row = session.get(DatabaseMetadataSearchItem, search_item_uid)
+            if row is None:
+                return
+            self._schema_service.assert_can_change(
+                self._database_service.get_batch(session, row.batch_uid), session
+            )
+            self._search_item_service.delete(row, session=session)

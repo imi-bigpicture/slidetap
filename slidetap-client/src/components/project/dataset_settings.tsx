@@ -22,6 +22,7 @@ import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Dataset } from 'src/models/dataset'
 import datasetApi from 'src/services/api/dataset_api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../contexts/project_actions/project_actions_context'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 
 interface DatasetSettingsProps {
@@ -35,6 +36,8 @@ export default function DatasetSettings({
 }: DatasetSettingsProps): ReactElement {
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
+  // A project that cannot be edited is view only.
+  const { edit: canEdit } = useProjectActions()
 
   const datasetUpdateMutation = useMutation({
     mutationFn: (dataset: Dataset) => {
@@ -89,15 +92,17 @@ export default function DatasetSettings({
         <AttributeDetails
           schemas={rootSchema?.dataset.attributes ?? {}}
           attributes={dataset.attributes}
-          action={ItemDetailAction.EDIT}
+          action={canEdit ? ItemDetailAction.EDIT : ItemDetailAction.VIEW}
           attributeLayout={rootSchema?.dataset.attributeLayout}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
         <Stack direction="row" spacing={1}>
-          <Button onClick={() => datasetUpdateMutation.mutate(dataset)}>Update</Button>
+          <Button disabled={!canEdit} onClick={() => datasetUpdateMutation.mutate(dataset)}>
+            Update
+          </Button>
           <Button
             onClick={() => remapMutation.mutate()}
-            disabled={remapMutation.isPending}
+            disabled={!canEdit || remapMutation.isPending}
             title="Re-apply mappers to every attribute in this dataset. Each batch must be in a stable state (not currently being processed and not completed)."
           >
             Remap

@@ -1,0 +1,30 @@
+#    Copyright 2026 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+"""A root schema the application provides, as it is listed."""
+
+from uuid import UUID
+
+from slidetap.model.base_model import FrozenBaseModel
+
+
+class RootSchemaSummary(FrozenBaseModel):
+    """A root schema the application provides, without its content."""
+
+    uid: UUID
+    name: str
+    version: str | None
+    family_uid: UUID
+    new_projects: bool
+    """Whether new projects are created with this root."""

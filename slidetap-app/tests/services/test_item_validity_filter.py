@@ -35,6 +35,7 @@ from slidetap.model import (
     MetadataImportCompleteness,
     Project,
     RootSchema,
+    RootSchemaIndex,
 )
 from slidetap.model.batch import BatchCreate
 from slidetap.model.item import Image
@@ -87,15 +88,21 @@ def review_unit(image_schema: ImageSchema) -> ReviewUnitSchema:
 
 
 @pytest.fixture()
+def root(schema: RootSchema, review_unit: ReviewUnitSchema) -> RootSchemaIndex:
+    """The root of the project queried, whose review unit excuses the images."""
+    return RootSchemaIndex(
+        schema.model_copy(update={"review_unit": review_unit}), is_default=True
+    )
+
+
+@pytest.fixture()
 def validation_service(
     decoy: Decoy,
     sqlite_database_service: DatabaseService,
-    review_unit: ReviewUnitSchema,
 ) -> ValidationService:
-    schema_service = decoy.mock(cls=SchemaService)
-    decoy.when(schema_service.review_unit).then_return(review_unit)
     return ValidationService(
-        schema_service=schema_service, database_service=sqlite_database_service
+        schema_service=decoy.mock(cls=SchemaService),
+        database_service=sqlite_database_service,
     )
 
 
@@ -152,6 +159,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
         self,
         sqlite_database_service: DatabaseService,
         validation_service: ValidationService,
+        root: RootSchemaIndex,
         image_schema: ImageSchema,
         dataset: Dataset,
         project: Project,
@@ -170,7 +178,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
             project,
             BatchStatus.METADATA_SEARCH_COMPLETE,
         )
-        pending_expression = validation_service.pending_expression(image_schema)
+        pending_expression = validation_service.pending_expression(root, image_schema)
 
         # Act
         with sqlite_database_service.get_session() as session:
@@ -196,6 +204,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
         self,
         sqlite_database_service: DatabaseService,
         validation_service: ValidationService,
+        root: RootSchemaIndex,
         image_schema: ImageSchema,
         dataset: Dataset,
         project: Project,
@@ -210,7 +219,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
             project,
             BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
         )
-        pending_expression = validation_service.pending_expression(image_schema)
+        pending_expression = validation_service.pending_expression(root, image_schema)
 
         # Act
         with sqlite_database_service.get_session() as session:
@@ -239,6 +248,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
         self,
         decoy: Decoy,
         sqlite_database_service: DatabaseService,
+        schema: RootSchema,
         review_unit: ReviewUnitSchema,
         image_schema: ImageSchema,
         dataset: Dataset,
@@ -247,12 +257,17 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
         """No row can be waiting on anything, so nothing answers to pending and
         every row that is not valid is one to see to."""
         # Arrange
-        schema_service = decoy.mock(cls=SchemaService)
-        decoy.when(schema_service.review_unit).then_return(
-            review_unit.model_copy(update={"completeness": None})
+        root = RootSchemaIndex(
+            schema.model_copy(
+                update={
+                    "review_unit": review_unit.model_copy(update={"completeness": None})
+                }
+            ),
+            is_default=True,
         )
         validation_service = ValidationService(
-            schema_service=schema_service, database_service=sqlite_database_service
+            schema_service=decoy.mock(cls=SchemaService),
+            database_service=sqlite_database_service,
         )
         add_images(
             sqlite_database_service,
@@ -261,7 +276,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
             project,
             BatchStatus.METADATA_SEARCH_COMPLETE,
         )
-        pending_expression = validation_service.pending_expression(image_schema)
+        pending_expression = validation_service.pending_expression(root, image_schema)
 
         # Act
         with sqlite_database_service.get_session() as session:
@@ -291,6 +306,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
         self,
         sqlite_database_service: DatabaseService,
         validation_service: ValidationService,
+        root: RootSchemaIndex,
         image_schema: ImageSchema,
         dataset: Dataset,
         project: Project,
@@ -305,7 +321,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
             project,
             BatchStatus.METADATA_SEARCH_COMPLETE,
         )
-        pending_expression = validation_service.pending_expression(image_schema)
+        pending_expression = validation_service.pending_expression(root, image_schema)
 
         # Act
         with sqlite_database_service.get_session() as session:

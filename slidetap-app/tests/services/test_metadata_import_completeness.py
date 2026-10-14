@@ -23,11 +23,16 @@ everything else is checked in earnest.
 from uuid import UUID, uuid4
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseBatch, DatabaseImage, DatabaseSample
-from slidetap.model import BatchStatus, Cardinality, MetadataImportCompleteness
+from slidetap.model import (
+    BatchStatus,
+    Cardinality,
+    MetadataImportCompleteness,
+    RootSchemaIndex,
+)
 from slidetap.model.schema.item_relation import ImageToSampleRelation
 from slidetap.model.schema.item_schema import ImageSchema, SampleSchema
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
@@ -132,16 +137,27 @@ def slide(decoy: Decoy, slide_schema_uid: UUID) -> DatabaseSample:
 
 
 @pytest.fixture()
-def schema_service(
+def root(
     decoy: Decoy,
     image_schema: ImageSchema,
     image_schema_uid: UUID,
     slide_schema: SampleSchema,
     slide_schema_uid: UUID,
-) -> SchemaService:
+) -> RootSchemaIndex:
+    """The root of the project the items are in."""
+    root = decoy.mock(cls=RootSchemaIndex)
+    decoy.when(root.images).then_return({image_schema_uid: image_schema})
+    decoy.when(root.samples).then_return({slide_schema_uid: slide_schema})
+    return root
+
+
+@pytest.fixture()
+def schema_service(decoy: Decoy, root: RootSchemaIndex) -> SchemaService:
     schema_service = decoy.mock(cls=SchemaService)
-    decoy.when(schema_service.images).then_return({image_schema_uid: image_schema})
-    decoy.when(schema_service.samples).then_return({slide_schema_uid: slide_schema})
+    decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
+    decoy.when(
+        schema_service.root_of(matchers.Anything(), matchers.Anything())
+    ).then_return(root)
     return schema_service
 
 
@@ -362,14 +378,14 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
         session: Session,
     ) -> None:
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
 
         # Act
@@ -383,7 +399,7 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -392,7 +408,7 @@ class TestValidForNow:
         """The same image, once the batch is far enough along for what was
         excused to have arrived: it now answers for itself."""
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
         decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
@@ -406,7 +422,7 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -414,7 +430,7 @@ class TestValidForNow:
     ) -> None:
         # Arrange
         decoy.when(review_unit.completeness).then_return(None)
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
 
         # Act
@@ -427,13 +443,13 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         image: DatabaseImage,
         batch: DatabaseBatch,
         session: Session,
     ) -> None:
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(None)
+        decoy.when(root.review_unit).then_return(None)
         decoy.when(image.batch).then_return(batch)
 
         # Act
@@ -446,7 +462,7 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         session: Session,
@@ -454,7 +470,7 @@ class TestValidForNow:
         """Nothing says how far along its import is supposed to be, so there is
         nothing to excuse it of."""
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(None)
 
         # Act
@@ -467,7 +483,7 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -479,7 +495,7 @@ class TestValidForNow:
         way."""
         # Arrange
         decoy.when(image.selected).then_return(False)
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
         decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
@@ -494,7 +510,7 @@ class TestValidForNow:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -502,7 +518,7 @@ class TestValidForNow:
     ) -> None:
         # Arrange
         decoy.when(image.valid).then_return(True)
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
         decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
@@ -527,14 +543,14 @@ class TestPending:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
         session: Session,
     ) -> None:
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
 
         # Act
@@ -548,7 +564,7 @@ class TestPending:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -560,7 +576,7 @@ class TestPending:
         marked as what it is."""
         # Arrange
         decoy.when(image.valid_relations).then_return(False)
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
 
         # Act
@@ -573,7 +589,7 @@ class TestPending:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -582,7 +598,7 @@ class TestPending:
         """The same image, once the batch is far enough along for what was
         waited on to have arrived: it is not waiting, it is wrong."""
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
         decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
@@ -597,7 +613,7 @@ class TestPending:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -606,7 +622,7 @@ class TestPending:
         """Nothing is waited on for an item that is already valid, whatever the
         batch has yet to do."""
         # Arrange
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
 
         # Act
@@ -619,7 +635,7 @@ class TestPending:
         self,
         decoy: Decoy,
         validation_service: ValidationService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_unit: ReviewUnitSchema,
         image: DatabaseImage,
         batch: DatabaseBatch,
@@ -629,7 +645,7 @@ class TestPending:
         exported, and the row says it is out rather than that it is late."""
         # Arrange
         decoy.when(image.selected).then_return(False)
-        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(root.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
 
         # Act

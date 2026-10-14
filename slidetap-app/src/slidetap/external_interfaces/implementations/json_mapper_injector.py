@@ -24,7 +24,8 @@ from slidetap.external_interfaces.exceptions import MapperInjectionError
 from slidetap.external_interfaces.mapper_injector import MapperInjectorInterface
 from slidetap.model import AttributeSchema, Mapper, MapperGroup, MappingItem
 from slidetap.model.external.mapper import MapperExternal, MapperGroupExternal
-from slidetap.services import ModelService, SchemaService
+from slidetap.services.model_service import ModelService
+from slidetap.services.schema_service import SchemaService
 
 
 class JsonMapperInjector(MapperInjectorInterface):
@@ -74,9 +75,14 @@ class JsonMapperInjector(MapperInjectorInterface):
         A name that the loaded schema does not have is a mapper declared
         against a model that is no longer there, which is the mapper file and
         the model disagreeing rather than anything this run can recover from.
+
+        Names are looked up in the root of new projects, as names are only
+        unique within a root and the mapper file is written against that one.
         """
         try:
-            return self._schema_service.get_attribute_by_name(attribute_name)
+            return self._schema_service.get_attribute_by_name(
+                attribute_name, self._schema_service.default_root.uid
+            )
         except KeyError as exception:
             raise MapperInjectionError(
                 f"attribute '{attribute_name}' is not in the loaded schema",

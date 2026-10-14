@@ -19,6 +19,7 @@ rows the delete matches and what the ORM cascades do to them, neither of which
 a mocked session says anything about.
 """
 
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
@@ -46,6 +47,7 @@ from slidetap.services import (
     BatchService,
     DatabaseService,
     MapperService,
+    MigrationService,
     ProjectService,
     SchemaService,
     StorageService,
@@ -57,8 +59,10 @@ UNKNOWN_SCHEMA_UID = UUID("f0f4a2c6-1d0e-4a5e-9a9f-0e7f2f1b6c31")
 
 
 @pytest.fixture()
-def schema_service(schema: ExampleSchema) -> SchemaService:
-    return SchemaService(schema)
+def schema_service(
+    schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+) -> SchemaService:
+    return schema_service_of(schema)
 
 
 @pytest.fixture()
@@ -82,6 +86,7 @@ def project_service(
         mapper_service=decoy.mock(cls=MapperService),
         database_service=sqlite_database_service,
         storage_service=storage_service,
+        migration_service=decoy.mock(cls=MigrationService),
     )
 
 
@@ -123,17 +128,17 @@ class TestProjectDeletion:
         """The batch is cleared out by what is in it, not by what is loaded.
 
         An item stored under a schema that a later model revision dropped is
-        matched by nothing in ``schema_service.items``, and used to survive the
-        delete and hold the batch down with it.
+        matched by nothing in ``schema_service.default_root.items``, and used to
+        survive the delete and hold the batch down with it.
         """
         # Arrange
-        assert UNKNOWN_SCHEMA_UID not in schema_service.items
+        assert UNKNOWN_SCHEMA_UID not in schema_service.default_root.items
         with sqlite_database_service.get_session() as session:
             session.add(
                 DatabaseSample(
                     dataset.uid,
                     batch_uid,
-                    schema_service.samples[next(iter(schema_service.samples))].uid,
+                    next(iter(schema_service.default_root.samples)),
                     "SLIDE-1",
                 )
             )
@@ -167,8 +172,8 @@ class TestProjectDeletion:
         query partway through the loop flushes what has been marked so far.
         """
         # Arrange
-        image_schema_uid = next(iter(schema_service.images))
-        sample_schema_uid = next(iter(schema_service.samples))
+        image_schema_uid = next(iter(schema_service.default_root.images))
+        sample_schema_uid = next(iter(schema_service.default_root.samples))
         with sqlite_database_service.get_session() as session:
             sample = DatabaseSample(
                 dataset.uid, batch_uid, sample_schema_uid, "SLIDE-1"
@@ -220,8 +225,8 @@ class TestProjectDeletion:
         refuses.
         """
         # Arrange
-        sample_schema_uid = next(iter(schema_service.samples))
-        observation_schema_uid = next(iter(schema_service.observations))
+        sample_schema_uid = next(iter(schema_service.default_root.samples))
+        observation_schema_uid = next(iter(schema_service.default_root.observations))
         with sqlite_database_service.get_session() as session:
             later = sqlite_database_service.add_batch(
                 session, BatchCreate(name="later", project_uid=project.uid)

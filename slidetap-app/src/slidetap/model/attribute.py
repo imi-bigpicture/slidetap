@@ -14,14 +14,15 @@
 
 """Models for attributes that can be assigned to items."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
-from enum import IntFlag
+from enum import Enum, IntFlag
 from typing import (
     Annotated,
     Any,
     Generic,
     Literal,
+    Self,
     TypeVar,
     Union,
 )
@@ -52,6 +53,17 @@ class RejectedValues(IntFlag):
     MAPPABLE = 2
     """The text mappers read. Refused, the attribute is left out of mapping, so
     re-running mappers neither replaces nor revives what was refused."""
+
+
+class AttributeValueLayer(Enum):
+    """One of the values an attribute holds, by the field holding it."""
+
+    ORIGINAL = "original_value"
+    """What the import said."""
+    UPDATED = "updated_value"
+    """What a curator has edited the attribute to."""
+    MAPPED = "mapped_value"
+    """What mapping made of the attribute."""
 
 
 class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
@@ -91,24 +103,99 @@ class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
 
     @property
     def value(self) -> AttributeType | None:
-        """Return the effective value of the attribute.
+        """Return the effective value of the attribute, the value of
+        `effective_layer`."""
+        match self.effective_layer:
+            case AttributeValueLayer.UPDATED:
+                return self.updated_value
+            case AttributeValueLayer.MAPPED:
+                return self.mapped_value
+            case AttributeValueLayer.ORIGINAL:
+                return self.original_value
+            case None:
+                return None
+
+    @property
+    def effective_layer(self) -> AttributeValueLayer | None:
+        """Which of the values of the attribute is its effective value, None
+        where it has none.
 
         What was edited, else what was mapped, else what was imported — each of
         them only if it says something and has not been refused.
         """
         if self.updated_value is not None:
-            return self.updated_value
+            return AttributeValueLayer.UPDATED
         if (
             self.mapped_value is not None
             and RejectedValues.MAPPABLE not in self.rejected
         ):
-            return self.mapped_value
+            return AttributeValueLayer.MAPPED
         if (
             self.original_value is not None
             and RejectedValues.ORIGINAL not in self.rejected
         ):
-            return self.original_value
+            return AttributeValueLayer.ORIGINAL
         return None
+
+    @property
+    def values_below_effective(self) -> RejectedValues:
+        """The values below the effective value, which would take its place if
+        it were cleared, as the refusals that keep them out.
+
+        Below an edit are what was mapped and what was imported, and below what
+        was mapped is what was imported. Below what was imported, or where
+        there is no effective value, is nothing.
+        """
+        match self.effective_layer:
+            case AttributeValueLayer.UPDATED:
+                return RejectedValues.MAPPABLE | RejectedValues.ORIGINAL
+            case AttributeValueLayer.MAPPED:
+                return RejectedValues.ORIGINAL
+            case _:
+                return RejectedValues.NONE
+
+    def without_mapping_items(self, removed: Callable[[UUID], bool]) -> Self:
+        """Clear the references of the attribute to the mapping items that are
+        removed, its own and those of the attributes nested in its values.
+
+        Parameters
+        ----------
+        removed: Callable[[UUID], bool]
+            Whether a mapping item is removed.
+
+        Returns
+        -------
+        Self
+            A copy, with what was mapped kept and the mapping item it was
+            mapped by cleared where that is removed.
+        """
+        update: dict[str, Any] = {
+            key: self._value_without_mapping_items(getattr(self, key), removed)
+            for key in ("original_value", "updated_value", "mapped_value")
+        }
+        if self.mapping_item_uid is not None and removed(self.mapping_item_uid):
+            update["mapping_item_uid"] = None
+        return self.model_copy(update=update)
+
+    @staticmethod
+    def _value_without_mapping_items(
+        value: Any, removed: Callable[[UUID], bool]
+    ) -> Any:
+        """Clear the references to removed mapping items of the attributes a
+        value nests."""
+        if isinstance(value, Attribute):
+            return value.without_mapping_items(removed)
+        if isinstance(value, Mapping):
+            return {
+                key: Attribute._value_without_mapping_items(nested, removed)
+                for key, nested in value.items()
+            }
+        if isinstance(value, list | tuple):
+            return [
+                Attribute._value_without_mapping_items(nested, removed)
+                for nested in value
+            ]
+        return value
 
 
 class StringAttribute(Attribute[str]):

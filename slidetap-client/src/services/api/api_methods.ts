@@ -157,6 +157,11 @@ export async function post(
   return response
 }
 
+export async function put(path: string, data?: object | null): Promise<Response> {
+  const url = buildUrl(path)
+  return await http('PUT', url, JSON.stringify(data))
+}
+
 export async function delete_(
   path: string,
   args?: Map<string, string | string[] | undefined | null>,

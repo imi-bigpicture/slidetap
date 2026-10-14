@@ -61,6 +61,7 @@ import type {
   AnyReviewPanelLayout,
   ReviewTabLayout,
 } from 'src/models/schema/review_layout'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { Batch } from 'src/models/batch'
@@ -176,6 +177,9 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   const rootSchema = useSchemaContext()
   const queryClient = useQueryClient()
   const { pseudonymMode } = usePseudonym()
+  // A project that cannot be edited is view only: its queue is worked through
+  // and read, and nothing is flagged, signed off, or saved.
+  const { edit: canEdit } = useProjectActions()
   // An item to open on, for arriving here from somewhere that was already
   // looking at one — the curate table, say.
   const [searchParams] = useSearchParams()
@@ -460,7 +464,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
       } else if (event.key === '.') {
         event.preventDefault()
         step(1)
-      } else if (event.key === 'Enter' && current !== undefined) {
+      } else if (event.key === 'Enter' && current !== undefined && canEdit) {
         event.preventDefault()
         setReviewStatus({
           itemUid: current.uid,
@@ -473,7 +477,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [step, current, setReviewStatus])
+  }, [step, current, setReviewStatus, canEdit])
 
   if (reviewSchemas.length === 0) {
     return (
@@ -543,7 +547,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                 <span>
                   <IconButton
                     size="small"
-                    disabled={flagInvalidMutation.isPending}
+                    disabled={!canEdit || flagInvalidMutation.isPending}
                     onClick={() => flagInvalidMutation.mutate()}
                   >
                     <Rule />
@@ -701,12 +705,16 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
               onNext={() => step(1)}
               hasPrevious={index > 0}
               hasNext={index !== -1 && index < queue.length - 1}
-              edit={{
-                isDirty,
-                saving,
-                save: () => edits.forEach((state) => state.save()),
-                revert: () => edits.forEach((state) => state.revert()),
-              }}
+              edit={
+                canEdit
+                  ? {
+                      isDirty,
+                      saving,
+                      save: () => edits.forEach((state) => state.save()),
+                      revert: () => edits.forEach((state) => state.revert()),
+                    }
+                  : undefined
+              }
             >
               {/* The icon is the action, not the state, and its colour is the
                   state it moves the item into: red to flag, green to mark
@@ -732,7 +740,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                 <span>
                   <IconButton
                     size="small"
-                    disabled={reviewMutation.isPending}
+                    disabled={!canEdit || reviewMutation.isPending}
                     onClick={() =>
                       reviewMutation.mutate({
                         itemUid: current.uid,

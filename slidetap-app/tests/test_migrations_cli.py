@@ -12,8 +12,9 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import datetime
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -240,3 +241,430 @@ def test_curator_excluded_is_read_off_what_is_left_out(session: Session):
         "under_in",
         "observation_on_in",
     }
+
+
+def test_mapper_names_are_unique_within_a_family_after_upgrade(session: Session):
+    """A mapper is found by its name within the family of its root, so two of
+    a name are refused in one family and allowed in two."""
+    command.upgrade(config(), "head")
+    mapper = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("root_attribute_schema_uid", sa.Uuid()),
+        sa.column("family_uid", sa.Uuid()),
+    )
+
+    def row(family_uid: UUID) -> dict:
+        schema_uid = uuid4()
+        return {
+            "uid": uuid4(),
+            "name": "Sex",
+            "attribute_schema_uid": schema_uid,
+            "root_attribute_schema_uid": schema_uid,
+            "family_uid": family_uid,
+        }
+
+    family_uid = uuid4()
+    session.execute(sa.insert(mapper), [row(family_uid), row(uuid4())])
+    session.commit()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        session.execute(sa.insert(mapper), [row(family_uid)])
+        session.commit()
+
+
+def test_a_project_can_be_migrating_after_upgrade(session: Session):
+    """The status a project is in while it is moved to another root schema,
+    which the column did not hold before."""
+    migrating_revision = "9e4b7c2d1a63"
+    before = ScriptDirectory.from_config(config()).get_revision(migrating_revision)
+    assert before is not None and isinstance(before.down_revision, str)
+    command.upgrade(config(), before.down_revision)
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+    )
+    uid = uuid4()
+    session.execute(
+        sa.insert(project),
+        [
+            {
+                "uid": uid,
+                "name": "project",
+                "status": "COMPLETED",
+                "root_schema_uid": uuid4(),
+                "schema_uid": uuid4(),
+                "dataset_uid": uuid4(),
+                "created": datetime.datetime(2026, 1, 1),
+                "valid_attributes": True,
+                "locked": False,
+            }
+        ],
+    )
+    session.commit()
+
+    command.upgrade(config(), migrating_revision)
+    session.execute(
+        sa.update(project).where(project.c.uid == uid).values(status="MIGRATING")
+    )
+    session.commit()
+
+    assert session.execute(
+        sa.select(project.c.name, project.c.status).where(project.c.uid == uid)
+    ).one() == ("project", "MIGRATING")
+
+
+def test_projects_whose_export_is_complete_are_exported_after_upgrade(
+    session: Session,
+):
+    """When they were exported is not known, but that they were is."""
+    exported_revision = "2f8a6d4c9b17"
+    before = ScriptDirectory.from_config(config()).get_revision(exported_revision)
+    assert before is not None and isinstance(before.down_revision, str)
+    command.upgrade(config(), before.down_revision)
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+    )
+    uids = {status: uuid4() for status in ("EXPORT_COMPLETE", "IN_PROGRESS")}
+    session.execute(
+        sa.insert(project),
+        [
+            {
+                "uid": uid,
+                "name": status,
+                "status": status,
+                "root_schema_uid": uuid4(),
+                "schema_uid": uuid4(),
+                "dataset_uid": uuid4(),
+                "created": datetime.datetime(2026, 1, 1),
+                "valid_attributes": True,
+                "locked": False,
+            }
+            for status, uid in uids.items()
+        ],
+    )
+    session.commit()
+
+    command.upgrade(config(), exported_revision)
+
+    exported = sa.table(
+        "project", sa.column("name", sa.String()), sa.column("exported", sa.DateTime())
+    )
+    assert {
+        name: when is not None
+        for name, when in session.execute(sa.select(exported)).all()
+    } == {"EXPORT_COMPLETE": True, "IN_PROGRESS": False}
+
+
+def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
+    session: Session,
+):
+    """The migration tables are dropped, and a project left migrating by them
+    is as it was before the migration, with the status it had."""
+    migration_revision = "4d2a7f91c3e8"
+    before = ScriptDirectory.from_config(config()).get_revision(migration_revision)
+    assert before is not None and isinstance(before.down_revision, str)
+    command.upgrade(config(), migration_revision)
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+    )
+    migration = sa.table(
+        "project_migration",
+        sa.column("uid", sa.Uuid()),
+        sa.column("project_uid", sa.Uuid()),
+        sa.column("source_root_schema_uid", sa.Uuid()),
+        sa.column("target_root_schema_uid", sa.Uuid()),
+        sa.column("previous_project_status", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("created", sa.DateTime()),
+        sa.column("updated", sa.DateTime()),
+    )
+    migration_entity = sa.table(
+        "migration_entity",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_uid", sa.Uuid()),
+        sa.column("entity_uid", sa.Uuid()),
+        sa.column("target_entity_schema_uid", sa.Uuid()),
+        sa.column("identifier", sa.String()),
+        sa.column("position", sa.Integer()),
+    )
+    issue = sa.table(
+        "attribute_migration_issue",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_entity_uid", sa.Uuid()),
+        sa.column("source_attribute_schema_uid", sa.Uuid()),
+        sa.column("target_attribute_schema_uid", sa.Uuid()),
+        sa.column("original", sa.JSON()),
+        sa.column("problem", sa.String()),
+    )
+    uids = {status: uuid4() for status in ("MIGRATING", "IN_PROGRESS")}
+    created = datetime.datetime(2026, 1, 1)
+    session.execute(
+        sa.insert(project),
+        [
+            {
+                "uid": uid,
+                "name": status,
+                "status": status,
+                "root_schema_uid": uuid4(),
+                "schema_uid": uuid4(),
+                "dataset_uid": uuid4(),
+                "created": created,
+                "valid_attributes": True,
+                "locked": False,
+            }
+            for status, uid in uids.items()
+        ],
+    )
+    migration_uid = uuid4()
+    session.execute(
+        sa.insert(migration),
+        [
+            {
+                "uid": migration_uid,
+                "project_uid": uids["MIGRATING"],
+                "source_root_schema_uid": uuid4(),
+                "target_root_schema_uid": uuid4(),
+                "previous_project_status": "COMPLETED",
+                "status": "CURATING",
+                "created": created,
+                "updated": created,
+            }
+        ],
+    )
+    migration_entity_uid = uuid4()
+    session.execute(
+        sa.insert(migration_entity),
+        [
+            {
+                "uid": migration_entity_uid,
+                "migration_uid": migration_uid,
+                "entity_uid": uids["MIGRATING"],
+                "target_entity_schema_uid": uuid4(),
+                "identifier": "MIGRATING",
+                "position": 0,
+            }
+        ],
+    )
+    session.execute(
+        sa.insert(issue),
+        [
+            {
+                "uid": uuid4(),
+                "migration_entity_uid": migration_entity_uid,
+                "source_attribute_schema_uid": uuid4(),
+                "target_attribute_schema_uid": uuid4(),
+                "original": {"attributeValueType": "enum"},
+                "problem": "no counterpart",
+            },
+            {
+                "uid": uuid4(),
+                "migration_entity_uid": migration_entity_uid,
+                "source_attribute_schema_uid": uuid4(),
+                "target_attribute_schema_uid": None,
+                "original": {"attributeValueType": "string"},
+                "problem": "dropped",
+            },
+        ],
+    )
+    session.commit()
+
+    command.downgrade(config(), before.down_revision)
+
+    assert {
+        name: status
+        for name, status in session.execute(
+            sa.select(project.c.name, project.c.status)
+        ).all()
+    } == {"MIGRATING": "COMPLETED", "IN_PROGRESS": "IN_PROGRESS"}
+    tables = sa.inspect(session.connection()).get_table_names()
+    assert "project_migration" not in tables
+    assert "migration_entity" not in tables
+    assert "attribute_migration_issue" not in tables
+    command.upgrade(config(), "head")
+    assert_up_to_date(session)
+
+
+MIGRATION_ENTITY = sa.table(
+    "migration_entity",
+    sa.column("uid", sa.Uuid()),
+    sa.column("migration_uid", sa.Uuid()),
+    sa.column("entity_uid", sa.Uuid()),
+    sa.column("target_entity_schema_uid", sa.Uuid()),
+    sa.column("identifier", sa.String()),
+    sa.column("position", sa.Integer()),
+)
+
+
+@pytest.fixture
+def migration_uid(session: Session) -> UUID:
+    """The uid of the migration of a project, in a database at head."""
+    command.upgrade(config(), "head")
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+    )
+    migration = sa.table(
+        "project_migration",
+        sa.column("uid", sa.Uuid()),
+        sa.column("project_uid", sa.Uuid()),
+        sa.column("source_root_schema_uid", sa.Uuid()),
+        sa.column("target_root_schema_uid", sa.Uuid()),
+        sa.column("previous_project_status", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("created", sa.DateTime()),
+        sa.column("updated", sa.DateTime()),
+    )
+    project_uid = uuid4()
+    created = datetime.datetime(2026, 1, 1)
+    session.execute(
+        sa.insert(project),
+        [
+            {
+                "uid": project_uid,
+                "name": "project",
+                "status": "MIGRATING",
+                "root_schema_uid": uuid4(),
+                "schema_uid": uuid4(),
+                "dataset_uid": uuid4(),
+                "created": created,
+                "valid_attributes": True,
+                "locked": False,
+            }
+        ],
+    )
+    migration_uid = uuid4()
+    session.execute(
+        sa.insert(migration),
+        [
+            {
+                "uid": migration_uid,
+                "project_uid": project_uid,
+                "source_root_schema_uid": uuid4(),
+                "target_root_schema_uid": uuid4(),
+                "previous_project_status": "IN_PROGRESS",
+                "status": "CURATING",
+                "created": created,
+                "updated": created,
+            }
+        ],
+    )
+    session.commit()
+    return migration_uid
+
+
+def test_an_entity_is_in_a_migration_once(session: Session, migration_uid: UUID):
+    entity_uid = uuid4()
+
+    def row(position: int) -> dict:
+        return {
+            "uid": uuid4(),
+            "migration_uid": migration_uid,
+            "entity_uid": entity_uid,
+            "target_entity_schema_uid": uuid4(),
+            "identifier": "item",
+            "position": position,
+        }
+
+    session.execute(sa.insert(MIGRATION_ENTITY), [row(0)])
+    session.commit()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        session.execute(sa.insert(MIGRATION_ENTITY), [row(1)])
+        session.commit()
+    session.rollback()
+
+
+def test_an_attribute_issue_of_an_entity_is_unique(
+    session: Session, migration_uid: UUID
+):
+    """An attribute issue of an entity is unique by its target attribute
+    schema, or, for a dropped attribute, its source attribute schema; an issue
+    has one of them."""
+    issue = sa.table(
+        "attribute_migration_issue",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_entity_uid", sa.Uuid()),
+        sa.column("source_attribute_schema_uid", sa.Uuid()),
+        sa.column("target_attribute_schema_uid", sa.Uuid()),
+        sa.column("problem", sa.String()),
+    )
+    migration_entity_uid = uuid4()
+    session.execute(
+        sa.insert(MIGRATION_ENTITY),
+        [
+            {
+                "uid": migration_entity_uid,
+                "migration_uid": migration_uid,
+                "entity_uid": uuid4(),
+                "target_entity_schema_uid": uuid4(),
+                "identifier": "project",
+                "position": 0,
+            }
+        ],
+    )
+    source_attribute_schema_uid = uuid4()
+    target_attribute_schema_uid = uuid4()
+
+    def row(
+        source: UUID | None = source_attribute_schema_uid,
+        target: UUID | None = target_attribute_schema_uid,
+    ) -> dict:
+        return {
+            "uid": uuid4(),
+            "migration_entity_uid": migration_entity_uid,
+            "source_attribute_schema_uid": source,
+            "target_attribute_schema_uid": target,
+            "problem": "no counterpart",
+        }
+
+    # An issue with a target, and a dropped attribute of the same source.
+    session.execute(sa.insert(issue), [row(), row(target=None)])
+    session.commit()
+
+    for duplicate in (
+        row(source=uuid4()),
+        row(source=None),
+        row(target=None),
+        row(source=None, target=None),
+    ):
+        with pytest.raises(sa.exc.IntegrityError):
+            session.execute(sa.insert(issue), [duplicate])
+            session.commit()
+        session.rollback()

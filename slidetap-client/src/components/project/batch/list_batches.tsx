@@ -40,6 +40,7 @@ import {
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../../contexts/project_actions/project_actions_context'
 import { BasicDataTable } from '../../table/basic_data_table'
 import DisplayBatch from './display_batch'
 
@@ -70,6 +71,8 @@ export default function ListBatches({
   const [batchDetailsOpen, setBatchDetailsOpen] = React.useState(false)
   const [batchDetailsUid, setBatchDetailsUid] = React.useState<string>()
   const { showError } = useError()
+  // A project that cannot be edited is view only.
+  const { edit: canEdit } = useProjectActions()
   const queryClient = useQueryClient()
   const [pendingDelete, setPendingDelete] = React.useState<Batch | null>(null)
   const batchQuery = useQuery({
@@ -126,6 +129,7 @@ export default function ListBatches({
   }
   const handleBatchDeleteEnabled = (batch: Batch): boolean => {
     return (
+      canEdit &&
       !batch.isDefault &&
       DELETABLE_STATUSES.includes(batch.status) &&
       !deleteBatchMutation.isPending
@@ -150,7 +154,9 @@ export default function ListBatches({
   const handleBatchReopenEnabled = (batch: Batch): boolean => {
     // Not while one is being reopened: what the row says is what was last read,
     // and it says locked until the answer arrives.
-    return batch.status === BatchStatus.LOCKED && !reopenBatchMutation.isPending
+    return (
+      canEdit && batch.status === BatchStatus.LOCKED && !reopenBatchMutation.isPending
+    )
   }
 
   return (
@@ -230,7 +236,7 @@ export default function ListBatches({
               {
                 action: Action.EDIT,
                 onAction: handleBatchEdit,
-                enabled: handleBatchNotDeleting,
+                enabled: (batch) => canEdit && handleBatchNotDeleting(batch),
               },
               {
                 action: Action.REOPEN,
@@ -244,7 +250,7 @@ export default function ListBatches({
               },
             ]}
             topBarActions={[
-              <Button key="new" onClick={handleCreateBatch}>
+              <Button key="new" disabled={!canEdit} onClick={handleCreateBatch}>
                 New batch
               </Button>,
             ]}

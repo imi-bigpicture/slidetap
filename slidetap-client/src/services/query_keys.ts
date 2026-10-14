@@ -59,6 +59,10 @@ export const queryKeys = {
       [...queryKeys.project.detail(projectUid), 'validation'] as const,
     privateAttributes: (projectUid: string) =>
       [...queryKeys.project.detail(projectUid), 'privateAttributes'] as const,
+    migration: (projectUid: string) =>
+      [...queryKeys.project.detail(projectUid), 'migration'] as const,
+    actions: (projectUid: string) =>
+      [...queryKeys.project.detail(projectUid), 'actions'] as const,
   },
 
   // Batches
@@ -206,14 +210,27 @@ export const queryKeys = {
   // Schemas
   schema: {
     all: ['schemas'] as const,
-    root: () => [...queryKeys.schema.all, 'root'] as const,
+    root: (rootSchemaUid?: string) =>
+      [...queryKeys.schema.all, 'root', rootSchemaUid ?? 'new projects'] as const,
+    roots: () => [...queryKeys.schema.all, 'roots'] as const,
     items: () => [...queryKeys.schema.all, 'items'] as const,
-    item: (schemaUid: string) => [...queryKeys.schema.items(), schemaUid] as const,
-    attributes: () => [...queryKeys.schema.all, 'attributes'] as const,
+    item: (schemaUid: string, rootSchemaUid?: string) =>
+      [
+        ...queryKeys.schema.items(),
+        schemaUid,
+        rootSchemaUid ?? 'new projects',
+      ] as const,
+    attributes: (rootSchemaUid?: string) =>
+      [...queryKeys.schema.all, 'attributes', rootSchemaUid ?? 'new projects'] as const,
     attribute: (schemaUid: string) =>
-      [...queryKeys.schema.attributes(), schemaUid] as const,
-    hierarchy: (schemaUid: string) =>
-      [...queryKeys.schema.all, 'hierarchy', schemaUid] as const,
+      [...queryKeys.schema.all, 'attribute', schemaUid] as const,
+    hierarchy: (schemaUid: string, rootSchemaUid?: string) =>
+      [
+        ...queryKeys.schema.all,
+        'hierarchy',
+        schemaUid,
+        rootSchemaUid ?? 'new projects',
+      ] as const,
   },
 
   // Mappers

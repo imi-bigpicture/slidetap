@@ -1,6 +1,6 @@
 [project]
 name = "slidetap"
-version = "0.3.0"
+version = "0.4.0rc1"
 description = "App package for SlideTap"
 authors = [
     {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}
@@ -9,7 +9,7 @@ license = "Apache-2.0"
 requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
-    "pydantic>=2.0.0",
+    "pydantic>=2.10",
     "SQLAlchemy>=2.0.20",
     "SQLAlchemy-Utils>=0.38.3",
     "alembic>=1.13.0",
@@ -30,6 +30,7 @@ dependencies = [
 slidetap-task-worker = "slidetap.task.worker_cli:main"
 slidetap-task-init-schema = "slidetap.task.init_schema_cli:main"
 slidetap-db = "slidetap.migrations.cli:app"
+slidetap-mappers = "slidetap.cli.mappers:app"
 
 [project.optional-dependencies]
 web = [

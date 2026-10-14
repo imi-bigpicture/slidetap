@@ -19,7 +19,7 @@ from uuid import UUID
 
 from slidetap.external_interfaces import MetadataExportInterface
 from slidetap.model import Project
-from slidetap.services import ProjectService
+from slidetap.services import ProjectService, SchemaService
 from slidetap.services.database_service import DatabaseService
 from slidetap.task import Scheduler
 
@@ -30,21 +30,27 @@ class MetadataExportService:
         scheduler: Scheduler,
         project_service: ProjectService,
         database_service: DatabaseService,
+        schema_service: SchemaService,
         metadata_export_interface: MetadataExportInterface,
     ):
         self._scheduler = scheduler
         self._project_service = project_service
         self._database_service = database_service
+        self._schema_service = schema_service
         self._metadata_export_interface = metadata_export_interface
         self._logger = logging.getLogger(__name__)
 
     async def export(self, project: Project):
         self._logger.info(f"Exporting project {project}.")
+        self._schema_service.assert_can_change(project)
         self._project_service.set_as_exporting(project)
         await self._scheduler.metadata_project_export(project)
 
     def preview_item(self, item_uid: UUID) -> str | None:
-        """Should return a preview of the item."""
+        """A preview of the item as it would be exported, None where the
+        project cannot be changed."""
         with self._database_service.get_session() as session:
             item = self._database_service.get_item(session, item_uid)
+            if not self._schema_service.can_change(item, session):
+                return None
             return self._metadata_export_interface.preview_item(item.model)

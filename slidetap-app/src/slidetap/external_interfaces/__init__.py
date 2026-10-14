@@ -37,6 +37,7 @@ from slidetap.external_interfaces.metadata_import import (
 )
 from slidetap.external_interfaces.pseudonym_factory import PseudonymFactoryInterface
 from slidetap.external_interfaces.schema import SchemaInterface
+from slidetap.external_interfaces.schema_migration import SchemaMigration
 
 __all__ = [
     "AuthInterface",
@@ -53,5 +54,6 @@ __all__ = [
     "MapperInjectorInterface",
     "PseudonymFactoryInterface",
     "SchemaInterface",
+    "SchemaMigration",
     "TransientTaskError",
 ]

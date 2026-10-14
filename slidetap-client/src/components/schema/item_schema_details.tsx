@@ -30,6 +30,7 @@ import ChipDivider from 'src/components/item/chip_divider'
 import Spinner from 'src/components/spinner'
 import { isImageSchema, isObservationSchema, isSampleSchema } from 'src/models/helpers'
 import { ItemValueTypeStrings } from 'src/models/item_value_type'
+import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 import SchemaChips from './schema_chips'
@@ -49,13 +50,14 @@ export default function DisplayItemSchemaDetails({
   openAttributeSchema,
   openItemSchema,
 }: DisplayItemSchemaDetailsProps): ReactElement {
+  const rootSchema = useSchemaContext()
   const schemaQuery = useQuery({
-    queryKey: queryKeys.schema.item(schemaUid || ''),
+    queryKey: queryKeys.schema.item(schemaUid || '', rootSchema.uid),
     queryFn: async () => {
       if (schemaUid === undefined) {
         return undefined
       }
-      return await schemaApi.getItemSchema(schemaUid)
+      return await schemaApi.getItemSchema(schemaUid, rootSchema.uid)
     },
   })
 

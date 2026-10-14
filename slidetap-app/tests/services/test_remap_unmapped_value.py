@@ -18,6 +18,7 @@ Against a real SQLite database, since what is being pinned is which rows the
 query finds and what the remap leaves in `unmapped_value`.
 """
 
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
@@ -46,8 +47,10 @@ PARAFFIN = Code(code="311731000", scheme="SCT", meaning="Paraffin wax")
 
 
 @pytest.fixture()
-def schema_service(schema: ExampleSchema) -> SchemaService:
-    return SchemaService(schema)
+def schema_service(
+    schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+) -> SchemaService:
+    return schema_service_of(schema)
 
 
 @pytest.fixture()

@@ -21,6 +21,7 @@ may be a bonus. The relation carries that choice, and the validator holds the
 subject to it the same way it holds a slide to its images.
 """
 
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
@@ -229,9 +230,11 @@ def batch_uid(
 
 @pytest.fixture()
 def validator(
-    schema: RootSchema, sqlite_database_service: DatabaseService
+    schema: RootSchema,
+    sqlite_database_service: DatabaseService,
+    schema_service_of: Callable[..., SchemaService],
 ) -> RelationValidator:
-    return RelationValidator(SchemaService(schema), sqlite_database_service)
+    return RelationValidator(schema_service_of(schema), sqlite_database_service)
 
 
 def _case(

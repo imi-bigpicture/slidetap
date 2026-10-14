@@ -18,19 +18,21 @@ Against a real SQLite database: what is being pinned is which images the
 guard counts, which a mocked session says nothing about.
 """
 
+from collections.abc import Callable
 from uuid import UUID
 
 import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
 
-from slidetap.database import DatabaseImage, DatabaseSample, NotAllowedActionError
+from slidetap.database import DatabaseImage, DatabaseSample
 from slidetap.model import (
     BatchCreate,
     BatchStatus,
     Dataset,
     ImageFormat,
     ImageStatus,
+    NotAllowedActionError,
     Project,
     ProjectStatus,
 )
@@ -39,6 +41,7 @@ from slidetap.services import (
     BatchService,
     DatabaseService,
     MapperService,
+    MigrationService,
     ProjectService,
     SchemaService,
     StorageService,
@@ -47,8 +50,10 @@ from slidetap.services import (
 
 
 @pytest.fixture()
-def schema_service(schema: ExampleSchema) -> SchemaService:
-    return SchemaService(schema)
+def schema_service(
+    schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+) -> SchemaService:
+    return schema_service_of(schema)
 
 
 @pytest.fixture()
@@ -65,6 +70,7 @@ def project_service(
         mapper_service=decoy.mock(cls=MapperService),
         database_service=sqlite_database_service,
         storage_service=decoy.mock(cls=StorageService),
+        migration_service=decoy.mock(cls=MigrationService),
     )
 
 

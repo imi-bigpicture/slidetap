@@ -25,7 +25,6 @@ from slidetap.database import (
     DatabaseImage,
     DatabaseItem,
     DatabaseReviewIssue,
-    NotAllowedActionError,
 )
 from slidetap.model import (
     AnyItem,
@@ -33,10 +32,13 @@ from slidetap.model import (
     MetadataImportCompleteness,
     MetadataSearchResult,
     NonValidItem,
+    NotAllowedActionError,
+    NotFoundError,
     ReviewIssue,
     ReviewIssueSource,
     ReviewQueueItem,
     ReviewStatus,
+    RootSchemaIndex,
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -112,6 +114,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            self._schema_service.assert_can_change(item, session)
             if status == ReviewStatus.REVIEWED:
                 refusal = self._invalid_descendants_reason(item, session)
             if refusal is not None:
@@ -173,28 +176,38 @@ class ReviewService:
         review, or the item itself where its own schema does. Nothing, for an
         item that sits under no such unit.
         """
-        unit = self._schema_service.review_unit
-        if unit is None or not self._schema_service.review_unit_covers(item.schema_uid):
+        root = self._schema_service.root_of(item)
+        unit = root.review_unit
+        if unit is None or not root.review_unit_covers(item.schema_uid):
             return None
         if item.schema_uid == unit.schema_uid:
             return item
         return self._database_service.get_ancestor(item, {unit.schema_uid})
 
     def review_unit_uids_in(
-        self, result: MetadataSearchResult, uid_remap: Mapping[UUID, UUID]
+        self,
+        result: MetadataSearchResult,
+        uid_remap: Mapping[UUID, UUID],
+        root: RootSchemaIndex,
     ) -> Iterable[UUID]:
         """The review units the result produced, by their uid in the database.
 
         Taken from the items rather than from the result's entry-level item:
         an importer names that one for its own reasons, and it need be neither
         a review unit nor the only one the result holds.
+
+        Parameters
+        ----------
+        root: RootSchemaIndex
+            The root of the project the result was imported into.
         """
-        if self._schema_service.review_unit is None:
+        unit = root.review_unit
+        if unit is None:
             return ()
         return (
             uid_remap.get(item.uid, item.uid)
             for item in result.items
-            if item.schema_uid == self._schema_service.review_unit.schema_uid
+            if item.schema_uid == unit.schema_uid
         )
 
     def check_imported_review_unit(self, item_uid: UUID, session: Session) -> None:
@@ -274,9 +287,15 @@ class ReviewService:
         rather than in whatever order the database returns.
         """
         with self._database_service.get_session() as session:
+            root = self._schema_service.root_of(
+                self._database_service.get_dataset(session, dataset_uid), session
+            )
+            item_schema = root.items.get(item_schema_uid)
+            if item_schema is None:
+                raise NotFoundError(f"Item schema {item_schema_uid} not found")
             items = self._database_service.get_items(
                 session,
-                self._schema_service.items[item_schema_uid],
+                item_schema,
                 dataset_uid,
                 batch_uid,
                 review_status=review_status,
@@ -333,14 +352,17 @@ class ReviewService:
         at a time per item, so running it twice adds nothing the first run did
         not and settling one item does not settle the rest.
         """
-        review_unit = self._schema_service.review_unit
-        if review_unit is None:
-            return 0
         flagged = 0
         with self._database_service.get_session(session) as session:
+            dataset = self._database_service.get_dataset(session, dataset_uid)
+            self._schema_service.assert_can_change(dataset, session)
+            root = self._schema_service.root_of(dataset, session)
+            review_unit = root.review_unit
+            if review_unit is None:
+                return 0
             units = self._database_service.get_items(
                 session,
-                self._schema_service.items[review_unit.schema_uid],
+                root.items[review_unit.schema_uid],
                 dataset_uid,
                 batch_uid,
             )
@@ -427,6 +449,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            self._schema_service.assert_can_change(item, session)
             unit = self.review_unit_of(item)
             if unit is None:
                 return None
@@ -644,7 +667,7 @@ class ReviewService:
         application knows, since a reason that names nothing still says which
         part of validity it is about.
         """
-        schema = self._schema_service.items.get(item.schema_uid)
+        schema = self._schema_service.root_of(item).items.get(item.schema_uid)
         if schema is None:
             return "attributes"
         names = [
@@ -724,6 +747,7 @@ class ReviewService:
             issue = self._database_service.get_optional_review_issue(session, issue_uid)
             if issue is None:
                 return None
+            self._schema_service.assert_can_change(issue.item, session)
             if issue.source == ReviewIssueSource.VALIDATION:
                 raise NotAllowedActionError(
                     "What validation raised is settled by the item becoming "
@@ -814,7 +838,7 @@ class ReviewService:
         What the unit says its import leaves out is not counted against it
         while the batch is still being filled.
         """
-        unit = self._schema_service.review_unit
+        unit = self._schema_service.root_of(item, session).review_unit
         if unit is None or unit.schema_uid != item.schema_uid:
             return [], 0
         selected = [

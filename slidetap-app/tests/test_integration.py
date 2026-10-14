@@ -41,6 +41,7 @@ from slidetap_example.interfaces.metadata_import import (
 from slidetap_example.mapper_injector import ExampleMapperInjector
 from slidetap_example.schema import ExampleSchema, ExampleSchemaInterface
 
+from slidetap.cli.mappers import MapperSetUp
 from slidetap.config import (
     DatabaseConfig,
     DicomizationConfig,
@@ -245,13 +246,15 @@ def app(
     config_provider: Provider,
     task_app: tuple[TaskApp, Container],
 ) -> FastAPI:
-    proc_app, _ = task_app
+    proc_app, container = task_app
+    # As `slidetap-mappers set-up` does on deploy, before the web app starts.
+    MapperSetUp.from_container(container).run()
     app_override = Provider(scope=Scope.APP)
     app_override.provide(lambda: proc_app, provides=TaskApp)
-    container = make_async_container(
+    web_container = make_async_container(
         base_provider, web_provider, app_override, config_provider
     )
-    return SlideTapWebAppFactory.create(container=container)
+    return SlideTapWebAppFactory.create(container=web_container)
 
 
 @pytest.fixture

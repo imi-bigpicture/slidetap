@@ -1,6 +1,6 @@
 [project]
 name = "slidetap-example"
-version = "0.3.0"
+version = "0.4.0rc1"
 description = "Example app for SlideTap"
 readme = "README.md"
 authors = [

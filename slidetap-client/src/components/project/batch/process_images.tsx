@@ -30,6 +30,7 @@ import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../../contexts/project_actions/project_actions_context'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 interface ProcessImagesProps {
@@ -59,6 +60,8 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [starting, setStarting] = React.useState(false)
+  // Refused for a project on a root schema the image pipeline does not support.
+  const { edit: canProcessImages } = useProjectActions()
   const validationQuery = useQuery({
     queryKey: queryKeys.batch.validation(batch.uid),
     queryFn: async () => {
@@ -92,7 +95,10 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
           }
         >
           <Stack>
-            <Button disabled={isNotValid || starting} onClick={handleStartProject}>
+            <Button
+              disabled={isNotValid || starting || !canProcessImages}
+              onClick={handleStartProject}
+            >
               Start
             </Button>
           </Stack>
@@ -175,12 +181,18 @@ function ProcessImagesProgress({
       })
   }
 
+  // Retrying, or taking a failed image out of the batch, changes the project.
+  const { edit: canEdit } = useProjectActions()
+  const handleRetryActionEnabled = (image: Image): boolean => {
+    return handleRetryEnabled(image) && canEdit
+  }
+
   const handleDeselectEnabled = (image: Image): boolean => {
-    return image.selected && handleRetryEnabled(image)
+    return canEdit && image.selected && handleRetryEnabled(image)
   }
 
   const handleRestoreEnabled = (image: Image): boolean => {
-    return !image.selected
+    return canEdit && !image.selected
   }
 
   const handleImagesRetry = (imageUids: string[]): void => {
@@ -198,7 +210,7 @@ function ProcessImagesProgress({
           {
             action: Action.RETRY,
             onAction: handleRetryAction,
-            enabled: handleRetryEnabled,
+            enabled: handleRetryActionEnabled,
           },
           {
             action: Action.DELETE,
@@ -211,7 +223,7 @@ function ProcessImagesProgress({
             enabled: handleRestoreEnabled,
           },
         ]}
-        onRowsRetry={handleImagesRetry}
+        onRowsRetry={canEdit ? handleImagesRetry : undefined}
         refresh={
           batch.status === BatchStatus.IMAGE_POST_PROCESSING ||
           batch.status === BatchStatus.IMAGE_STORING

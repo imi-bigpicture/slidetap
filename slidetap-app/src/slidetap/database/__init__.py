@@ -27,7 +27,7 @@ from slidetap.database.attribute import (
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
 )
-from slidetap.database.db import Base, NotAllowedActionError, NotFoundError
+from slidetap.database.db import Base
 from slidetap.database.item import (
     DatabaseAnnotation,
     DatabaseImage,
@@ -48,13 +48,16 @@ from slidetap.database.project import (
     DatabaseDataset,
     DatabaseProject,
 )
+from slidetap.database.project_migration import (
+    DatabaseAttributeMigrationIssue,
+    DatabaseMigrationEntity,
+    DatabaseProjectMigration,
+)
 from slidetap.database.review_issue import DatabaseReviewIssue
 from slidetap.database.unmapped_value import DatabaseUnmappedValue
 
 __all__ = [
     "Base",
-    "NotFoundError",
-    "NotAllowedActionError",
     "DatabaseItem",
     "DatabaseItemType",
     "DatabaseImage",
@@ -78,6 +81,9 @@ __all__ = [
     "DatabaseMapperGroup",
     "DatabaseMetadataSearchItem",
     "DatabaseReviewIssue",
+    "DatabaseProjectMigration",
+    "DatabaseMigrationEntity",
+    "DatabaseAttributeMigrationIssue",
     "DatabaseUnmappedValue",
     "DatabaseProject",
     "DatabaseDataset",

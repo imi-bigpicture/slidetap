@@ -53,6 +53,7 @@ import AttributeDetails from 'src/components/attribute/attribute_details'
 import ItemViewHeader from 'src/components/item/item_view_header'
 import { useSelectWithPreview } from 'src/components/item/use_select_with_preview'
 import { useError } from 'src/contexts/error/error_context'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { ItemDetailAction } from 'src/models/action'
@@ -135,6 +136,9 @@ export default function OverviewView({
   const { pseudonymMode } = usePseudonym()
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
+  // A project that cannot be edited is view only: the case is read, and
+  // nothing in it is edited, added, moved, copied, or removed.
+  const { edit: canEdit } = useProjectActions()
   const [currentItemUid, setCurrentItemUid] = useState(itemUid)
   const [editedItems, setEditedItems] = useState<
     Record<string, Record<string, Attribute<AttributeValueTypes>>>
@@ -477,7 +481,19 @@ export default function OverviewView({
           group={group}
           allSchemas={allSchemas}
           targetAttributes={[...section.attributes, ...section.privateAttributes]}
-          section={section}
+          section={
+            canEdit
+              ? section
+              : {
+                  ...section,
+                  reassignable: false,
+                  creatable: false,
+                  copyable: false,
+                  deletable: false,
+                  deletableItems: false,
+                }
+          }
+          editable={canEdit}
           siblingGroups={sectionData}
           editedItems={editedItems}
           onAttributeUpdate={handleAttributeUpdate}
@@ -559,12 +575,16 @@ export default function OverviewView({
           onNext={navigateNext}
           hasPrevious={hasPrevious}
           hasNext={hasNext}
-          edit={{
-            isDirty,
-            saving: saveItemMutation.isPending,
-            save: handleSaveAll,
-            revert: () => setEditedItems({}),
-          }}
+          edit={
+            canEdit
+              ? {
+                  isDirty,
+                  saving: saveItemMutation.isPending,
+                  save: handleSaveAll,
+                  revert: () => setEditedItems({}),
+                }
+              : undefined
+          }
         />
       )}
 
@@ -665,6 +685,8 @@ interface OverviewSectionCardProps {
   /** Put an entry that was removed from the project back into it. */
   onRestoreItem: (itemUid: string) => void
   isMutating: boolean
+  /** Whether the values can be edited; not for a view only project. */
+  editable?: boolean
   /** Fill the height of the column, dividing it among the long texts inside. */
   fillHeight?: boolean
   /** How an identifier chip opens its item, and what it says instead when the
@@ -799,6 +821,7 @@ function OverviewSectionCard({
   onDeleteItem,
   onRestoreItem,
   isMutating,
+  editable = true,
   fillHeight = false,
   openItem,
   openBlockedAction,
@@ -1033,6 +1056,7 @@ function OverviewSectionCard({
                 section.reassignable ? section.reassignableAttributes : undefined
               }
               parentAttributes
+              editable={editable}
               fillHeight={fillHeight}
             />
           )}
@@ -1049,6 +1073,7 @@ function OverviewSectionCard({
                 section.reassignable ? section.reassignableAttributes : undefined
               }
               draggableItem={section.reassignable}
+              editable={editable}
               fillHeight={fillHeight}
               actions={
                 <React.Fragment>
@@ -1316,6 +1341,8 @@ interface OverviewItemRowProps {
   /** The row gets a handle of its own, dragging the whole item to another item
    * rather than one of its values. */
   draggableItem?: boolean
+  /** Whether the values can be edited; not for a view only project. */
+  editable?: boolean
   /** Long texts in the row divide the height it is given. */
   fillHeight?: boolean
   actions?: ReactElement | null
@@ -1397,6 +1424,7 @@ function OverviewItemRow({
   draggableAttributes,
   parentAttributes = false,
   draggableItem = false,
+  editable = true,
   fillHeight = false,
   actions,
 }: OverviewItemRowProps): ReactElement {
@@ -1546,7 +1574,7 @@ function OverviewItemRow({
         <AttributeDetails
           schemas={schemas}
           attributes={mergedAttributes}
-          action={ItemDetailAction.EDIT}
+          action={editable ? ItemDetailAction.EDIT : ItemDetailAction.VIEW}
           attributeLayout={layout}
           defaultCollapsed={childDefaultCollapsed}
           // Enough that the outlined fields do not touch: their labels sit on

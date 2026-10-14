@@ -14,19 +14,29 @@
 
 """Service for accessing projects and project items."""
 
+import datetime
 import logging
 from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseProject, NotAllowedActionError
-from slidetap.model import BatchStatus, ImageStatus, Project, ProjectStatus
+from slidetap.database import DatabaseProject
+from slidetap.model import (
+    BatchStatus,
+    ImageStatus,
+    NotAllowedActionError,
+    NotFoundError,
+    Project,
+    ProjectActions,
+    ProjectStatus,
+)
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
+from slidetap.services.migration.migration_service import MigrationService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
@@ -42,6 +52,7 @@ class ProjectService:
         mapper_service: MapperService,
         database_service: DatabaseService,
         storage_service: StorageService,
+        migration_service: MigrationService,
     ):
         self._attribute_service = attribute_service
         self._batch_service = batch_service
@@ -50,6 +61,7 @@ class ProjectService:
         self._mapper_service = mapper_service
         self._database_service = database_service
         self._storage_service = storage_service
+        self._migration_service = migration_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(
@@ -57,6 +69,7 @@ class ProjectService:
         project: Project,
         session: Session | None = None,
     ) -> Project:
+        """Create a project on its dataset, validating both."""
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_project(session, project)
             if existing:
@@ -79,12 +92,18 @@ class ProjectService:
             )
             database_project = self._database_service.add_project(session, project)
             database_project.attributes = set(database_attributes)
+            database_project.dataset = self._database_service.get_dataset(
+                session, project.dataset_uid
+            )
 
             self._validation_service.validate_project_attributes(
                 database_project, session=session
             )
+            self._validation_service.validate_dataset_attributes(
+                database_project.dataset, session=session
+            )
+            session.flush()
 
-            session.commit()
             mappers = [
                 mapper
                 for group in database_project.mapper_groups
@@ -106,6 +125,45 @@ class ProjectService:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 return None
+            return project.model
+
+    def get_completed(self, uid: UUID) -> Project | None:
+        """The project, None where it is not completed.
+
+        What is only done with a completed project, such as storing its images
+        or giving it new pseudonyms, is refused for one that is not.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, uid)
+            if not project.completed:
+                return None
+            return project.model
+
+    def get_exportable(self, uid: UUID) -> Project:
+        """Get the project, where it can be exported.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project is not wholly in the outbox, as `assert_can_export`
+            refuses it.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, uid)
+            self.assert_can_export(project, session)
+            return project.model
+
+    def get_settled(self, uid: UUID) -> Project:
+        """Get the project, where it is completed, exported or failed.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project is not settled, as `assert_settled` refuses it.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, uid)
+            self.assert_settled(project)
             return project.model
 
     def get_seed(self, uid: UUID) -> UUID | None:
@@ -131,20 +189,55 @@ class ProjectService:
         """
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
+            self._schema_service.assert_can_change(project, session)
             project.seed = None
             self._logger.info(f"Cleared the importer seed of project {project.uid}.")
             session.commit()
             return project.model
 
     def get_all(self, root_schema_uid: UUID | None = None) -> Iterable[Project]:
+        """Every project, or those on one root."""
         with self._database_service.get_session() as session:
             projects = self._database_service.get_all_projects(
                 session, root_schema_uid, load_relations=True
             )
             return [project.model for project in projects]
 
-    def get_all_of_root_schema(self):
-        return self.get_all(self._schema_service.root.uid)
+    def get_actions(self, uid: UUID) -> ProjectActions:
+        """Tell what a project is offered.
+
+        Parameters
+        ----------
+        uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        ProjectActions
+            Whether the project can be changed, whether its root has a
+            migration, and, where it has, why the project cannot be migrated.
+
+        Raises
+        ------
+        NotFoundError
+            If there is no project of the uid.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_optional_project(session, uid)
+            if project is None:
+                raise NotFoundError(f"Project {uid} not found")
+            migration_available = (
+                self._schema_service.migration_of(project.root_schema_uid) is not None
+            )
+            return ProjectActions(
+                edit=self._schema_service.can_change(project, session),
+                migration_available=migration_available,
+                migrate_refusal=(
+                    self._migration_service.migrate_refusal(project, session)
+                    if migration_available
+                    else None
+                ),
+            )
 
     def update(self, project: Project) -> Project | None:
         with self._database_service.get_session() as session:
@@ -153,6 +246,7 @@ class ProjectService:
             )
             if database_project is None:
                 return None
+            self._schema_service.assert_can_change(database_project, session)
             database_project.name = project.name
             mapper_groups = [
                 self._database_service.get_mapper_group(session, group)
@@ -223,6 +317,8 @@ class ProjectService:
         """
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
+            # Not while a migration may be writing to it.
+            self._assert_can_delete(project)
             if project.exporting:
                 raise NotAllowedActionError(
                     f"Cannot delete project {project.uid} while it is "
@@ -304,7 +400,9 @@ class ProjectService:
             raise NotAllowedActionError(
                 f"Cannot export project {project.uid}: its attributes are not valid."
             )
-        for image_schema in self._schema_service.images.values():
+        for image_schema in self._schema_service.root_of(
+            project, session
+        ).images.values():
             selected = self._database_service.get_item_count(
                 session, image_schema, dataset=project.dataset_uid, selected=True
             )
@@ -320,6 +418,25 @@ class ProjectService:
                     f"Cannot export project {project.uid}: {selected - stored} "
                     f"selected {image_schema.name} image(s) are not stored."
                 )
+
+    @staticmethod
+    def _assert_can_delete(project: DatabaseProject) -> None:
+        """Refuse deleting a project a migration may be writing to.
+
+        Parameters
+        ----------
+        project: DatabaseProject
+            The project.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project is being migrated.
+        """
+        if project.status == ProjectStatus.MIGRATING:
+            raise NotAllowedActionError(
+                "The project cannot be deleted: the project is being migrated."
+            )
 
     def set_as_in_progress(
         self,
@@ -348,6 +465,9 @@ class ProjectService:
                 )
                 raise Exception(error)
             project.status = ProjectStatus.EXPORT_COMPLETE
+            # Kept whatever the status is set to after: what was exported is out
+            # there as it was.
+            project.exported = datetime.datetime.now()
             self._logger.info(f"Project {project.uid} set as export complete.")
             session.commit()
             return project.model

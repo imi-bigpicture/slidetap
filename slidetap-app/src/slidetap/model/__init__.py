@@ -18,6 +18,7 @@ from slidetap.model.attribute import (
     AnyAttribute,
     Attribute,
     AttributeType,
+    AttributeValueLayer,
     BooleanAttribute,
     CodeAttribute,
     DatetimeAttribute,
@@ -38,6 +39,12 @@ from slidetap.model.code import Code, CodeSuggestion
 from slidetap.model.dataset import Dataset
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
+from slidetap.model.errors import (
+    MigrationError,
+    NotAllowedActionError,
+    NotFoundError,
+    ProjectNotEditableError,
+)
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item import (
@@ -76,7 +83,16 @@ from slidetap.model.metadata_search_result import (
     MetadataSearchResult,
     ReviewIssueToRaise,
 )
+from slidetap.model.migration import (
+    AttributeMigrationIssue,
+    EntityMigrationIssues,
+    EntityMigrationResult,
+    MigrationStatus,
+    ProjectMigration,
+    UnresolvedAttributeMigration,
+)
 from slidetap.model.project import Project
+from slidetap.model.project_actions import ProjectActions
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.review_issue import ReviewIssue
 from slidetap.model.review_issue_source import ReviewIssueSource
@@ -143,7 +159,11 @@ from slidetap.model.schema.review_layout import (
     ReviewTabLayout,
 )
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model.schema.root_schema import AnyEntitySchema, RootSchema
+from slidetap.model.schema.root_schema_index import (
+    RootSchemaIndex,
+)
+from slidetap.model.schema.root_schema_summary import RootSchemaSummary
 from slidetap.model.session import UserSession
 from slidetap.model.table import (
     AttributeFilter,
@@ -165,16 +185,22 @@ from slidetap.model.validation import (
 )
 
 __all__ = [
+    "NotAllowedActionError",
+    "NotFoundError",
+    "MigrationError",
+    "ProjectNotEditableError",
     "AnyAttribute",
     "AnyItem",
     "Attribute",
     "AttributeType",
+    "AttributeValueLayer",
     "AttributeFilter",
     "AttributeValueField",
     "ItemValidity",
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
+    "AnyEntitySchema",
     "AnyItemSchema",
     "AttributeDisplay",
     "AttributeDisplaySettings",
@@ -257,7 +283,14 @@ __all__ = [
     "HierarchyLevelLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
+    "EntityMigrationResult",
+    "AttributeMigrationIssue",
+    "EntityMigrationIssues",
+    "MigrationStatus",
+    "ProjectMigration",
+    "UnresolvedAttributeMigration",
     "Project",
+    "ProjectActions",
     "HierarchyPanelLayout",
     "ImagesPanelLayout",
     "NonValidItemsPanelLayout",
@@ -273,7 +306,9 @@ __all__ = [
     "ReviewIssueSource",
     "ReviewStatus",
     "ProjectValidation",
+    "RootSchemaIndex",
     "RootSchema",
+    "RootSchemaSummary",
     "Sample",
     "SampleSchema",
     "Cardinality",

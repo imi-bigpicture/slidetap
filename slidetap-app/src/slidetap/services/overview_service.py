@@ -21,8 +21,8 @@ from slidetap.database import DatabaseSample
 from slidetap.model import (
     AnyAttribute,
     Item,
+    NotFoundError,
     ObservationSchema,
-    OverviewLayout,
     OverviewSectionLayout,
     SampleSchema,
 )
@@ -54,7 +54,7 @@ class OverviewService:
     def get_overview_data(
         self,
         item_uid: UUID,
-        overview_layout: OverviewLayout,
+        overview_layout_uid: UUID,
         pseudonym_mode: bool = False,
         batch_uid: UUID | None = None,
         table_request: TableRequest | None = None,
@@ -71,9 +71,13 @@ class OverviewService:
 
             # Build sections from layout
             sections: list[OverviewSection] = []
+            root = self._schema_service.root_of(parent, session)
+            overview_layout = root.get_overview_layout(overview_layout_uid)
+            if overview_layout is None:
+                raise NotFoundError(f"Overview layout {overview_layout_uid} not found")
 
             for section in overview_layout.sections:
-                target_schema = self._schema_service.items.get(section.schema_uid)
+                target_schema = root.items.get(section.schema_uid)
                 if target_schema is None:
                     self._logger.warning(
                         f"Section target schema {section.schema_uid} "
@@ -243,7 +247,9 @@ class OverviewService:
         old behaviour: all selected samples sorted by identifier (or
         pseudonym in pseudonym mode).
         """
-        parent_schema = self._schema_service.samples.get(parent.schema_uid)
+        parent_schema = self._schema_service.root_of(parent, session).samples.get(
+            parent.schema_uid
+        )
         if parent_schema is None:
             return None, None
 

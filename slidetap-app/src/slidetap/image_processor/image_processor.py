@@ -46,7 +46,7 @@ class ImageProcessor:
         """
         self._steps = steps
         self._storage_service = storage_service
-        self._root_schema = schema_service.root
+        self._schema_service = schema_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def run(
@@ -60,12 +60,15 @@ class ImageProcessor:
         if image.folder_path is None:
             raise FileNotFoundError(f"Image {image.uid} does not have a folder path. ")
         processing_path = Path(image.folder_path)
+        # The root of the project the image is of, as the steps read the image
+        # against it; one processor serves the projects of every root.
+        root_schema = self._schema_service.root_of(project).schema
         with TemporaryDirectory() as temp_dir:
             try:
                 for index, step in enumerate(self._steps):
                     try:
                         processing_path, image = step.run(
-                            self._root_schema,
+                            root_schema,
                             self._storage_service,
                             project,
                             image,

@@ -13,32 +13,58 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Sequence
 
+from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import RootSchema
 
 
 class SchemaInterface(metaclass=ABCMeta):
+    """The root schemas the application provides: the root of new projects,
+    and the roots of earlier versions that projects are still on."""
+
     @abstractmethod
-    def create(self) -> RootSchema:
+    def root(self) -> RootSchema:
         """
-        Create and return a RootSchema instance.
+        The root schema new projects are created with, whose projects can be
+        changed.
+
+        A project is on its root by the root's uid alone, so any change to the
+        content of a root needs a new root uid, and new uids for the schemas
+        changed, with the old root kept as a previous root. The application
+        refuses to start while projects hold items or attributes on schemas
+        their root does not have.
+
+        Called once, when the schema service is created.
 
         Returns
         -------
         RootSchema
-            The created RootSchema instance.
+            The root of new projects.
         """
         raise NotImplementedError()
 
-    @classmethod
-    @abstractmethod
-    def get_schema_type(cls) -> type[RootSchema]:
+    def previous_roots(self) -> Sequence[RootSchema]:
         """
-        Get the type of schema handled by this interface.
+        The root schemas of earlier versions, whose projects are view only.
+
+        A project stays on the root it was created with, so a root that
+        existing projects are on must be returned for as long as there are
+        such projects: the application refuses to start while a project is on
+        a root returned neither here nor by `root()`. A previous root is
+        returned as it was when its projects were created on it; a change to
+        it is a new root, see `root()`.
+
+        Called once, when the schema service is created.
 
         Returns
         -------
-        type[RootSchema]
-            The type of schema.
+        Sequence[RootSchema]
+            The previous roots. Defaults to none.
         """
-        raise NotImplementedError()
+        return ()
+
+    def migration_from(self, root: RootSchema) -> SchemaMigration | None:
+        """The migration of the projects on a previous root to the root of new
+        projects, or None where they stay view only."""
+        return None

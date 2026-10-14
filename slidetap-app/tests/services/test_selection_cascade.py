@@ -21,7 +21,7 @@ case may or may not require; a macro image over blocks; a block that may
 come from more than one specimen.
 """
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from uuid import UUID, uuid4
 
 import pytest
@@ -33,9 +33,14 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseObservation,
     DatabaseSample,
-    NotAllowedActionError,
 )
-from slidetap.model import Cardinality, Dataset, ImageFormat, Project
+from slidetap.model import (
+    Cardinality,
+    Dataset,
+    ImageFormat,
+    NotAllowedActionError,
+    Project,
+)
 from slidetap.model.batch import BatchCreate
 from slidetap.model.item_select import (
     CascadeDirection,
@@ -313,9 +318,11 @@ def batch_uid(
 
 @pytest.fixture()
 def validation_service(
-    sqlite_database_service: DatabaseService, schema: RootSchema
+    sqlite_database_service: DatabaseService,
+    schema: RootSchema,
+    schema_service_of: Callable[..., SchemaService],
 ) -> ValidationService:
-    return ValidationService(SchemaService(schema), sqlite_database_service)
+    return ValidationService(schema_service_of(schema), sqlite_database_service)
 
 
 @pytest.fixture()
@@ -323,8 +330,9 @@ def item_service(
     sqlite_database_service: DatabaseService,
     schema: RootSchema,
     validation_service: ValidationService,
+    schema_service_of: Callable[..., SchemaService],
 ) -> ItemService:
-    schema_service = SchemaService(schema)
+    schema_service = schema_service_of(schema)
     review_service = ReviewService(
         schema_service, validation_service, sqlite_database_service
     )
@@ -1363,10 +1371,11 @@ class TestBulkSelectGuards:
         schema: RootSchema,
         validation_service: ValidationService,
         review_service: ReviewService,
+        schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         """The item service with the review service watched, to see what it
         is told."""
-        schema_service = SchemaService(schema)
+        schema_service = schema_service_of(schema)
         attribute_service = AttributeService(
             schema_service, validation_service, sqlite_database_service, review_service
         )

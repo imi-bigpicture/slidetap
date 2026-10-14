@@ -40,7 +40,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from slidetap.database.db import Base, NotAllowedActionError
+from slidetap.database.db import Base
 from slidetap.database.types import (
     attribute_db_type,
     attribute_dict_db_type,
@@ -66,6 +66,7 @@ from slidetap.model import (
     StringAttribute,
     UnionAttribute,
 )
+from slidetap.model.errors import NotAllowedActionError
 
 ValueStorageType = TypeVar("ValueStorageType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")

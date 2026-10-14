@@ -50,6 +50,7 @@ import { useSelectWithPreview } from 'src/components/item/use_select_with_previe
 import { useError } from 'src/contexts/error/error_context'
 import SplitPanel from 'src/components/split_panel'
 import { ValueActions } from 'src/components/table/value_actions'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { AttributeValueType } from 'src/models/attribute_value_type'
@@ -202,6 +203,9 @@ export default function HierarchyView({
   const rootSchema = useSchemaContext()
   const queryClient = useQueryClient()
   const { pseudonymMode } = usePseudonym()
+  // A project that cannot be edited is view only: its tree is read, and no row
+  // is moved, taken out, or put back.
+  const { edit: canEdit } = useProjectActions()
   const [search, setSearch] = useState('')
   const [targetTag, setTargetTag] = useState<string>(BY_IDENTIFIER)
   // Folded groups, by the uid of the item at the top of them. For working
@@ -649,8 +653,8 @@ export default function HierarchyView({
                                 // below it down to say the same thing sideways.
                                 stacked={span.span > 1}
                                 labelWidth={labelWidths[column]}
-                                movable={movable.has(span.node.schemaUid)}
-                                deletable={deletable.has(span.node.schemaUid)}
+                                movable={canEdit && movable.has(span.node.schemaUid)}
+                                deletable={canEdit && deletable.has(span.node.schemaUid)}
                                 dragged={dragged}
                                 accepts={accepts}
                                 pseudonymMode={pseudonymMode}
@@ -695,8 +699,8 @@ export default function HierarchyView({
                             // what it shows for itself.
                             level={levelOf(image.schemaUid)}
                             labelWidth={labelWidths[columns.length]}
-                            movable={movable.has(image.schemaUid)}
-                            deletable={deletable.has(image.schemaUid)}
+                            movable={canEdit && movable.has(image.schemaUid)}
+                            deletable={canEdit && deletable.has(image.schemaUid)}
                             dragged={dragged}
                             accepts={accepts}
                             pseudonymMode={pseudonymMode}

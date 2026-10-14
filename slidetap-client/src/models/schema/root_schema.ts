@@ -29,6 +29,8 @@ import { ProjectSchema } from './project_schema'
 export interface RootSchema {
   readonly uid: string
   readonly name: string
+  readonly version: string | null
+  readonly familyUid: string
   readonly project: ProjectSchema
   readonly dataset: DatasetSchema
   readonly samples: Record<string, SampleSchema>
@@ -39,6 +41,22 @@ export interface RootSchema {
   readonly hierarchyLayouts: HierarchyLayout[]
   readonly imagesLayouts: ImagesLayout[]
   readonly reviewUnit: ReviewUnitSchema | null
+}
+
+/** A root schema the application provides, without its content. */
+export interface RootSchemaSummary {
+  readonly uid: string
+  /** The name of the family of versions the root belongs to. */
+  readonly name: string
+  readonly version: string | null
+  readonly familyUid: string
+  /** Whether new projects are created with this root. */
+  readonly newProjects: boolean
+}
+
+/** A root schema as shown to a user: its name, and its version if it has one. */
+export function rootDisplayName(root: { name: string; version: string | null }): string {
+  return root.version === null ? root.name : `${root.name} ${root.version}`
 }
 
 /** Whether items of a schema are what a reviewer works through. */

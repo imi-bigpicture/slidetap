@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 from functools import partial
 from uuid import UUID
 
-from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus, RootSchema
+from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
 
@@ -37,13 +37,11 @@ class ImagePipelineService:
         batch_service: BatchService,
         schema_service: SchemaService,
         database_service: DatabaseService,
-        root_schema: RootSchema,
     ):
         self._scheduler = scheduler
         self._batch_service = batch_service
         self._schema_service = schema_service
         self._database_service = database_service
-        self._image_schemas = root_schema.images.values()
         self._logger = logging.getLogger(__name__)
 
     async def retry(self, image_uid: UUID) -> None:
@@ -65,6 +63,8 @@ class ImagePipelineService:
             image = self._database_service.get_image(session, image_uid)
             if image is None:
                 raise ValueError(f"Image {image_uid} does not exist.")
+            # Storing is exporting the image, and the rest is processing it.
+            self._schema_service.assert_can_change(image, session)
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")
@@ -101,13 +101,15 @@ class ImagePipelineService:
             )
             if database_batch is None:
                 return None
-            for item_schema in self._schema_service.items.values():
+            self._schema_service.assert_can_change(database_batch, session)
+            root = self._schema_service.root_of(database_batch.project, session)
+            for item_schema in root.items.values():
                 self._database_service.delete_items(
                     session, item_schema, batch_uid, only_non_selected=True
                 )
             batch = self._batch_service.set_as_pre_processing(database_batch, session)
             session.commit()
-        for image_schema in self._image_schemas:
+        for image_schema in root.images.values():
             self._logger.info(
                 f"Pre-processing images for batch {batch.uid} "
                 f"and schema {image_schema.uid}."
@@ -121,14 +123,16 @@ class ImagePipelineService:
         """Post-process a batch (export)."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
-            for item_schema in self._schema_service.items.values():
+            self._schema_service.assert_can_change(database_batch, session)
+            root = self._schema_service.root_of(database_batch.project, session)
+            for item_schema in root.items.values():
                 self._database_service.delete_items(
                     session, item_schema, batch_uid, only_non_selected=True
                 )
             batch = self._batch_service.set_as_post_processing(
                 database_batch, False, session
             )
-        for image_schema in self._image_schemas:
+        for image_schema in root.images.values():
             self._logger.info(
                 f"Post processing images of schema {image_schema.name} "
                 f"for batch {batch.uid}."
@@ -146,6 +150,10 @@ class ImagePipelineService:
         been handed over. A batch already storing is stored again, which is how
         an attempt that failed part-way is resumed.
         """
+        with self._database_service.get_session() as session:
+            self._schema_service.assert_can_change(
+                self._database_service.get_project(session, project_uid), session
+            )
         for batch in self._batch_service.get_all(project_uid=project_uid):
             if batch.status in (
                 BatchStatus.LOCKED,

@@ -55,12 +55,24 @@ mapper_to_mapper_group = Table(
 
 class DatabaseMapper(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
-    name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
+    name: Mapped[str] = mapped_column(String(128), index=True)
+    """What the mapper is called, which the mapping sheets find it by. Unique
+    within its family."""
+
+    family_uid: Mapped[UUID | None] = mapped_column(Uuid, index=True)
+    """The family of the root schema its attribute is in.
+
+    A mapper is of its family rather than of one version of it: a migration
+    moves it to the root, and family, it migrates to, and the mapping sheets of every
+    version find it by name. None for a mapper of an attribute no provided
+    root has.
+    """
 
     attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     root_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     __table_args__ = (
         UniqueConstraint("attribute_schema_uid", "root_attribute_schema_uid"),
+        UniqueConstraint("name", "family_uid", name="uq_mapper_name_family_uid"),
     )
     __tablename__ = "mapper"
 
@@ -69,10 +81,12 @@ class DatabaseMapper(Base, Generic[AttributeType]):
         name: str,
         attribute_schema_uid: UUID,
         root_attribute_schema_uid: UUID,
+        family_uid: UUID | None = None,
     ):
         super().__init__(
             uid=uuid4(),
             name=name,
+            family_uid=family_uid,
             attribute_schema_uid=attribute_schema_uid,
             root_attribute_schema_uid=root_attribute_schema_uid,
         )

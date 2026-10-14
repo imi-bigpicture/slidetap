@@ -14,7 +14,7 @@
 from collections.abc import Callable
 from typing import TypeVar
 
-from dishka import Provider, Scope, WithParents
+from dishka import Provider, Scope
 
 from slidetap.config import (
     ConfigParser,
@@ -36,7 +36,6 @@ from slidetap.external_interfaces import (
 )
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
-from slidetap.model import RootSchema
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -44,8 +43,10 @@ from slidetap.services import (
     DatasetService,
     FileOperations,
     ItemService,
+    MapperMigrationService,
     MapperService,
     MetadataSearchItemService,
+    MigrationService,
     ModelService,
     OverviewService,
     ProjectService,
@@ -55,13 +56,19 @@ from slidetap.services import (
     StorageService,
     ValidationService,
 )
+from slidetap.services.migration.project_migration_executor import (
+    ProjectMigrationExecutor,
+)
+from slidetap.services.migration.project_migration_planner import (
+    ProjectMigrationPlanner,
+)
 from slidetap.services.tag_service import TagService
 
 
 class BaseProvider(Provider):
     def __init__(
         self,
-        schema_interface: type[SchemaInterface],
+        schema_interface: Callable[..., SchemaInterface],
         metadata_import_interface: Callable[..., MetadataImportInterface],
         metadata_export_interface: Callable[..., MetadataExportInterface],
         pseudonym_factory_interface: Callable[
@@ -72,15 +79,9 @@ class BaseProvider(Provider):
         ] = lambda: None,
         mapper_injector: Callable[..., MapperInjectorInterface | None] = lambda: None,
     ):
-        def _create_schema(factory: SchemaInterface) -> RootSchema:
-            return factory.create()
-
         super().__init__(scope=Scope.APP)
 
         self.provide(schema_interface, provides=SchemaInterface)
-        self.provide(
-            _create_schema, provides=WithParents[schema_interface.get_schema_type()]
-        )
         self.provide(AttributeService)
         self.provide(BatchService)
         self.provide(DatabaseService)
@@ -88,6 +89,7 @@ class BaseProvider(Provider):
         self.provide(ItemService)
         self.provide(ReviewService)
         self.provide(MapperService)
+        self.provide(MapperMigrationService)
         self.provide(MetadataSearchItemService)
         self.provide(OverviewService)
         self.provide(ProjectService)
@@ -110,6 +112,9 @@ class BaseProvider(Provider):
             provides=ItemNamingFactoryInterface | None,
         )
         self.provide(mapper_injector, provides=MapperInjectorInterface | None)
+        self.provide(ProjectMigrationPlanner)
+        self.provide(ProjectMigrationExecutor)
+        self.provide(MigrationService)
 
 
 ConfigType = TypeVar("ConfigType")

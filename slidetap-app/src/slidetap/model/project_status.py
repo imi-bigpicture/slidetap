@@ -20,6 +20,8 @@ class ProjectStatus(IntEnum):
     COMPLETED = 2
     EXPORTING = 3
     EXPORT_COMPLETE = 4
+    MIGRATING = 5
+    """Being moved to another root schema. Nothing is done to it meanwhile."""
     FAILED = 10
     DELETING = 11
     DELETED = 12

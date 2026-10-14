@@ -14,47 +14,27 @@
 
 """Task app factory for the example application."""
 
-from dishka import make_container
 from procrastinate import App as TaskApp
 
-from slidetap import BaseProvider
-from slidetap.service_provider import ConfigProvider
 from slidetap.task import (
     ProcrastinateAppProvider,
     SlideTapTaskAppFactory,
     TaskAppProvider,
 )
 from slidetap_example import (
-    ExampleConfig,
     ExampleImageExportInterface,
     ExampleImageImportInterface,
     ExampleImagePostProcessor,
-    ExampleImagePreProcessor,
-    ExampleMapperInjector,
-    ExampleMetadataExportInterface,
-    ExampleMetadataImportInterface,
 )
-from slidetap_example.schema import ExampleSchemaInterface
+from slidetap_example.container import create_container
 
 
 def make_task_app() -> TaskApp:
     """Build the task app for the example application."""
-    base_provider = BaseProvider(
-        schema_interface=ExampleSchemaInterface,
-        metadata_export_interface=ExampleMetadataExportInterface,
-        metadata_import_interface=ExampleMetadataImportInterface,
-        mapper_injector=ExampleMapperInjector,
-    )
     task_provider = TaskAppProvider(
         image_export_interface=ExampleImageExportInterface,
         image_import_interface=ExampleImageImportInterface,
     )
     task_provider.provide(ExampleImagePostProcessor)
-    task_provider.provide(ExampleImagePreProcessor)
-    app_provider = ProcrastinateAppProvider()
-    config_provider = ConfigProvider()
-    config_provider.provide(ExampleConfig.parse, provides=ExampleConfig)
-    container = make_container(
-        base_provider, task_provider, app_provider, config_provider
-    )
+    container = create_container(task_provider, ProcrastinateAppProvider())
     return SlideTapTaskAppFactory.create(container=container)

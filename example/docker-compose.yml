@@ -16,13 +16,21 @@ services:
   dbmigrate:
     env_file: .env
     environment:
+      SLIDETAP_STORAGE: /storage
       SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+      # The package whose container module the mapper set-up creates its
+      # container from.
+      SLIDETAP_TASK_APP: ${SLIDETAP_TASK_APP}
     build:
       context: ../slidetap-app
       dockerfile: dockerfiles/taskservice.Dockerfile
+    # The mapper set-up reads config.yaml from the storage.
+    volumes:
+      - ${SLIDETAP_STORAGE}:/storage:rw
     command: >
       sh -c "slidetap-db upgrade &&
-             slidetap-task-init-schema"
+             slidetap-task-init-schema &&
+             slidetap-mappers set-up"
     restart: "no"
     depends_on:
       dbservice:

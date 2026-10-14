@@ -17,18 +17,25 @@
 import logging
 from collections.abc import Sequence
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
 from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from procrastinate import App as TaskApp
 from starlette.routing import Mount, Route, WebSocketRoute
 
 from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
 from slidetap.migrations.cli import assert_up_to_date
-from slidetap.services import DatabaseService, ImageCache
+from slidetap.model import NotFoundError, ProjectNotEditableError
+from slidetap.services import (
+    DatabaseService,
+    ImageCache,
+    SchemaService,
+)
 from slidetap.web.routers import (
     attribute_router,
     batch_router,
@@ -88,6 +95,10 @@ class SlideTapWebAppFactory:
             if config.cors_origins:
                 cls._setup_cors(app, config.cors_origins)
 
+            # Built now rather than on first use, so that a plugin whose roots or
+            # migrations do not match the database refuses to start.
+            await container.get(SchemaService)
+
             task_app = await container.get(TaskApp)
             async with task_app.open_async():
                 logger.info("SlideTap FastAPI app started.")
@@ -106,6 +117,8 @@ class SlideTapWebAppFactory:
             lifespan=lifespan,
         )
         setup_dishka(container=container, app=app)
+        app.add_exception_handler(NotFoundError, cls._not_found)
+        app.add_exception_handler(ProjectNotEditableError, cls._refuse_change)
         cls._create_and_register_routers(app, extra_routers)
         logger.info("SlideTap FastAPI app created.")
         return app
@@ -180,6 +193,21 @@ class SlideTapWebAppFactory:
             logger.info(
                 f"Registered extension router: {router.prefix or '(no prefix)'}"
             )
+
+    @staticmethod
+    async def _refuse_change(request: Request, exception: Exception) -> JSONResponse:
+        """Refuse, on any endpoint, a change to a project that cannot be
+        changed: on a view-only root, or in a state that rules it out."""
+        return JSONResponse(
+            status_code=HTTPStatus.CONFLICT, content={"detail": str(exception)}
+        )
+
+    @staticmethod
+    async def _not_found(request: Request, exception: Exception) -> JSONResponse:
+        """Answer, on any endpoint, what was asked for and is not there."""
+        return JSONResponse(
+            status_code=HTTPStatus.NOT_FOUND, content={"detail": str(exception)}
+        )
 
     @staticmethod
     def _setup_cors(app: FastAPI, cors_origins: str):

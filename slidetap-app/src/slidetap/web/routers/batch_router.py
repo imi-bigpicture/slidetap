@@ -27,9 +27,15 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi import File as FlaskFile
 
-from slidetap.database import NotAllowedActionError
 from slidetap.external_interfaces import FileParseError
-from slidetap.model import Batch, BatchCreate, BatchStatus, File
+from slidetap.model import (
+    Batch,
+    BatchCreate,
+    BatchStatus,
+    File,
+    NotAllowedActionError,
+    ProjectNotEditableError,
+)
 from slidetap.model.validation import BatchValidation
 from slidetap.services import (
     BatchService,
@@ -223,7 +229,12 @@ async def pre_process(
         Batch data if successful.
     """
     logger.info(f"Pre-processing batch {batch_uid}.")
-    batch = await image_pipeline_service.pre_process_batch(batch_uid)
+    try:
+        batch = await image_pipeline_service.pre_process_batch(batch_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
@@ -249,7 +260,12 @@ async def process(
         Batch data if successful.
     """
     logger.info(f"Processing batch {batch_uid}.")
-    batch = await image_pipeline_service.export(batch_uid)
+    try:
+        batch = await image_pipeline_service.export(batch_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
@@ -280,6 +296,9 @@ async def complete(
     logger.info(f"Completing curation of batch {batch_uid}.")
     try:
         return batch_service.set_as_locked(batch_uid)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
@@ -296,6 +315,9 @@ async def reopen(
     logger.info(f"Reopening batch {batch_uid}.")
     try:
         return batch_service.reopen(batch_uid)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
@@ -353,6 +375,8 @@ async def remap_batch(
                 "wait for the current operation to finish."
             ),
         )
+    # Refused here rather than by the task, which nobody would hear.
+    batch_service.assert_can_change(batch_uid)
     logger.info(f"Scheduling remap for batch {batch_uid}.")
     await scheduler.remap_batch_attributes(batch_uid)
     return StatusResponse(status="scheduled")

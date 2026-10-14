@@ -45,6 +45,7 @@ import { ApiError } from 'src/services/api/api_methods'
 import mapperApi from 'src/services/api/mapper_api'
 import projectApi from 'src/services/api/project_api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../contexts/project_actions/project_actions_context'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import Spinner from '../spinner'
 import MapperGroupSelect from './mapper_group_select'
@@ -194,6 +195,9 @@ export default function ProjectSettings({
     ProjectStatus.EXPORT_COMPLETE,
     ProjectStatus.FAILED,
   ].includes(project.status)
+  // A project that cannot be edited is view only, and new pseudonyms are minted
+  // only where the application can do that for the project's root schema.
+  const { edit: canEdit } = useProjectActions()
   const pseudonymsBusy =
     repseudonymizeMutation.isPending ||
     clearPseudonymsMutation.isPending ||
@@ -261,7 +265,7 @@ export default function ProjectSettings({
         <AttributeDetails
           schemas={rootSchema?.project.attributes ?? {}}
           attributes={project.attributes}
-          action={ItemDetailAction.EDIT}
+          action={canEdit ? ItemDetailAction.EDIT : ItemDetailAction.VIEW}
           attributeLayout={rootSchema?.project.attributeLayout}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
@@ -269,7 +273,12 @@ export default function ProjectSettings({
         {project.uid === '' ? (
           <Button onClick={handleCreateProject}>Create</Button>
         ) : (
-          <Button onClick={() => projectUpdateMutation.mutate(project)}>Update</Button>
+          <Button
+            disabled={!canEdit}
+            onClick={() => projectUpdateMutation.mutate(project)}
+          >
+            Update
+          </Button>
         )}
 
         {project.uid !== '' && (
@@ -303,7 +312,7 @@ export default function ProjectSettings({
               >
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                   <Button
-                    disabled={!isSettled || pseudonymsBusy}
+                    disabled={!canEdit || !isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('new')
                     }}
@@ -312,7 +321,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isSettled || pseudonymsBusy}
+                    disabled={!canEdit || !isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('clear')
                     }}
@@ -321,7 +330,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isSettled || pseudonymsBusy}
+                    disabled={!canEdit || !isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('identifiers')
                     }}
@@ -330,7 +339,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isSettled || pseudonymsBusy}
+                    disabled={!canEdit || !isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('privateAttributes')
                     }}
@@ -339,7 +348,7 @@ export default function ProjectSettings({
                   </Button>
                   <Button
                     color="error"
-                    disabled={!isSettled || pseudonymsBusy}
+                    disabled={!canEdit || !isSettled || pseudonymsBusy}
                     onClick={() => {
                       setPending('seed')
                     }}

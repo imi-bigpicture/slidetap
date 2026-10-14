@@ -88,9 +88,9 @@ export default function DisplayAttributeSchemaDetails({
 }: DisplayAttributeSchemaDetailsProps): ReactElement {
   const rootSchema = useSchemaContext()
   const allAttributesQuery = useQuery({
-    queryKey: queryKeys.schema.attributes(),
+    queryKey: queryKeys.schema.attributes(rootSchema.uid),
     queryFn: async () => {
-      return await schemaApi.getAttributeSchemas()
+      return await schemaApi.getAttributeSchemas(rootSchema.uid)
     },
   })
   const schemaQuery = useQuery({

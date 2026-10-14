@@ -17,6 +17,7 @@
 from dishka import Container
 from procrastinate import App as TaskApp
 
+from slidetap.services import SchemaService
 from slidetap.task.dishka_integration import setup_dishka
 
 
@@ -28,7 +29,10 @@ class SlideTapTaskAppFactory:
         cls,
         container: Container,
     ) -> TaskApp:
-        """Return the container's App with the container attached.
+        """Return the container's App with the container attached, once the
+        plugin's roots and schema migrations are checked against the database,
+        as the web app does at startup: a worker refuses to start too where
+        they cannot be used, such as with projects on a root not provided.
 
         Parameters
         ----------
@@ -41,7 +45,15 @@ class SlideTapTaskAppFactory:
             Procrastinate App that the ``slidetap-task-worker`` console
             script (or the ``procrastinate worker`` CLI) loads.
 
+        Raises
+        ------
+        ValueError
+            If the roots or the migrations cannot be used, see `SchemaService`.
+
         """
+        # Built now rather than on first use, so that a plugin whose roots or
+        # migrations do not match the database refuses to start.
+        container.get(SchemaService)
         task_app = container.get(TaskApp)
         setup_dishka(container=container, app=task_app)
         return task_app

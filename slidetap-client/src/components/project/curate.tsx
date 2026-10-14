@@ -31,6 +31,7 @@ import { hasFilterValue } from 'src/components/table/get_table_items'
 import { useError } from 'src/contexts/error/error_context'
 import { isReviewUnit, isUnderReviewUnit } from 'src/models/schema/root_schema'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { ReviewStatus } from 'src/models/review_status'
 import { Batch } from 'src/models/batch'
@@ -114,6 +115,9 @@ export default function Curate({
     itemSchemas.find((schema) => schema.uid === searchParams.get('tab'))?.uid ??
     itemSchemas[0].uid
   const { pseudonymMode } = usePseudonym()
+  // A project that cannot be edited is view only: its items are opened and
+  // looked through, and nothing that changes them is offered.
+  const { edit: canEdit } = useProjectActions()
   // Put on the address of every view an item is opened into, so that stepping
   // from one item to the next there reaches as far as this table does: a batch
   // when a batch is being curated, the whole dataset when it is not.
@@ -364,7 +368,7 @@ export default function Curate({
                   // Raising is offered wherever there is a unit to answer for
                   // the row, which is most of the hierarchy — a block that
                   // looks wrong is raised on the block.
-                  ...(isUnderReviewUnit(rootSchema, schema.uid)
+                  ...(canEdit && isUnderReviewUnit(rootSchema, schema.uid)
                     ? [
                         {
                           action: Action.REVIEW,
@@ -398,19 +402,23 @@ export default function Curate({
                           onAction: (item: Item): void =>
                             setReviewStatus([item.uid], ReviewStatus.Reviewed),
                           enabled: (item: Item): boolean =>
-                            item.reviewStatus === ReviewStatus.Flagged,
+                            canEdit && item.reviewStatus === ReviewStatus.Flagged,
                           hideWhenDisabled: true,
                         },
                       ]
                     : []),
-                  {
-                    action: Action.DELETE,
-                    onAction: handleItemDeleteOrRestore,
-                  },
-                  {
-                    action: Action.RESTORE,
-                    onAction: handleItemDeleteOrRestore,
-                  },
+                  ...(canEdit
+                    ? [
+                        {
+                          action: Action.DELETE,
+                          onAction: handleItemDeleteOrRestore,
+                        },
+                        {
+                          action: Action.RESTORE,
+                          onAction: handleItemDeleteOrRestore,
+                        },
+                      ]
+                    : []),
                   // The views of an item are links rather than buttons that
                   // open a window: a click goes there, and the browser keeps
                   // its own middle-click, ctrl-click and "open in new window"
@@ -452,15 +460,15 @@ export default function Curate({
                         `/project/${project.uid}/item/${item.uid}/hierarchy/${layout.uid}${batchScope}`,
                     })),
                 ]}
-                onRowsStateChange={handleStateChange}
-                onRowsRemap={handleRowsRemap}
+                onRowsStateChange={canEdit ? handleStateChange : undefined}
+                onRowsRemap={canEdit ? handleRowsRemap : undefined}
                 onRowsFlagForReview={
-                  isUnderReviewUnit(rootSchema, schema.uid)
+                  canEdit && isUnderReviewUnit(rootSchema, schema.uid)
                     ? openFlagForReview
                     : undefined
                 }
                 onRowsMarkReviewed={
-                  isReviewUnit(rootSchema, schema.uid)
+                  canEdit && isReviewUnit(rootSchema, schema.uid)
                     ? (uids) => setReviewStatus(uids, ReviewStatus.Reviewed)
                     : undefined
                 }
@@ -469,7 +477,7 @@ export default function Curate({
                   tableRequestsRef.current[schema.uid] = request
                 }}
                 onNew={
-                  batch !== undefined
+                  canEdit && batch !== undefined
                     ? async (): Promise<void> => {
                         const newItem = await itemApi.create(schema.uid, batch.uid)
                         setItemDetailUid(newItem.uid)

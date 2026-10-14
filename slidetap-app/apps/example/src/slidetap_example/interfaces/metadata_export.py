@@ -33,7 +33,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
     ):
         self._serializer = JsonMetadataSerializer()
         self._database_service = database_service
-        self._root_schema = schema_service.root
+        self._root_schema = schema_service.default_root.schema
         self._storage = storage_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 

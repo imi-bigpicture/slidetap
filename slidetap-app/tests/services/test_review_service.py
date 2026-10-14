@@ -30,15 +30,16 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseReviewIssue,
     DatabaseSample,
-    NotAllowedActionError,
 )
 from slidetap.model import (
     AnyAttributeSchema,
     MetadataSearchResult,
+    NotAllowedActionError,
     ReviewIssueSource,
     ReviewLayout,
     ReviewStatus,
     ReviewUnitSchema,
+    RootSchemaIndex,
     Sample,
     SampleSchema,
 )
@@ -140,15 +141,30 @@ def descendants(
 
 
 @pytest.fixture()
-def schema_service(
+def root(
     decoy: Decoy,
     case_schema: SampleSchema,
     case_schema_uid: UUID,
     reviewed_schema: ReviewUnitSchema | None,
-):
+) -> RootSchemaIndex:
+    """The root of the project the items are in."""
+    root = decoy.mock(cls=RootSchemaIndex)
+    decoy.when(root.items).then_return({case_schema_uid: case_schema})
+    decoy.when(root.review_unit).then_return(reviewed_schema)
+    return root
+
+
+@pytest.fixture()
+def schema_service(decoy: Decoy, root: RootSchemaIndex):
     schema_service = decoy.mock(cls=SchemaService)
-    decoy.when(schema_service.items).then_return({case_schema_uid: case_schema})
-    decoy.when(schema_service.review_unit).then_return(reviewed_schema)
+    decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
+    decoy.when(
+        schema_service.root_of(matchers.Anything(), matchers.Anything())
+    ).then_return(root)
+    decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
+    decoy.when(
+        schema_service.can_change(matchers.Anything(), matchers.Anything())
+    ).then_return(True)
     return schema_service
 
 
@@ -356,6 +372,7 @@ class TestReviewUnitsInResult:
     def test_found_however_the_result_names_its_entry_item(
         self,
         review_service: ReviewService,
+        root: RootSchemaIndex,
         case_schema_uid: UUID,
     ) -> None:
         """The failure this guards against: an importer naming something other
@@ -388,7 +405,7 @@ class TestReviewUnitsInResult:
         )
 
         # Act
-        units = list(review_service.review_unit_uids_in(result, {}))
+        units = list(review_service.review_unit_uids_in(result, {}, root))
 
         # Assert
         assert units == [case.uid]
@@ -396,6 +413,7 @@ class TestReviewUnitsInResult:
     def test_every_unit_the_result_produced_is_found(
         self,
         review_service: ReviewService,
+        root: RootSchemaIndex,
         case_schema_uid: UUID,
     ) -> None:
         # Arrange
@@ -417,7 +435,7 @@ class TestReviewUnitsInResult:
         )
 
         # Act
-        units = list(review_service.review_unit_uids_in(result, {}))
+        units = list(review_service.review_unit_uids_in(result, {}, root))
 
         # Assert
         assert units == [case.uid for case in cases]
@@ -591,7 +609,7 @@ class TestValidityTransitions:
         decoy: Decoy,
         session: Session,
         database_service: DatabaseService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         specimen: DatabaseSample,
         specimen_schema_uid: UUID,
         case: DatabaseSample,
@@ -601,9 +619,7 @@ class TestValidityTransitions:
     ) -> None:
         """The specimen is found, sits under the case, and the case is what
         answers for it."""
-        decoy.when(schema_service.review_unit_covers(specimen_schema_uid)).then_return(
-            True
-        )
+        decoy.when(root.review_unit_covers(specimen_schema_uid)).then_return(True)
         decoy.when(
             database_service.get_optional_item(session, specimen.uid)
         ).then_return(specimen)
@@ -658,7 +674,7 @@ class TestValidityTransitions:
         decoy: Decoy,
         session: Session,
         database_service: DatabaseService,
-        schema_service: SchemaService,
+        root: RootSchemaIndex,
         review_service: ReviewService,
         specimen: DatabaseSample,
         specimen_schema_uid: UUID,
@@ -683,9 +699,7 @@ class TestValidityTransitions:
             attribute_schemas[tag] = attribute_schema
         specimen_schema = decoy.mock(cls=SampleSchema)
         decoy.when(specimen_schema.attributes).then_return(attribute_schemas)
-        decoy.when(schema_service.items).then_return(
-            {specimen_schema_uid: specimen_schema}
-        )
+        decoy.when(root.items).then_return({specimen_schema_uid: specimen_schema})
         attributes = []
         for tag in display_names:
             attribute = decoy.mock(cls=DatabaseAttribute)

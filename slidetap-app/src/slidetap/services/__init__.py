@@ -26,6 +26,7 @@ from slidetap.services.mapper_service import (
     MapperService,
 )
 from slidetap.services.metadata_search_item_service import MetadataSearchItemService
+from slidetap.services.migration import MapperMigrationService, MigrationService
 from slidetap.services.model_service import ModelService
 from slidetap.services.overview_service import OverviewService
 from slidetap.services.project_service import ProjectService
@@ -49,7 +50,9 @@ __all__ = [
     "MapperInjectorInterface",
     "MapperCache",
     "MapperService",
+    "MapperMigrationService",
     "MetadataSearchItemService",
+    "MigrationService",
     "OverviewService",
     "ProjectService",
     "SchemaService",

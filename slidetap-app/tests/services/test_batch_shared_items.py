@@ -24,6 +24,7 @@ off the same patient, since a patient is stored once for the dataset.
 """
 
 import datetime
+from collections.abc import Callable
 from uuid import UUID
 
 import pytest
@@ -52,8 +53,10 @@ from slidetap.services import (
 
 
 @pytest.fixture()
-def schema_service(schema: ExampleSchema) -> SchemaService:
-    return SchemaService(schema)
+def schema_service(
+    schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+) -> SchemaService:
+    return schema_service_of(schema)
 
 
 @pytest.fixture()
@@ -128,7 +131,7 @@ def clear_batch(
 ) -> None:
     """The part of a search that clears out what the last one left."""
     with database_service.get_session() as session:
-        for item_schema in schema_service.items.values():
+        for item_schema in schema_service.default_root.items.values():
             database_service.delete_items(session, item_schema, batch_uid)
 
 

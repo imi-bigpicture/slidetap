@@ -23,13 +23,13 @@ from slidetap.database import (
     DatabaseImage,
     DatabaseItem,
     DatabaseProject,
-    NotAllowedActionError,
 )
 from slidetap.model import (
     Batch,
     BatchCreate,
     BatchStatus,
     ImageStatus,
+    NotAllowedActionError,
     ProjectStatus,
 )
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
@@ -82,6 +82,7 @@ class BatchService:
                 session,
                 batch.project_uid,
             )
+            self._schema_service.assert_can_change(database_project, session)
             database_batch = self._database_service.add_batch(session, batch)
             database_project.batches.add(database_batch)
             if batch.is_default:
@@ -92,6 +93,20 @@ class BatchService:
     def get(self, uid: UUID, session: Session | None = None) -> Batch:
         with self._database_service.get_session(session) as session:
             return self._database_service.get_batch(session, uid).model
+
+    def assert_can_change(self, uid: UUID, session: Session | None = None) -> None:
+        """Refuse a change to the project the batch is of, where it cannot be
+        changed.
+
+        Raises
+        ------
+        ProjectNotEditableError
+            If the project cannot be changed, with why.
+        """
+        with self._database_service.get_session(session) as session:
+            self._schema_service.assert_can_change(
+                self._database_service.get_batch(session, uid), session
+            )
 
     def get_optional(self, uid: UUID, session: Session | None = None) -> Batch | None:
         with self._database_service.get_session(session) as session:
@@ -118,6 +133,7 @@ class BatchService:
             )
             if existing_batch is None:
                 return None
+            self._schema_service.assert_can_change(existing_batch, session)
             existing_batch.name = batch.name
             return existing_batch.model
 
@@ -218,9 +234,11 @@ class BatchService:
             How many items were handed over.
         """
         with self._database_service.get_session(session) as session:
-            batch_uid = self._database_service.get_batch(session, batch).uid
+            batch = self._database_service.get_batch(session, batch)
+            batch_uid = batch.uid
+            root = self._schema_service.root_of(batch.project, session)
             moved = 0
-            for schema in self._schema_service.items.values():
+            for schema in root.items.values():
                 items = list(
                     self._database_service.get_items(
                         batch=batch_uid,
@@ -605,6 +623,7 @@ class BatchService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
+            self._schema_service.assert_can_change(batch, session)
             if not batch.image_post_processing_complete:
                 error = (
                     f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE.name} "
@@ -642,6 +661,7 @@ class BatchService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
+            self._schema_service.assert_can_change(batch, session)
             if batch.status != BatchStatus.LOCKED:
                 error = (
                     f"Can only reopen a {BatchStatus.LOCKED.name} batch, "
@@ -668,9 +688,10 @@ class BatchService:
         self, batch: DatabaseBatch, locked: bool, session: Session
     ) -> None:
         """Lock or unlock everything the batch holds, attributes included."""
+        root = self._schema_service.root_of(batch.project, session)
         items = (
             item
-            for schema in self._schema_service.items.values()
+            for schema in root.items.values()
             for item in self._database_service.get_items(
                 session=session, schema=schema, batch=batch
             )
@@ -702,6 +723,7 @@ class BatchService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
+            self._schema_service.assert_can_change(batch, session)
             if batch.project.default_batch_uid == batch.uid:
                 raise NotAllowedActionError("The default batch cannot be deleted.")
             if batch.project.deleting:

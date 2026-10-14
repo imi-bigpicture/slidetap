@@ -24,18 +24,22 @@ from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
-from slidetap.database import NotAllowedActionError
-from slidetap.model import Project
-from slidetap.model.batch import BatchCreate
+from slidetap.model import (
+    AnyAttribute,
+    AttributeMigrationIssue,
+    NotAllowedActionError,
+    Project,
+    ProjectActions,
+    ProjectMigration,
+    ProjectNotEditableError,
+)
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
-    BatchService,
-    DatabaseService,
-    DatasetService,
     ItemService,
+    MigrationService,
     ProjectService,
     ValidationService,
 )
@@ -61,10 +65,6 @@ project_router = APIRouter(
 
 @project_router.post("/create")
 async def create_project(
-    project_service: FromDishka[ProjectService],
-    batch_service: FromDishka[BatchService],
-    dataset_service: FromDishka[DatasetService],
-    database_service: FromDishka[DatabaseService],
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
 ) -> Project:
@@ -75,32 +75,8 @@ async def create_project(
     Project
         Response with created project's data.
     """
-    project_name = "New project"
     try:
-        with database_service.get_session() as session:
-            mapper_groups = list(database_service.get_default_mapper_groups(session))
-            logger.info(
-                f"Creating project {project_name} with mapper groups: "
-                f"{[group.name for group in mapper_groups]}"
-            )
-            dataset = metadata_import_service.create_dataset(project_name)
-            dataset = dataset_service.create(
-                dataset,
-                [mapper.uid for group in mapper_groups for mapper in group.mappers],
-                session=session,
-            )
-            project = metadata_import_service.create_project(project_name, dataset.uid)
-            project.mapper_groups = [group.uid for group in mapper_groups]
-            project = project_service.create(project, session=session)
-            batch = BatchCreate(
-                name="Default",
-                project_uid=project.uid,
-                is_default=True,
-            )
-            batch_service.create(batch, session=session)
-        logger.debug(f"Created project {project.uid, project.name}")
-
-        return project
+        return metadata_import_service.create_project("New project")
 
     except ValueError as exception:
         logger.error("Failed to parse create project due to error", exc_info=True)
@@ -115,12 +91,14 @@ async def get_projects(
 ) -> Iterable[Project]:
     """Get status of registered projects.
 
+    The projects of every root schema.
+
     Returns
     ----------
     Iterable[Project]
         List of registered projects
     """
-    projects = project_service.get_all_of_root_schema()
+    projects = project_service.get_all()
     return projects
 
 
@@ -163,7 +141,7 @@ async def update_project(
 @project_router.post("/project/{project_uid}/complete")
 async def complete(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
+    project_service: FromDishka[ProjectService],
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
 ) -> Project:
@@ -183,25 +161,27 @@ async def complete(
     Project
         Project data.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only complete a project whose batches are all curated.",
-            )
-        project = database_project.model
+    project = project_service.get_completed(project_uid)
+    if project is None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Can only complete a project whose batches are all curated.",
+        )
     logger.info(f"Storing images of project {project_uid} to outbox.")
-    await image_pipeline_service.store_project(project_uid)
+    try:
+        await image_pipeline_service.store_project(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     return project
 
 
 @project_router.post("/project/{project_uid}/export")
 async def export(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     metadata_export_service: FromDishka[MetadataExportService],
     logger: Logger,
 ) -> Project:
@@ -221,17 +201,14 @@ async def export(
     Project
         Project data if successful.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_can_export(database_project, session)
-        except NotAllowedActionError as exception:
-            logger.info(f"Refused export of project {project_uid}: {exception}")
-            raise HTTPException(
-                status_code=HTTPStatus.CONFLICT, detail=str(exception)
-            ) from exception
-        logger.info("Exporting project to outbox")
-        project = database_project.model
+    try:
+        project = project_service.get_exportable(project_uid)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused export of project {project_uid}: {exception}")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    logger.info("Exporting project to outbox")
     # An item is named in a bundle by its pseudonym and by nothing else, and
     # what writes the bundle leaves out what it has not been given: without
     # this the export writes elements nothing can name or point at, and says
@@ -245,16 +222,20 @@ async def export(
                 f"pseudonyms have been cleared cannot be exported."
             ),
         )
-    await metadata_export_service.export(project)
+    try:
+        await metadata_export_service.export(project)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     return project
 
 
 @project_router.post("/project/{project_uid}/repseudonymize")
 async def repseudonymize(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Give every item of the project's dataset a new pseudonym.
@@ -277,17 +258,18 @@ async def repseudonymize(
     RepseudonymizeResponse
         How many items were given a new pseudonym.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
     try:
-        changed = item_service.repseudonymize(dataset_uid)
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    try:
+        changed = item_service.repseudonymize(project.dataset_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     except ValueError as exception:
         logger.error("Failed to repseudonymize project.", exc_info=True)
         raise HTTPException(
@@ -300,9 +282,8 @@ async def repseudonymize(
 @project_router.post("/project/{project_uid}/clear_pseudonyms")
 async def clear_pseudonyms(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Take the pseudonyms off the project's dataset.
@@ -324,16 +305,13 @@ async def clear_pseudonyms(
     RepseudonymizeResponse
         How many items had their pseudonym taken off.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
-    cleared = item_service.clear_pseudonyms(dataset_uid)
+    try:
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    cleared = item_service.clear_pseudonyms(project.dataset_uid)
     logger.info(f"Took the pseudonym off {cleared} items of project {project_uid}.")
     return RepseudonymizeResponse(changed=cleared)
 
@@ -341,9 +319,8 @@ async def clear_pseudonyms(
 @project_router.post("/project/{project_uid}/pseudonymize_identifiers")
 async def pseudonymize_identifiers(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Overwrite the identifier of every item that has a pseudonym with it.
@@ -362,17 +339,17 @@ async def pseudonymize_identifiers(
     RepseudonymizeResponse
         How many identifiers were replaced with the item's pseudonym.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
     try:
-        replaced = item_service.pseudonymize_identifiers(dataset_uid)
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    try:
+        replaced = item_service.pseudonymize_identifiers(project.dataset_uid)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
     except NotAllowedActionError as exception:
         logger.error("Failed to pseudonymize project identifiers.", exc_info=True)
         raise HTTPException(
@@ -388,7 +365,7 @@ async def pseudonymize_identifiers(
 @project_router.get("/project/{project_uid}/private_attributes")
 async def get_private_attributes(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
+    project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
 ) -> PrivateAttributeSummary:
     """What private attributes the project's dataset and its items hold.
@@ -406,17 +383,15 @@ async def get_private_attributes(
     PrivateAttributeSummary
         The private attributes by owner and attribute schema.
     """
-    with database_service.get_session() as session:
-        dataset_uid = database_service.get_project(session, project_uid).dataset_uid
-    return item_service.private_attribute_summary(dataset_uid)
+    project = project_service.get(project_uid)
+    return item_service.private_attribute_summary(project.dataset_uid)
 
 
 @project_router.post("/project/{project_uid}/remove_private_attributes")
 async def remove_private_attributes(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> PrivateAttributeSummary:
     """Delete every private attribute of the project's dataset and its items.
@@ -434,16 +409,13 @@ async def remove_private_attributes(
     PrivateAttributeSummary
         What was removed, by owner and attribute schema.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
-    removed = item_service.remove_private_attributes(dataset_uid)
+    try:
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    removed = item_service.remove_private_attributes(project.dataset_uid)
     logger.info(
         f"Removed the private attributes of {len(removed.attributes)} schemas from "
         f"the dataset of project {project_uid}."
@@ -454,7 +426,6 @@ async def remove_private_attributes(
 @project_router.post("/project/{project_uid}/clear_seed")
 async def clear_seed(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
     project_service: FromDishka[ProjectService],
     logger: Logger,
 ) -> Project:
@@ -475,14 +446,12 @@ async def clear_seed(
     Project
         The project, seed cleared.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
+    try:
+        project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
     project = project_service.clear_seed(project_uid)
     logger.info(f"Cleared the importer seed of project {project_uid}.")
     return project
@@ -511,6 +480,229 @@ async def get_project(
             status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
         )
     return project
+
+
+@project_router.get("/project/{project_uid}/actions")
+async def get_project_actions(
+    project_uid: UUID,
+    project_service: FromDishka[ProjectService],
+) -> ProjectActions:
+    """Get what can be done with the project specified by id.
+
+    What the application can do with the projects on its root schema, with
+    the project's state applied, and whether a schema migration can migrate
+    it.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    ProjectActions
+        Which of the actions the project can be offered.
+    """
+    return project_service.get_actions(project_uid)
+
+
+@project_router.get("/project/{project_uid}/migration")
+async def get_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+) -> ProjectMigration:
+    """Get the migration of the project to another root schema, with its
+    state and its plan: the attribute issues to resolve and the attributes
+    dropped, by object.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    ProjectMigration
+        The migration.
+
+    Raises
+    ----------
+    NotFoundError
+        If there is no such project, or it has no migration (404).
+    """
+    return migration_service.get(project_uid)
+
+
+@project_router.post("/project/{project_uid}/migration")
+async def create_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
+) -> ProjectMigration:
+    """Create the migration of the project to another root schema.
+
+    The project is migrating, and nothing can be changed of it, until the
+    migration is completed or reverted. The migration is planned in a task.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    ProjectMigration
+        The migration, being planned.
+
+    Raises
+    ----------
+    HTTPException
+        Conflict (409) if the project cannot be migrated, or not now; internal
+        server error (500) if planning could not be started, with the
+        migration reverted.
+    NotFoundError
+        If there is no such project (404).
+    """
+    try:
+        migration = migration_service.create(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    try:
+        await scheduler.plan_migration(project_uid)
+    except Exception as exception:
+        # Set as migrating already, and nothing would ever plan it.
+        logger.error(f"Failed to start migrating project {project_uid}", exc_info=True)
+        migration_service.revert(project_uid)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to start the migration",
+        ) from exception
+    return migration
+
+
+@project_router.put(
+    "/project/{project_uid}/migration/attribute-issues/{attribute_issue_uid}"
+)
+async def resolve_project_migration_attribute_issue(
+    project_uid: UUID,
+    attribute_issue_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+    attribute: AnyAttribute | None = Body(default=None),
+) -> AttributeMigrationIssue:
+    """Resolve an attribute issue of the migration of the project: a value on
+    its attribute schema, or left empty.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+    attribute_issue_uid: UUID
+        Id of the attribute issue.
+    attribute: AnyAttribute | None = None
+        The value, or none to leave the attribute empty or accept a dropped
+        attribute.
+
+    Returns
+    ----------
+    AttributeMigrationIssue
+        The attribute issue, resolved.
+
+    Raises
+    ----------
+    HTTPException
+        Conflict (409) if the migration is not being curated, or the value is
+        not on the attribute schema of the attribute issue.
+    NotFoundError
+        If there is no such project, migration, or attribute issue (404).
+    """
+    try:
+        return migration_service.resolve(project_uid, attribute_issue_uid, attribute)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+
+
+@project_router.post("/project/{project_uid}/migration/submit")
+async def submit_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
+) -> ProjectMigration:
+    """Complete the migration of the project, with every attribute issue
+    resolved, in a task.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    ProjectMigration
+        The migration, being completed.
+
+    Raises
+    ----------
+    HTTPException
+        Conflict (409) if the migration is not being curated, or an attribute
+        issue is not resolved; internal server error (500) if completing could
+        not be started, with the migration back to being curated.
+    NotFoundError
+        If there is no such project, or it has no migration (404).
+    """
+    try:
+        migration = migration_service.submit(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    try:
+        await scheduler.complete_migration(project_uid)
+    except Exception as exception:
+        logger.error(
+            f"Failed to start completing the migration of project {project_uid}",
+            exc_info=True,
+        )
+        migration_service.resume_curating(project_uid)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to start completing the migration",
+        ) from exception
+    return migration
+
+
+@project_router.delete("/project/{project_uid}/migration")
+async def revert_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+) -> Project:
+    """Revert the migration of the project: remove it and its plan, and set
+    the project back to the status it had.
+
+    Also for a migration that failed, or whose task was lost. Nothing of the
+    project is changed until a migration is completed.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    Project
+        The project, with the status it had.
+
+    Raises
+    ----------
+    NotFoundError
+        If there is no such project, or it has no migration (404).
+    """
+    return migration_service.revert(project_uid)
 
 
 @project_router.delete("/project/{project_uid}")

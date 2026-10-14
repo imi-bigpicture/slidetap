@@ -15,12 +15,16 @@
 
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ItemSchema } from 'src/models/schema/item_schema'
-import { RootSchema } from 'src/models/schema/root_schema'
+import { RootSchema, RootSchemaSummary } from 'src/models/schema/root_schema'
 import { get, parseJsonResponse } from 'src/services/api/api_methods'
 
 const schemaApi = {
-  getAttributeSchemas: async () => {
-    const response = await get(`schemas/attributes`)
+  /** The attribute schemas of a root, or without one the root of new projects. */
+  getAttributeSchemas: async (rootSchemaUid?: string) => {
+    const response = await get(
+      `schemas/attributes`,
+      new Map([['rootSchemaUid', rootSchemaUid]]),
+    )
     return await parseJsonResponse<AttributeSchema[]>(response)
   },
 
@@ -29,18 +33,40 @@ const schemaApi = {
     return await parseJsonResponse<AttributeSchema>(response)
   },
 
-  getItemSchema: async <T extends ItemSchema>(itemSchemaUid: string) => {
-    const response = await get(`schemas/item/${itemSchemaUid}`)
+  /** An item schema of a root, or without one the root of new projects. */
+  getItemSchema: async <T extends ItemSchema>(
+    itemSchemaUid: string,
+    rootSchemaUid?: string,
+  ) => {
+    const response = await get(
+      `schemas/item/${itemSchemaUid}`,
+      new Map([['rootSchemaUid', rootSchemaUid]]),
+    )
     return await parseJsonResponse<T>(response)
   },
 
-  getRootSchema: async () => {
-    const response = await get('schemas/root')
+  /** The root schema of a project, or without one the root of new projects. */
+  getRootSchema: async (rootSchemaUid?: string) => {
+    const response = await get(
+      rootSchemaUid === undefined ? 'schemas/root' : `schemas/root/${rootSchemaUid}`,
+    )
     return await parseJsonResponse<RootSchema>(response)
   },
 
-  getSchemaHierarchy: async (itemSchemaUid: string) => {
-    const response = await get(`schemas/item/${itemSchemaUid}/hierarchy`)
+  /** The root schemas the application provides, and which of them new
+   * projects are created with. */
+  getRootSchemas: async () => {
+    const response = await get('schemas/roots')
+    return await parseJsonResponse<RootSchemaSummary[]>(response)
+  },
+
+  /** The hierarchy of an item schema of a root, or without one the root of new
+   * projects. */
+  getSchemaHierarchy: async (itemSchemaUid: string, rootSchemaUid?: string) => {
+    const response = await get(
+      `schemas/item/${itemSchemaUid}/hierarchy`,
+      new Map([['rootSchemaUid', rootSchemaUid]]),
+    )
     return await parseJsonResponse<ItemSchema[]>(response)
   },
 }

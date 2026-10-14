@@ -22,6 +22,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import batchApi from 'src/services/api/batch.api'
@@ -40,6 +41,8 @@ function Search({ batch }: SearchProps): ReactElement {
   const queryClient = useQueryClient()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
+  // Refused for a project on a root schema the metadata import does not support.
+  const { edit: canSearch } = useProjectActions()
 
   const handleFileChange = (e: React.FormEvent<HTMLInputElement>): void => {
     const files = (e.target as HTMLInputElement).files
@@ -115,7 +118,9 @@ function Search({ batch }: SearchProps): ReactElement {
               />
             </Button>
           </Stack>
-          <Button onClick={handleSubmit}>Parse</Button>
+          <Button onClick={handleSubmit} disabled={!canSearch}>
+            Parse
+          </Button>
         </Stack>
       </Grid>
       <Grid size={{ xs: 12 }}>

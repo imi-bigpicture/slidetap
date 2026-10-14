@@ -19,8 +19,7 @@ from uuid import uuid4
 import pytest
 
 from slidetap.database import DatabaseImage
-from slidetap.database.attribute import NotAllowedActionError
-from slidetap.model import ImageFormat, ImageStatus
+from slidetap.model import ImageFormat, ImageStatus, NotAllowedActionError
 
 
 @pytest.fixture()

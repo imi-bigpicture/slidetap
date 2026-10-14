@@ -16,9 +16,10 @@
 
 import datetime
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
+    ClassVar,
     NamedTuple,
     Optional,
     TypeVar,
@@ -46,6 +47,7 @@ from sqlalchemy import (
     or_,
     select,
     true,
+    union_all,
     update,
 )
 from sqlalchemy.engine import CursorResult, ScalarResult
@@ -82,6 +84,7 @@ from slidetap.database import (
     DatabaseObjectAttribute,
     DatabaseObservation,
     DatabaseProject,
+    DatabaseProjectMigration,
     DatabaseReviewIssue,
     DatabaseSample,
     DatabaseStringAttribute,
@@ -122,6 +125,7 @@ from slidetap.model import (
     Mapper,
     MeasurementAttribute,
     MeasurementAttributeSchema,
+    MetadataImportStatus,
     NumericAttribute,
     NumericAttributeSchema,
     ObjectAttribute,
@@ -209,6 +213,32 @@ class DatabaseService:
     QUEUED_REASONS = 5
     """How many of a unit's open issues the queue is given the reasons for."""
 
+    STORED_BATCH_STATUSES: ClassVar[frozenset[BatchStatus]] = frozenset(
+        {BatchStatus.LOCKED, BatchStatus.COMPLETED}
+    )
+    """Batch statuses where the images are stored, or locked to be: a locked
+    batch holds what goes into its bundle, and is reopened to be changed."""
+
+    BUSY_BATCH_STATUSES: ClassVar[frozenset[BatchStatus]] = frozenset(
+        {
+            BatchStatus.METADATA_SEARCHING,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+            BatchStatus.IMAGE_POST_PROCESSING,
+            BatchStatus.IMAGE_STORING,
+        }
+    )
+    """Batch statuses where a task may be writing to the items."""
+
+    IN_FLIGHT_IMAGE_STATUSES: ClassVar[frozenset[ImageStatus]] = frozenset(
+        {
+            ImageStatus.DOWNLOADING,
+            ImageStatus.PRE_PROCESSING,
+            ImageStatus.POST_PROCESSING,
+            ImageStatus.STORING,
+        }
+    )
+    """Image statuses where a task is working on the image."""
+
     def __init__(self, config: DatabaseConfig):
         self._engine = create_engine(self._sqlalchemy_uri(config.uri))
         self._no_autoflush = config.no_autoflush
@@ -274,6 +304,78 @@ class DatabaseService:
         elif isinstance(project, Project):
             return session.get(DatabaseProject, project.uid)
         return project
+
+    def get_optional_project_for_update(
+        self,
+        session: Session,
+        project_uid: UUID,
+    ) -> DatabaseProject | None:
+        """Get a project with its row locked (SELECT FOR UPDATE).
+
+        Parameters
+        ----------
+        session: Session
+            The session to lock it in.
+        project_uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        DatabaseProject | None
+            The project, or None where there is no such project.
+        """
+        return session.get(DatabaseProject, project_uid, with_for_update=True)
+
+    def get_project_migration(
+        self,
+        session: Session,
+        project_uid: UUID,
+    ) -> DatabaseProjectMigration:
+        """Get the migration of a project.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get it in.
+        project_uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        DatabaseProjectMigration
+            The migration.
+
+        Raises
+        ------
+        NoResultFound
+            If the project has no migration.
+        """
+        return session.scalars(
+            select(DatabaseProjectMigration).filter_by(project_uid=project_uid)
+        ).one()
+
+    def get_optional_project_migration(
+        self,
+        session: Session,
+        project_uid: UUID,
+    ) -> DatabaseProjectMigration | None:
+        """Get the migration of a project, if it has one.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get it in.
+        project_uid: UUID
+            The uid of the project.
+
+        Returns
+        -------
+        DatabaseProjectMigration | None
+            The migration, or None where the project has none.
+        """
+        return session.scalars(
+            select(DatabaseProjectMigration).filter_by(project_uid=project_uid)
+        ).one_or_none()
 
     def get_all_projects(
         self,
@@ -351,6 +453,57 @@ class DatabaseService:
         elif isinstance(batch, Batch):
             return session.get(DatabaseBatch, batch.uid)
         return batch
+
+    def get_metadata_search_items_in_batch(
+        self,
+        session: Session,
+        batch_uid: UUID,
+        schema_uids: Collection[UUID] | None = None,
+    ) -> Iterable[DatabaseMetadataSearchItem]:
+        """Get the metadata search items of a batch.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get them in.
+        batch_uid: UUID
+            The uid of the batch.
+        schema_uids: Collection[UUID] | None = None
+            The item schemas to get the search items of, or None for all.
+
+        Returns
+        -------
+        Iterable[DatabaseMetadataSearchItem]
+            The search items of the batch.
+        """
+        query = select(DatabaseMetadataSearchItem).filter_by(batch_uid=batch_uid)
+        if schema_uids is not None:
+            query = query.where(DatabaseMetadataSearchItem.schema_uid.in_(schema_uids))
+        return session.scalars(query)
+
+    def get_metadata_search_item(
+        self, session: Session, search_item_uid: UUID
+    ) -> DatabaseMetadataSearchItem:
+        """Get a metadata search item.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get it in.
+        search_item_uid: UUID
+            The uid of the search item.
+
+        Returns
+        -------
+        DatabaseMetadataSearchItem
+            The search item.
+
+        Raises
+        ------
+        NoResultFound
+            If there is no such search item.
+        """
+        return session.get_one(DatabaseMetadataSearchItem, search_item_uid)
 
     def get_attribute(
         self,
@@ -486,14 +639,18 @@ class DatabaseService:
         session: Session,
         dataset_uid: UUID,
         load_attributes: bool = False,
+        schema_uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseItem]:
-        """Yield every item (any subclass) in a dataset.
+        """Yield every item (any subclass) in a dataset, or those of some item
+        schemas.
 
         Set ``load_attributes=True`` for callers that will iterate each
         item's ``attributes`` relationship (e.g. mapper remap loops) to
         avoid one query per item.
         """
         query = select(DatabaseItem).where(DatabaseItem.dataset_uid == dataset_uid)
+        if schema_uids is not None:
+            query = query.where(DatabaseItem.schema_uid.in_(schema_uids))
         if load_attributes:
             query = query.options(selectinload(DatabaseItem.attributes))
         return session.scalars(query)
@@ -1882,6 +2039,26 @@ class DatabaseService:
         for child in children:
             yield from cls.unmapped_under(child)
 
+    def delete_unmapped_values(
+        self,
+        session: Session,
+        root_attribute_uids: Sequence[UUID],
+    ) -> None:
+        """Delete the unmapped values recorded for top-level attributes.
+
+        Parameters
+        ----------
+        session: Session
+            The session to delete them in.
+        root_attribute_uids: Sequence[UUID]
+            The uids of the top-level attributes.
+        """
+        session.execute(
+            delete(DatabaseUnmappedValue).where(
+                DatabaseUnmappedValue.root_attribute_uid.in_(root_attribute_uids)
+            )
+        )
+
     def record_unmapped_values(
         self,
         attribute: DatabaseAttribute,
@@ -2547,10 +2724,215 @@ class DatabaseService:
         self,
         session: Session,
         name: str,
+        family_uid: UUID | None,
     ) -> DatabaseMapper | None:
+        """The mapper of a name in a family of root schemas, where names are
+        unique."""
         return session.scalars(
-            select(DatabaseMapper).filter_by(name=name)
+            select(DatabaseMapper).filter_by(name=name, family_uid=family_uid)
         ).one_or_none()
+
+    def count_schema_uids_by_root(
+        self, session: Session
+    ) -> Sequence[tuple[UUID, bool, UUID, int]]:
+        """How many item and attribute rows there are of each schema uid, by
+        the root schema of the project they belong to.
+
+        Rows of (root schema uid, whether item rows, schema uid, count), in one
+        query, for telling where what is stored no longer matches the root it
+        is said to be on.
+        """
+        owners = self._owners_of_attributes()
+        items = (
+            select(
+                DatabaseProject.root_schema_uid,
+                true(),
+                DatabaseItem.schema_uid,
+                func.count(),
+            )
+            .join(
+                DatabaseProject, DatabaseProject.dataset_uid == DatabaseItem.dataset_uid
+            )
+            .group_by(DatabaseProject.root_schema_uid, DatabaseItem.schema_uid)
+        )
+        attributes = (
+            select(
+                owners.c.root_schema_uid,
+                false(),
+                DatabaseAttribute.schema_uid,
+                func.count(),
+            )
+            .join(owners, owners.c.attribute_uid == DatabaseAttribute.uid)
+            .group_by(owners.c.root_schema_uid, DatabaseAttribute.schema_uid)
+        )
+        return [
+            (root_schema_uid, bool(is_item), schema_uid, count)
+            for root_schema_uid, is_item, schema_uid, count in session.execute(
+                union_all(items, attributes)
+            )
+        ]
+
+    def get_projects_of_attributes(
+        self, session: Session, attribute_schema_uid: UUID
+    ) -> dict[UUID, UUID]:
+        """The project each attribute row of a schema belongs to, by attribute
+        uid, in one query. An attribute of no project is left out."""
+        owners = self._owners_of_attributes()
+        return {
+            attribute_uid: project_uid
+            for attribute_uid, project_uid in session.execute(
+                select(owners.c.attribute_uid, owners.c.project_uid)
+                .join(
+                    DatabaseAttribute, DatabaseAttribute.uid == owners.c.attribute_uid
+                )
+                .where(DatabaseAttribute.schema_uid == attribute_schema_uid)
+            )
+        }
+
+    @staticmethod
+    def _owners_of_attributes():
+        """A subquery of every attribute row with the project it belongs to,
+        through the item, project, or dataset it is of: (attribute_uid,
+        project_uid, root_schema_uid)."""
+        owners = union_all(
+            select(
+                DatabaseItem.uid.label("owner_uid"),
+                DatabaseProject.uid.label("project_uid"),
+                DatabaseProject.root_schema_uid.label("root_schema_uid"),
+            ).join(
+                DatabaseProject, DatabaseProject.dataset_uid == DatabaseItem.dataset_uid
+            ),
+            select(
+                DatabaseProject.uid,
+                DatabaseProject.uid,
+                DatabaseProject.root_schema_uid,
+            ),
+            select(
+                DatabaseProject.dataset_uid,
+                DatabaseProject.uid,
+                DatabaseProject.root_schema_uid,
+            ),
+        ).subquery()
+        return (
+            select(
+                DatabaseAttribute.uid.label("attribute_uid"),
+                owners.c.project_uid,
+                owners.c.root_schema_uid,
+            )
+            .join(
+                owners,
+                owners.c.owner_uid
+                == func.coalesce(
+                    DatabaseAttribute.attribute_item_uid,
+                    DatabaseAttribute.private_attribute_item_uid,
+                    DatabaseAttribute.attribute_project_uid,
+                    DatabaseAttribute.private_attribute_project_uid,
+                    DatabaseAttribute.attribute_dataset_uid,
+                    DatabaseAttribute.private_attribute_dataset_uid,
+                ),
+            )
+            .subquery()
+        )
+
+    @staticmethod
+    def has_stored_batches(session: Session, project: DatabaseProject) -> bool:
+        """Tell whether a batch of a project has images stored, or is locked to
+        have them stored.
+
+        Parameters
+        ----------
+        session: Session
+            The session to query in.
+        project: DatabaseProject
+            The project whose batches to look at.
+
+        Returns
+        -------
+        bool
+            Whether a batch is completed or locked, or has a stored image.
+        """
+        batches = select(DatabaseBatch.uid).where(
+            DatabaseBatch.project_uid == project.uid
+        )
+        return bool(
+            session.scalar(
+                select(
+                    or_(
+                        batches.where(
+                            DatabaseBatch.status.in_(
+                                list(DatabaseService.STORED_BATCH_STATUSES)
+                            )
+                        ).exists(),
+                        select(DatabaseImage.uid)
+                        .where(
+                            DatabaseImage.batch_uid.in_(batches),
+                            DatabaseImage.status == ImageStatus.STORED,
+                        )
+                        .exists(),
+                    )
+                )
+            )
+        )
+
+    @staticmethod
+    def has_busy_batches(session: Session, project: DatabaseProject) -> bool:
+        """Tell whether a task may be writing to a batch of a project.
+
+        Parameters
+        ----------
+        session: Session
+            The session to query in.
+        project: DatabaseProject
+            The project whose batches to look at.
+
+        Returns
+        -------
+        bool
+            Whether a batch is being searched or processed, has search items
+            not yet searched, or has images being downloaded, processed, or
+            stored.
+        """
+        batches = select(DatabaseBatch.uid).where(
+            DatabaseBatch.project_uid == project.uid
+        )
+        return bool(
+            session.scalar(
+                select(
+                    or_(
+                        batches.where(
+                            DatabaseBatch.status.in_(
+                                list(DatabaseService.BUSY_BATCH_STATUSES)
+                            )
+                        ).exists(),
+                        select(DatabaseMetadataSearchItem.uid)
+                        .where(
+                            DatabaseMetadataSearchItem.batch_uid.in_(batches),
+                            DatabaseMetadataSearchItem.status
+                            == MetadataImportStatus.NOT_STARTED,
+                        )
+                        .exists(),
+                        select(DatabaseImage.uid)
+                        .where(
+                            DatabaseImage.batch_uid.in_(batches),
+                            DatabaseImage.status.in_(
+                                list(DatabaseService.IN_FLIGHT_IMAGE_STATUSES)
+                            ),
+                        )
+                        .exists(),
+                    )
+                )
+            )
+        )
+
+    def get_all_mappers(self, session: Session) -> Sequence[DatabaseMapper]:
+        """Get every stored mapper."""
+        return session.scalars(select(DatabaseMapper)).all()
+
+    def get_mappers_without_family(self, session: Session) -> Sequence[DatabaseMapper]:
+        """The mappers not yet given the family of their attribute."""
+        return session.scalars(
+            select(DatabaseMapper).where(DatabaseMapper.family_uid.is_(None))
+        ).all()
 
     def get_mapper_for_schemas(
         self,
@@ -2589,6 +2971,7 @@ class DatabaseService:
         name: str,
         attribute_schema_uid: UUID,
         root_attribute_schema_uid: UUID,
+        family_uid: UUID | None = None,
     ):
         return self._add_to_session(
             session,
@@ -2596,6 +2979,7 @@ class DatabaseService:
                 name=name,
                 attribute_schema_uid=attribute_schema_uid,
                 root_attribute_schema_uid=root_attribute_schema_uid,
+                family_uid=family_uid,
             ),
         )
 
