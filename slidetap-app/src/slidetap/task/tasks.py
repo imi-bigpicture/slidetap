@@ -115,19 +115,6 @@ scale exponentially: 3 s, 9 s, 27 s — total ~40 s across three attempts.
 """
 
 
-PRE_PROCESSING_SETTLED = [
-    # An image that failed is not going to reach the next status by itself, and
-    # waiting for it would leave the batch unfinished for good — which would
-    # also keep the case it is under from ever being flagged for somebody to
-    # deal with it. It stays in the batch, not valid and raised on, for a
-    # person to fetch again or take out of the project.
-    ImageStatus.DOWNLOADING_FAILED,
-    ImageStatus.PRE_PROCESSING_FAILED,
-    ImageStatus.PRE_PROCESSED,
-]
-"""What an image has to be for the batch to be finished pre-processing it."""
-
-
 def _record_image_phase_failure(
     database_image: DatabaseImage,
     exception: BaseException,
@@ -178,6 +165,7 @@ def download_and_pre_process_image(
 
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
+        batch_uid = database_image.batch_uid
 
         if (
             database_image.pre_processed
@@ -222,6 +210,9 @@ def download_and_pre_process_image(
             review_service,
         )
         if not downloaded:
+            # An image that failed is settled too, and can be the last one the
+            # batch was waiting for.
+            batch_service.finish_pre_processing_if_settled(batch_uid)
             return
 
         with database_service.get_session() as session:
@@ -235,32 +226,15 @@ def download_and_pre_process_image(
             database_image.set_as_pre_processing()
             session.commit()
 
-    pre_processed = _run_pre_process_phase(
+    _run_pre_process_phase(
         image_uid,
         task_id,
         metadata_import_interface,
         database_service,
         attribute_service,
     )
-    if not pre_processed:
-        return
-
-    with database_service.get_session() as session:
-        database_image = database_service.get_image(session, image_uid)
-        any_non_completed = database_service.get_first_image_for_batch(
-            session,
-            batch_uid=database_image.batch.uid,
-            exclude_status=PRE_PROCESSING_SETTLED,
-            selected=True,
-        )
-        if any_non_completed is not None:
-            logger.debug(
-                f"Batch {database_image.batch.uid} not yet finished pre-processing. "
-                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
-            )
-            return
-        logger.debug(f"Batch {database_image.batch.uid} pre-processed.")
-        batch_service.set_as_pre_processed(database_image.batch, session=session)
+    # Whether it was pre-processed or failed to be, the image is settled.
+    batch_service.finish_pre_processing_if_settled(batch_uid)
 
 
 def _run_download_phase(
@@ -395,6 +369,7 @@ def post_process_image(
     project = None
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
+        batch_uid = database_image.batch_uid
 
         try:
             project = database_image.batch.project.model
@@ -441,23 +416,8 @@ def post_process_image(
             )
 
         session.commit()
-        any_non_completed = database_service.get_first_image_for_batch(
-            session,
-            batch_uid=database_image.batch.uid,
-            exclude_status=[
-                ImageStatus.POST_PROCESSING_FAILED,
-                ImageStatus.POST_PROCESSED,
-            ],
-            selected=True,
-        )
-        if any_non_completed is not None:
-            logger.debug(
-                f"Batch {database_image.batch.uid} not yet finished post-processing. "
-                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
-            )
-            return
-        logger.debug(f"Batch {database_image.batch.uid} post-processed.")
-        batch_service.set_as_post_processed(database_image.batch, session=session)
+
+    batch_service.finish_post_processing_if_settled(batch_uid)
 
 
 @dishka_task(
