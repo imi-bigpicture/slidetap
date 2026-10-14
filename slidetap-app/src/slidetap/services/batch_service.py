@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -37,6 +37,25 @@ from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
+
+PRE_PROCESSING_SETTLED = [
+    # An image that failed is not going to reach the next status by itself, and
+    # waiting for it would leave the batch unfinished for good — which would
+    # also keep the case it is under from ever being flagged for somebody to
+    # deal with it. It stays in the batch, not valid and raised on, for a
+    # person to fetch again or take out of the project.
+    ImageStatus.DOWNLOADING_FAILED,
+    ImageStatus.PRE_PROCESSING_FAILED,
+    ImageStatus.PRE_PROCESSED,
+]
+"""What an image has to be for the batch to be finished pre-processing it."""
+
+
+POST_PROCESSING_SETTLED = [
+    ImageStatus.POST_PROCESSING_FAILED,
+    ImageStatus.POST_PROCESSED,
+]
+"""What an image has to be for the batch to be finished post-processing it."""
 
 
 class BatchService:
@@ -287,13 +306,13 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.initialized:
                 error = (
-                    f"Can only set {BatchStatus.INITIALIZED} batch as "
-                    f"{BatchStatus.METADATA_SEARCHING}, was {batch.status}"
+                    f"Can only set {BatchStatus.INITIALIZED.name} batch as "
+                    f"{BatchStatus.METADATA_SEARCHING.name}, was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.METADATA_SEARCHING
             batch.status_message = None
-            self._logger.info(f"Batch {batch.uid} set as {batch.status}.")
+            self._logger.info(f"Batch {batch.uid} set as {batch.status.name}.")
             session.commit()
             return batch.model
 
@@ -306,13 +325,14 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.metadata_searching:
                 error = (
-                    f"Can only set {BatchStatus.METADATA_SEARCHING} batch as "
-                    f"{BatchStatus.METADATA_SEARCH_COMPLETE}, was {batch.status}"
+                    f"Can only set {BatchStatus.METADATA_SEARCHING.name} batch as "
+                    f"{BatchStatus.METADATA_SEARCH_COMPLETE.name}, "
+                    f"was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
 
             batch.status = BatchStatus.METADATA_SEARCH_COMPLETE
-            self._logger.info(f"Batch {batch.uid} set as {batch.status}.")
+            self._logger.info(f"Batch {batch.uid} set as {batch.status.name}.")
             session.commit()
             return batch.model
 
@@ -325,8 +345,9 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.metadata_search_complete:
                 error = (
-                    f"Can only set {BatchStatus.METADATA_SEARCH_COMPLETE} batch as "
-                    f"{BatchStatus.IMAGE_PRE_PROCESSING}, was {batch.status}"
+                    f"Can only set {BatchStatus.METADATA_SEARCH_COMPLETE.name} "
+                    f"batch as {BatchStatus.IMAGE_PRE_PROCESSING.name}, "
+                    f"was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_PRE_PROCESSING
@@ -346,8 +367,9 @@ class BatchService:
                 force and batch.image_post_processing
             ):
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING} batch as "
-                    f"{BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE}, was {batch.status}"
+                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING.name} batch as "
+                    f"{BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE.name}, "
+                    f"was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
@@ -375,14 +397,98 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.image_post_processing:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING} batch as "
-                    f"{BatchStatus.IMAGE_POST_PROCESSING_COMPLETE}, was {batch.status}"
+                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING.name} batch as "
+                    f"{BatchStatus.IMAGE_POST_PROCESSING_COMPLETE.name}, "
+                    f"was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
             self._logger.info(f"Batch {batch.uid} set as post-processed.")
             session.commit()
             return batch.model
+
+    def finish_pre_processing_if_settled(
+        self,
+        batch_uid: UUID,
+        session: Session | None = None,
+    ) -> None:
+        """Set the batch as pre-processed if no image is still on its way.
+
+        Parameters
+        ----------
+        batch_uid: UUID
+            Batch to finish pre-processing.
+        session: Session | None = None
+            Session to use.
+        """
+        self._finish_image_phase_if_settled(
+            batch_uid,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+            PRE_PROCESSING_SETTLED,
+            self.set_as_pre_processed,
+            session,
+        )
+
+    def finish_post_processing_if_settled(
+        self,
+        batch_uid: UUID,
+        session: Session | None = None,
+    ) -> None:
+        """Set the batch as post-processed if no image is still on its way.
+
+        Parameters
+        ----------
+        batch_uid: UUID
+            Batch to finish post-processing.
+        session: Session | None = None
+            Session to use.
+        """
+        self._finish_image_phase_if_settled(
+            batch_uid,
+            BatchStatus.IMAGE_POST_PROCESSING,
+            POST_PROCESSING_SETTLED,
+            self.set_as_post_processed,
+            session,
+        )
+
+    def _finish_image_phase_if_settled(
+        self,
+        batch_uid: UUID,
+        in_progress_status: BatchStatus,
+        settled_statuses: Iterable[ImageStatus],
+        set_as_finished: Callable[..., Batch],
+        session: Session | None,
+    ) -> None:
+        """Finish the image phase of a batch if no image is still on its way.
+
+        Asked by every image as it settles, and several can settle at once. The
+        batch row is locked while its images are looked at, so one of them
+        finishes the phase and the others find it already finished. A batch
+        that is not in the phase is left alone, which is also what an image
+        retried after the batch has moved on finds.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch_for_update(session, batch_uid)
+            if batch.status != in_progress_status:
+                self._logger.debug(
+                    f"Batch {batch_uid} is not {in_progress_status.name} "
+                    f"(status={batch.status.name}), leaving it as it is."
+                )
+                return
+            non_settled_image = self._database_service.get_first_image_for_batch(
+                session,
+                batch_uid=batch_uid,
+                exclude_status=settled_statuses,
+                selected=True,
+            )
+            if non_settled_image is not None:
+                self._logger.debug(
+                    f"Batch {batch_uid} not yet finished {in_progress_status.name}. "
+                    f"Image {non_settled_image.uid} has status "
+                    f"{non_settled_image.status.name}."
+                )
+                return
+            set_as_finished(batch, session=session)
 
     def set_as_post_processing(
         self,
@@ -394,8 +500,9 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.image_pre_processing_complete and not force:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE} "
-                    f"batch as {BatchStatus.IMAGE_POST_PROCESSING}, was {batch.status}"
+                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE.name} "
+                    f"batch as {BatchStatus.IMAGE_POST_PROCESSING.name}, "
+                    f"was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING
@@ -417,9 +524,9 @@ class BatchService:
                 BatchStatus.IMAGE_STORING,
             ):
                 error = (
-                    f"Can only set {BatchStatus.LOCKED} or "
-                    f"{BatchStatus.IMAGE_STORING} batch as "
-                    f"{BatchStatus.IMAGE_STORING}, was {batch.status}"
+                    f"Can only set {BatchStatus.LOCKED.name} or "
+                    f"{BatchStatus.IMAGE_STORING.name} batch as "
+                    f"{BatchStatus.IMAGE_STORING.name}, was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_STORING
@@ -463,14 +570,14 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.image_storing:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_STORING} batch as "
-                    f"{BatchStatus.COMPLETED}, was {batch.status}"
+                    f"Can only set {BatchStatus.IMAGE_STORING.name} batch as "
+                    f"{BatchStatus.COMPLETED.name}, was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             failed_image = self.image_that_failed_to_store(batch, session)
             if failed_image is not None:
                 error = (
-                    f"Can not set batch {batch.uid} as {BatchStatus.COMPLETED}, "
+                    f"Can not set batch {batch.uid} as {BatchStatus.COMPLETED.name}, "
                     f"image {failed_image.uid} failed to store. Retry the image to "
                     f"store it, or deselect it to complete the batch without it."
                 )
@@ -500,8 +607,8 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if not batch.image_post_processing_complete:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE} "
-                    f"batch as {BatchStatus.LOCKED}, was {batch.status}"
+                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE.name} "
+                    f"batch as {BatchStatus.LOCKED.name}, was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             validation = self._validation_service.get_validation_for_batch(batch)
@@ -511,7 +618,7 @@ class BatchService:
                 )
                 error = (
                     f"Can not set batch {batch.uid} as "
-                    f"{BatchStatus.LOCKED}: "
+                    f"{BatchStatus.LOCKED.name}: "
                     f"{len(validation.non_valid_items)} items are not valid "
                     f"({named}). Curate them, or take them out of the project."
                 )
@@ -537,7 +644,8 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             if batch.status != BatchStatus.LOCKED:
                 error = (
-                    f"Can only reopen a {BatchStatus.LOCKED} batch, was {batch.status}"
+                    f"Can only reopen a {BatchStatus.LOCKED.name} batch, "
+                    f"was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
             if batch.project.status not in (
@@ -546,7 +654,7 @@ class BatchService:
             ):
                 error = (
                     f"Can not reopen batch {batch.uid}: project "
-                    f"{batch.project.uid} is {batch.project.status}."
+                    f"{batch.project.uid} is {batch.project.status.name}."
                 )
                 raise NotAllowedActionError(error)
             self._lock_contents(batch, False, session)

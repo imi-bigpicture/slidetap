@@ -324,6 +324,23 @@ class DatabaseService:
             return session.get_one(DatabaseBatch, batch.uid)
         return batch
 
+    def get_batch_for_update(
+        self,
+        session: Session,
+        batch_uid: UUID,
+    ) -> DatabaseBatch:
+        """Get batch with a row-level lock (SELECT FOR NO KEY UPDATE).
+
+        The lock leaves rows referencing the batch free to be inserted, so
+        holding it only keeps other transactions from changing the batch.
+        """
+        return session.scalars(
+            select(DatabaseBatch)
+            .where(DatabaseBatch.uid == batch_uid)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        ).one()
+
     def get_optional_batch(
         self,
         session: Session,
