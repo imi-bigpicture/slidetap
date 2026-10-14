@@ -1348,7 +1348,7 @@ class DatabaseService:
         else:
             raise TypeError(f"Unknown schema type {schema}.")
         query = self._items_query(
-            select(func.count(query_item.uid)),
+            select(func.count()).select_from(query_item),
             schema=schema,
             dataset_uid=dataset,
             batch_uid=batch,
