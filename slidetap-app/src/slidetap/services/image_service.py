@@ -188,17 +188,20 @@ class ImageService:
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str
     ) -> bytes | None:
+        """A thumbnail of the image at the given size.
+
+        Read from the thumbnail made when the image was post-processed, and
+        otherwise made from the image files for this request alone. A thumbnail
+        made here is not stored: the outbox is handed over as it is, and a
+        thumbnail named after the image is not something to hand over with a
+        pseudonymised project.
+        """
         with self._database_service.get_session() as session:
             image = self._database_service.get_optional_image(session, image_uid)
             if image is None or image.folder_path is None:
                 return None
             if image.thumbnail_path is None:
-                thumbnail = self._create_thumbnail(image, width, height, format)
-                if image.batch is not None:
-                    self._storage_service.store_thumbnail(
-                        image.batch.project.model, image.model, thumbnail
-                    )
-                return thumbnail
+                return self._create_thumbnail(image, width, height, format)
 
             return self._read_thumbnail(image, width, height, format)
 
