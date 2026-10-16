@@ -25,7 +25,11 @@ def setup_logging(config: dict[str, Any] | None = None) -> None:
     callers set directly (or Python's defaults) in place. Used to opt
     into a full ``dictConfig``-style logging setup via the ``logging:``
     section of ``config.yaml``.
+
+    Loggers that exist before the call keep working unless the config sets
+    ``disable_existing_loggers`` itself: module level loggers are created on
+    import, before the config is read.
     """
     if config is None:
         return
-    dictConfig(config)
+    dictConfig({"disable_existing_loggers": False, **config})
