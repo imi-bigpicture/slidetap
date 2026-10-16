@@ -302,6 +302,84 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
                 "failed",
             }
 
+    def test_each_status_answers_as_the_model_says(
+        self,
+        sqlite_database_service: DatabaseService,
+        image_schema: ImageSchema,
+        dataset: Dataset,
+        project: Project,
+    ):
+        """An image a phase failed in is not valid, whatever its columns say.
+        The filter, the count and the sort ask the database, and the table
+        draws the column from the model, so the two have to agree on every
+        status an image can be in."""
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_dataset(session, dataset)
+            sqlite_database_service.add_project(session, project)
+            batch = sqlite_database_service.add_batch(
+                session, BatchCreate(name="batch", project_uid=project.uid)
+            )
+            for status in ImageStatus:
+                database_image = sqlite_database_service.add_item(
+                    session,
+                    Image(
+                        uid=uuid4(),
+                        identifier=status.name,
+                        dataset_uid=dataset.uid,
+                        batch_uid=batch.uid,
+                        schema_uid=image_schema.uid,
+                        format=ImageFormat.DICOM_WSI,
+                    ),
+                    [],
+                    [],
+                )
+                database_image.valid_attributes = True
+                database_image.valid_relations = True
+                database_image.valid_pseudonym = True
+                database_image.status = status
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            valid_by_model = {
+                image.identifier
+                for image in sqlite_database_service.get_images(session, image_schema)
+                if image.model.valid
+            }
+            answers = {
+                validity: {
+                    image.identifier
+                    for image in sqlite_database_service.get_images(
+                        session, image_schema, validity=validity
+                    )
+                }
+                for validity in (ItemValidity.VALID, ItemValidity.INVALID)
+            }
+            valid_count = sqlite_database_service.get_item_count(
+                session, image_schema, validity=ItemValidity.VALID
+            )
+            sorted_identifiers = [
+                image.identifier
+                for image in sqlite_database_service.get_images(
+                    session,
+                    image_schema,
+                    sorting=[ColumnSort(sort_type=SortType.VALID, descending=False)],
+                )
+            ]
+
+        # Assert
+        failed = {
+            ImageStatus.DOWNLOADING_FAILED.name,
+            ImageStatus.PRE_PROCESSING_FAILED.name,
+            ImageStatus.POST_PROCESSING_FAILED.name,
+            ImageStatus.STORING_FAILED.name,
+        }
+        assert valid_by_model == {status.name for status in ImageStatus} - failed
+        assert answers[ItemValidity.VALID] == valid_by_model
+        assert answers[ItemValidity.INVALID] == failed
+        assert valid_count == len(valid_by_model)
+        assert set(sorted_identifiers[: len(failed)]) == failed
+
     def test_the_column_sorts_in_the_order_a_curator_reads_it(
         self,
         sqlite_database_service: DatabaseService,

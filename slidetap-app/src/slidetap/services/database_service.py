@@ -25,6 +25,7 @@ from typing import (
     TypeVar,
     overload,
 )
+from typing import cast as cast_type
 from uuid import UUID
 
 from sqlalchemy import (
@@ -2493,11 +2494,18 @@ class DatabaseService:
         exclude_status: Iterable[ImageStatus] = [],
         selected: bool | None = None,
     ) -> DatabaseImage | None:
+        """Return an image of the batch, or None if there is none.
+
+        An image is returned if its status is any of `include_status`, when
+        given, and none of `exclude_status`.
+        """
         query = select(DatabaseImage).filter(DatabaseImage.batch_uid == batch_uid)
-        for item in include_status:
-            query = query.filter(DatabaseImage.status == item)
-        for item in exclude_status:
-            query = query.filter(DatabaseImage.status != item)
+        included = list(include_status)
+        if included:
+            query = query.filter(DatabaseImage.status.in_(included))
+        excluded = list(exclude_status)
+        if excluded:
+            query = query.filter(DatabaseImage.status.notin_(excluded))
         if selected is not None:
             query = query.filter(DatabaseImage.selected == selected)
         return session.scalars(query).first()
@@ -3248,15 +3256,29 @@ class DatabaseService:
         if selected is not None:
             query = query.filter_by(selected=selected)
         if validity is not None:
-            query = cls._validity_filter(query, validity, pending_expression)
+            query = cls._validity_filter(query, schema, validity, pending_expression)
         if review_status is not None:
             query = query.filter_by(review_status=review_status)
         return query
+
+    @staticmethod
+    def _valid_expression(schema: ItemSchema) -> ColumnElement[bool]:
+        """Whether a row of the schema is valid, as its model says.
+
+        An image a phase failed in is not valid whatever its columns say, so
+        image rows are asked through `DatabaseImage.valid`. Queries for an
+        image schema select `DatabaseImage`, which that expression is on. The
+        class-level hybrids are SQL expressions, which the cast says.
+        """
+        if isinstance(schema, ImageSchema):
+            return cast_type(ColumnElement[bool], DatabaseImage.valid)
+        return cast_type(ColumnElement[bool], DatabaseItem.valid)
 
     @classmethod
     def _validity_filter(
         cls,
         query: Select,
+        schema: ItemSchema,
         validity: ItemValidity,
         pending_expression: ColumnElement[bool] | None,
     ) -> Select:
@@ -3268,8 +3290,9 @@ class DatabaseService:
         or a schema it does not excuse --- nothing is pending and the other two
         are validity as it has always been asked.
         """
+        valid = cls._valid_expression(schema)
         if validity is ItemValidity.VALID:
-            return query.filter(DatabaseItem.valid)
+            return query.filter(valid)
         if validity is ItemValidity.PENDING:
             if pending_expression is None:
                 # Nothing here can be waiting on anything, so nothing answers.
@@ -3278,10 +3301,10 @@ class DatabaseService:
                 return query.filter(false())
             return query.filter(pending_expression)
         if pending_expression is None:
-            return query.filter(not_(DatabaseItem.valid))
+            return query.filter(not_(valid))
         # Pending is a kind of not valid, so what is left of not valid is what
         # is not pending either.
-        return query.filter(not_(DatabaseItem.valid), not_(pending_expression))
+        return query.filter(not_(valid), not_(pending_expression))
 
     @classmethod
     def _attribute_filters(
@@ -3736,12 +3759,11 @@ class DatabaseService:
                     # The three the column is drawn with, in the order a
                     # curator wants them: what is theirs to see to first, then
                     # what is only waiting, then what is done.
+                    valid = cls._valid_expression(schema)
                     sort_by = (
-                        DatabaseItem.valid
+                        valid
                         if pending_expression is None
-                        else case(
-                            (DatabaseItem.valid, 2), (pending_expression, 1), else_=0
-                        )
+                        else case((valid, 2), (pending_expression, 1), else_=0)
                     )
                 elif sort.sort_type == SortType.STATUS:
                     sort_by = DatabaseImage.status

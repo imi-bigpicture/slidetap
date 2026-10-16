@@ -372,3 +372,74 @@ class TestPreProcessingCompletion:
 
         # Assert
         assert unfinished is None
+
+
+@pytest.mark.integration
+class TestFirstImageForBatch:
+    def test_an_image_in_any_of_the_included_statuses_is_found(
+        self,
+        sqlite_database_service: DatabaseService,
+        batch_uid: UUID,
+        dataset_uid: UUID,
+    ) -> None:
+        """The failure this guards against: each included status narrowing the
+        query on its own, so that asking for more than one finds nothing."""
+        # Arrange
+        _add_image(
+            sqlite_database_service,
+            batch_uid,
+            dataset_uid,
+            "PL1234-20-1",
+            ImageStatus.STORED,
+        )
+        _add_image(
+            sqlite_database_service,
+            batch_uid,
+            dataset_uid,
+            "PL1234-20-2",
+            ImageStatus.POST_PROCESSING_FAILED,
+        )
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            image = sqlite_database_service.get_first_image_for_batch(
+                session,
+                batch_uid=batch_uid,
+                include_status=[
+                    ImageStatus.STORING_FAILED,
+                    ImageStatus.POST_PROCESSING_FAILED,
+                ],
+            )
+            identifier = image.identifier if image is not None else None
+
+        # Assert
+        assert identifier == "PL1234-20-2"
+
+    def test_an_image_in_none_of_the_included_statuses_is_not_found(
+        self,
+        sqlite_database_service: DatabaseService,
+        batch_uid: UUID,
+        dataset_uid: UUID,
+    ) -> None:
+        # Arrange
+        _add_image(
+            sqlite_database_service,
+            batch_uid,
+            dataset_uid,
+            "PL1234-20-1",
+            ImageStatus.STORED,
+        )
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            image = sqlite_database_service.get_first_image_for_batch(
+                session,
+                batch_uid=batch_uid,
+                include_status=[
+                    ImageStatus.STORING_FAILED,
+                    ImageStatus.POST_PROCESSING_FAILED,
+                ],
+            )
+
+        # Assert
+        assert image is None

@@ -34,7 +34,6 @@ from slidetap.model import (
     BatchValidation,
     Dataset,
     DatasetValidation,
-    ImageStatus,
     Item,
     MetadataImportCompleteness,
     Project,
@@ -274,17 +273,9 @@ class ValidationService:
             ),
         ]
         if isinstance(schema, ImageSchema):
-            # As `DatabaseImage.valid` counts it: an image whose download or
-            # processing failed is not waiting for anything.
-            terms.append(
-                DatabaseImage.status.notin_(
-                    [
-                        ImageStatus.DOWNLOADING_FAILED,
-                        ImageStatus.PRE_PROCESSING_FAILED,
-                        ImageStatus.POST_PROCESSING_FAILED,
-                    ]
-                )
-            )
+            # As `DatabaseImage.valid` counts it: an image a phase failed in
+            # is not waiting for anything.
+            terms.append(DatabaseImage.status.notin_(DatabaseImage.FAILED_STATUSES))
         return and_(*terms)
 
     def validate_item_attributes(

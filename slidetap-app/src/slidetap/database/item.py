@@ -22,6 +22,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import (
     Any,
+    ClassVar,
     Generic,
     TypeVar,
 )
@@ -566,6 +567,16 @@ class DatabaseImageFile(Base):
 
 
 class DatabaseImage(DatabaseItem[Image]):
+    FAILED_STATUSES: ClassVar[tuple[ImageStatus, ...]] = (
+        ImageStatus.DOWNLOADING_FAILED,
+        ImageStatus.PRE_PROCESSING_FAILED,
+        ImageStatus.POST_PROCESSING_FAILED,
+        ImageStatus.STORING_FAILED,
+    )
+    """The statuses of an image a phase failed in. Such an image is not valid,
+    whatever its attributes and relations say, both on the model and in
+    queries."""
+
     # Table for mapping many-to-many samples to images
     sample_to_image = Table(
         "sample_to_image",
@@ -688,13 +699,7 @@ class DatabaseImage(DatabaseItem[Image]):
             cls.valid_attributes,
             cls.valid_relations,
             cls.valid_pseudonym,
-            cls.status.notin_(
-                [
-                    ImageStatus.DOWNLOADING_FAILED,
-                    ImageStatus.PRE_PROCESSING_FAILED,
-                    ImageStatus.POST_PROCESSING_FAILED,
-                ]
-            ),
+            cls.status.notin_(cls.FAILED_STATUSES),
         )
 
     @hybrid_property
@@ -760,12 +765,14 @@ class DatabaseImage(DatabaseItem[Image]):
 
     @hybrid_property
     def failed(self) -> bool:
-        return (
-            self.downloading_failed
-            or self.pre_processing_failed
-            or self.post_processing_failed
-            or self.storing_failed
-        )
+        """Return True if a phase of the image failed, see
+        ``FAILED_STATUSES``."""
+        return self.status in self.FAILED_STATUSES
+
+    @failed.inplace.expression
+    @classmethod
+    def _failed_expression(cls):
+        return cls.status.in_(cls.FAILED_STATUSES)
 
     @property
     def model(self) -> Image:
