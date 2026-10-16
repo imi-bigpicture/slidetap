@@ -16,20 +16,10 @@ import { Chip, Stack, Typography } from '@mui/material'
 import type { ReactElement } from 'react'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { SelectionChange } from 'src/models/item_select'
-import type { RootSchema } from 'src/models/schema/root_schema'
+import { schemaName } from './schema_name'
 
 /** How many items of a group are named before the rest are counted. */
 const SHOWN_PER_GROUP = 8
-
-/** What the schema calls a kind of item. */
-export function schemaName(schema: RootSchema, schemaUid: string): string {
-  const itemSchema =
-    schema.samples[schemaUid] ??
-    schema.images[schemaUid] ??
-    schema.observations[schemaUid] ??
-    schema.annotations[schemaUid]
-  return itemSchema?.displayName ?? 'Item'
-}
 
 /** Items a selection changes, or would change, named up to a limit and
  * counted beyond it. */

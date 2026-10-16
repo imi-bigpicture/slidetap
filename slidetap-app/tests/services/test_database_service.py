@@ -18,7 +18,7 @@
 in-memory `MapperExpressionIndex`: the exact/regex split now lives in the
 `mapping_item.literal` column (set at write time, see
 `tests/database/test_mapper.py`) instead of a per-process cache that could go
-stale across the web and worker processes. These run against a real SQLite
+stale across the web and worker processes. These run against a real
 database (not decoy mocks) since what they need to prove is the SQL itself:
 the indexed literal lookup and the hits/uid ordering.
 """
@@ -35,19 +35,19 @@ from slidetap.services import DatabaseService
 class TestGetLiteralMappingCandidate:
     def test_matches_by_literal(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_mapping(
                 session, mapper_uid, "^71854001$", code_attribute
             )
-            sqlite_database_service.add_mapping(
+            stored_database_service.add_mapping(
                 session, mapper_uid, ".*resectie.*", code_attribute
             )
 
-            candidate = sqlite_database_service.get_literal_mapping_candidate(
+            candidate = stored_database_service.get_literal_mapping_candidate(
                 session, mapper_uid, "71854001"
             )
 
@@ -56,17 +56,17 @@ class TestGetLiteralMappingCandidate:
 
     def test_no_candidate_for_regex_only_value(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_mapping(
                 session, mapper_uid, ".*resectie.*", code_attribute
             )
 
             assert (
-                sqlite_database_service.get_literal_mapping_candidate(
+                stored_database_service.get_literal_mapping_candidate(
                     session, mapper_uid, "resectie stuk"
                 )
                 is None
@@ -74,24 +74,24 @@ class TestGetLiteralMappingCandidate:
 
     def test_colliding_literals_return_highest_hits(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
         # "^A$" and "A$" both classify to the literal "A" (start anchor is
         # implicit under re.match); the query must pick the higher-hit row
         # rather than an arbitrary one of the two.
-        with sqlite_database_service.get_session() as session:
-            low_hits = sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            low_hits = stored_database_service.add_mapping(
                 session, mapper_uid, "^A$", code_attribute
             )
-            high_hits = sqlite_database_service.add_mapping(
+            high_hits = stored_database_service.add_mapping(
                 session, mapper_uid, "A$", code_attribute
             )
             low_hits.hits = 1
             high_hits.hits = 5
 
-            candidate = sqlite_database_service.get_literal_mapping_candidate(
+            candidate = stored_database_service.get_literal_mapping_candidate(
                 session, mapper_uid, "A"
             )
 
@@ -100,20 +100,20 @@ class TestGetLiteralMappingCandidate:
 
     def test_different_mappers_are_isolated(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
-        with sqlite_database_service.get_session() as session:
-            other_mapper = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            other_mapper = stored_database_service.add_mapper(
                 session, "other-mapper", uuid4(), uuid4()
             )
-            sqlite_database_service.add_mapping(
+            stored_database_service.add_mapping(
                 session, other_mapper.uid, "^A$", code_attribute
             )
 
             assert (
-                sqlite_database_service.get_literal_mapping_candidate(
+                stored_database_service.get_literal_mapping_candidate(
                     session, mapper_uid, "A"
                 )
                 is None
@@ -124,24 +124,24 @@ class TestGetLiteralMappingCandidate:
 class TestGetRegexMappingItems:
     def test_excludes_literal_expressions(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_mapping(
                 session, mapper_uid, "^71854001$", code_attribute
             )
-            sqlite_database_service.add_mapping(
+            stored_database_service.add_mapping(
                 session, mapper_uid, ".*resectie.*", code_attribute
             )
-            sqlite_database_service.add_mapping(
+            stored_database_service.add_mapping(
                 session, mapper_uid, "^HE[0-9]*", code_attribute
             )
 
             regex_expressions = {
                 item.expression
-                for item in sqlite_database_service.get_regex_mapping_items(
+                for item in stored_database_service.get_regex_mapping_items(
                     session, mapper_uid
                 )
             }
@@ -150,22 +150,22 @@ class TestGetRegexMappingItems:
 
     def test_ordered_by_hits_desc(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
-        with sqlite_database_service.get_session() as session:
-            low = sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            low = stored_database_service.add_mapping(
                 session, mapper_uid, ".*a.*", code_attribute
             )
-            high = sqlite_database_service.add_mapping(
+            high = stored_database_service.add_mapping(
                 session, mapper_uid, ".*b.*", code_attribute
             )
             low.hits = 1
             high.hits = 9
 
             items = list(
-                sqlite_database_service.get_regex_mapping_items(session, mapper_uid)
+                stored_database_service.get_regex_mapping_items(session, mapper_uid)
             )
 
             assert [item.uid for item in items] == [high.uid, low.uid]

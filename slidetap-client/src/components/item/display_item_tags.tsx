@@ -29,8 +29,10 @@ import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MuiColorInput } from 'mui-color-input'
 import React, { useState } from 'react'
+import { NIL_UID } from 'src/models/attribute'
 import { Tag } from 'src/models/tag'
 import tagApi from 'src/services/api/tag_api'
+import { splitTagSelection } from 'src/components/item/tag_selection'
 import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayItemTagsProps {
@@ -98,7 +100,7 @@ export default function DisplayItemTags({
     .filter((tag): tag is Tag => tag !== undefined)
     .concat(
       newTagNames.map((name) => ({
-        uid: '00000000-0000-0000-0000-000000000000',
+        uid: NIL_UID,
         name: name,
         description: '',
         color: '',
@@ -118,13 +120,10 @@ export default function DisplayItemTags({
         // })}
         value={tags}
         freeSolo
-        onChange={async (_, newValue) => {
-          const newTags = newValue.filter((tag) => typeof tag === 'string')
-          setNewTags(newTags)
-          const updatedTags = newValue
-            .filter((tag) => typeof tag !== 'string')
-            .map((tag) => tag.uid)
-          handleTagsUpdate(updatedTags)
+        onChange={(_, newValue) => {
+          const selection = splitTagSelection(newValue)
+          setNewTags(selection.newTagNames)
+          handleTagsUpdate(selection.tagUids)
         }}
         renderInput={(params) => (
           <TextField

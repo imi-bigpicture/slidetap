@@ -48,6 +48,8 @@ from dishka import Container, FromDishka
 from dishka.entities.key import _FromComponent
 from procrastinate import App as TaskApp
 from procrastinate import Blueprint, JobContext
+from procrastinate.jobs import Job
+from procrastinate.retry import RetryValue, get_retry_strategy
 
 
 def _find_dishka_params(fn: Callable[..., Any]) -> list[tuple[str, type[Any]]]:
@@ -71,12 +73,30 @@ def _find_dishka_params(fn: Callable[..., Any]) -> list[tuple[str, type[Any]]]:
     return found
 
 
+def retry_check(retry: RetryValue | None, job: Job) -> Callable[[BaseException], bool]:
+    """Whether an exception raised by the job will have the job retried.
+
+    Asks the task's retry strategy the question the worker asks of it once the
+    task has raised, for the job as it is running, so that a task can tell its
+    last attempt from one that is run again.
+    """
+    strategy = get_retry_strategy(retry) if retry is not None else None
+
+    def will_retry(exception: BaseException) -> bool:
+        if strategy is None:
+            return False
+        return strategy.get_retry_decision(exception=exception, job=job) is not None
+
+    return will_retry
+
+
 def dishka_task(
     target: TaskApp | Blueprint,
     *,
     name: str,
     queue: str = "default",
     inject_task_id: bool = False,
+    inject_will_retry: bool = False,
     **task_kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Any]:
     """Register a Procrastinate task with Dishka-resolved parameters.
@@ -100,6 +120,11 @@ def dishka_task(
     When ``inject_task_id=True``, the wrapper passes ``str(context.job.id)``
     as the ``task_id`` parameter — useful for tasks that need a stable
     "who's currently holding this resource" marker.
+
+    When ``inject_will_retry=True``, the wrapper passes a ``will_retry``
+    callable, see :func:`retry_check`, that tells whether an exception will
+    have the job retried under the task's ``retry`` strategy. A task uses it
+    to leave what it works on settled on its last attempt.
     """
 
     def decorator(fn: Callable[..., Any]) -> Any:
@@ -107,6 +132,8 @@ def dishka_task(
         synthetic_names = {name for name, _ in dishka_params}
         if inject_task_id:
             synthetic_names.add("task_id")
+        if inject_will_retry:
+            synthetic_names.add("will_retry")
 
         # Function signature minus the injected parameters — what callers pass.
         signature = inspect.signature(fn)
@@ -124,6 +151,10 @@ def dishka_task(
                 resolved[param_name] = request_container.get(service_type)
             if inject_task_id:
                 resolved["task_id"] = str(context.job.id)
+            if inject_will_retry:
+                resolved["will_retry"] = retry_check(
+                    task_kwargs.get("retry"), context.job
+                )
             return resolved
 
         @functools.wraps(fn)

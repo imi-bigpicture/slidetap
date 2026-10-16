@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress, Stack } from '@mui/material'
+import { LinearProgress, Stack, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
 import Spinner from 'src/components/spinner'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { useObjectUrl } from 'src/hooks/use_object_url'
 import type { Image } from 'src/models/item'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import type { Size } from 'src/models/setting'
@@ -41,8 +42,16 @@ export default function Thumbnail({
     },
   })
   const { pseudonymMode } = usePseudonym()
+  const thumbnailUrl = useObjectUrl(thumbnailQuery.data)
 
-  if (thumbnailQuery.data === undefined) {
+  if (thumbnailQuery.isError) {
+    return (
+      <Typography variant="caption" color="error">
+        Thumbnail unavailable
+      </Typography>
+    )
+  }
+  if (thumbnailUrl === undefined) {
     return <LinearProgress />
   }
 
@@ -57,7 +66,7 @@ export default function Thumbnail({
         minHeight={size.height.toString() + 'px'}
       >
         <img
-          src={URL.createObjectURL(thumbnailQuery.data)}
+          src={thumbnailUrl}
           loading="lazy"
           alt={pseudonymMode ? getDisplayIdentifier(image, pseudonymMode) : (image.name ?? image.identifier)}
           onClick={handleOnClick}

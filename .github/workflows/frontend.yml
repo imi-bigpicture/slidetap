@@ -1,0 +1,48 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: slidetap-client
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # The version comes from `packageManager` in package.json.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          package_json_file: slidetap-client/package.json
+
+      # The same Node as the image builds the client with.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: slidetap-client/pnpm-lock.yaml
+
+      # Fails when pnpm-lock.yaml is out of date with package.json.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests
+        run: pnpm test
+
+      # Type checks as well as bundles: `tsc -b && vite build`.
+      - name: Build
+        run: pnpm build

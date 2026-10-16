@@ -111,8 +111,7 @@ def metadata_import_service(
 
 @pytest.mark.unittest
 class TestMetadataImportServiceService:
-    @pytest.mark.asyncio
-    async def test_search(
+    def test_search(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -152,7 +151,7 @@ class TestMetadataImportServiceService:
         )
 
         # Act
-        result = await metadata_import_service.search(batch.uid, file)
+        result = metadata_import_service.search(batch.uid, file)
 
         # Assert
         assert result == batch
@@ -165,14 +164,11 @@ class TestMetadataImportServiceService:
             database_service.delete_items(session, item_schema, batch.uid), times=1
         )
         decoy.verify(
-            await scheduler.metadata_batch_import(
-                batch, search_parameters=search_parameters
-            ),
+            scheduler.metadata_batch_import(batch, search_parameters=search_parameters),
             times=1,
         )
 
-    @pytest.mark.asyncio
-    async def test_a_batch_that_cannot_be_searched_is_not_handed_the_document(
+    def test_a_batch_that_cannot_be_searched_is_not_handed_the_document(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -200,13 +196,12 @@ class TestMetadataImportServiceService:
 
         # Act
         with pytest.raises(NotAllowedActionError):
-            await metadata_import_service.search(batch.uid, file)
+            metadata_import_service.search(batch.uid, file)
 
         # Assert
         decoy.verify(metadata_import_interface.parse_file(file), times=0)
 
-    @pytest.mark.asyncio
-    async def test_a_document_that_cannot_be_read_leaves_the_batch_alone(
+    def test_a_document_that_cannot_be_read_leaves_the_batch_alone(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -235,15 +230,14 @@ class TestMetadataImportServiceService:
 
         # Act
         with pytest.raises(FileParseError) as raised:
-            await metadata_import_service.search(batch.uid, file)
+            metadata_import_service.search(batch.uid, file)
 
         # Assert
         assert "Row 3" in str(raised.value)
         decoy.verify(batch_service.reset(database_batch, session), times=0)
         decoy.verify(batch_service.set_as_searching(database_batch, session), times=0)
 
-    @pytest.mark.asyncio
-    async def test_a_batch_that_can_no_longer_be_searched_is_left_alone(
+    def test_a_batch_that_can_no_longer_be_searched_is_left_alone(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -283,13 +277,12 @@ class TestMetadataImportServiceService:
 
         # Act
         with pytest.raises(NotAllowedActionError):
-            await metadata_import_service.search(batch.uid, file)
+            metadata_import_service.search(batch.uid, file)
 
         # Assert
         decoy.verify(batch_service.reset(database_batch, session), times=0)
 
-    @pytest.mark.asyncio
-    async def test_search_failed_enqueue_sets_batch_as_failed(
+    def test_search_failed_enqueue_sets_batch_as_failed(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -333,9 +326,7 @@ class TestMetadataImportServiceService:
             search_parameters
         )
         decoy.when(
-            await scheduler.metadata_batch_import(
-                batch, search_parameters=search_parameters
-            )
+            scheduler.metadata_batch_import(batch, search_parameters=search_parameters)
         ).then_raise(RuntimeError("no worker"))
         decoy.when(
             batch_service.set_as_failed(
@@ -344,7 +335,7 @@ class TestMetadataImportServiceService:
         ).then_return(failed_batch)
 
         # Act
-        result = await metadata_import_service.search(batch.uid, file)
+        result = metadata_import_service.search(batch.uid, file)
 
         # Assert
         assert result.status == BatchStatus.FAILED

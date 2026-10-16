@@ -322,7 +322,9 @@ class DatabaseBatch(Base):
         back_populates="batches",
     )
     # For relations
-    project_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("project.uid"))
+    project_uid: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("project.uid"), index=True
+    )
 
     # For relations
     __tablename__ = "batch"

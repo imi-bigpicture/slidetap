@@ -15,7 +15,7 @@
 """Public dispatch API for background tasks."""
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 from uuid import UUID
 
@@ -39,132 +39,149 @@ from slidetap.task.tasks import (
 )
 
 
+class DeferError(Exception):
+    """Tasks for some of the images could not be deferred.
+
+    Raised once every image has been tried, so that one image failing to be
+    deferred does not keep the others from being processed.
+    """
+
+    def __init__(self, failures: Mapping[UUID, BaseException]):
+        self.failures = dict(failures)
+        first = next(iter(self.failures.values()), None)
+        super().__init__(
+            f"Failed to defer tasks for {len(self.failures)} image(s): {first}"
+        )
+
+
 class Scheduler:
     """Interface for starting background tasks.
 
-    The Procrastinate :class:`App` is expected to be opened for the
-    process lifetime (see :class:`SlideTapWebAppFactory`'s lifespan), so
-    methods only ``await ...defer_async(...)`` — they do not open or
-    close the connector themselves.
+    The Procrastinate :class:`App` is expected to be opened synchronously for
+    the process lifetime (see :class:`SlideTapWebAppFactory`'s lifespan), so
+    methods only call ``...defer(...)``; they do not open or close the
+    connector themselves. Deferring is synchronous, through the connector's
+    sync pool, so it can be called from any thread of the web app.
+
+    A task that cannot be deferred raises, so that the caller, which has
+    usually already set what the task works on as waiting for it, can set it
+    as failed rather than leave it waiting for a job that does not exist.
     """
 
     def __init__(self, app: TaskApp):
         self._app = app
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    async def pre_process_images(self, image_uids: Iterable[UUID]) -> None:
+    def pre_process_images(self, image_uids: Iterable[UUID]) -> None:
         """Defer pre-processing for each image.
 
         Each task takes ``lock=f"image-{uid}"`` so at most one task touches
         a given image at a time. Per-image entry guards still apply; the
         lock is an upstream filter that keeps the worker from picking up
         a job whose guard would just bail.
-        """
-        try:
-            for uid in image_uids:
-                await download_and_pre_process_image.configure(
-                    lock=f"image-{uid}",
-                ).defer_async(image_uid=str(uid))
-        except Exception:
-            self._logger.error(
-                "Error deferring pre-process tasks",
-                exc_info=True,
-            )
 
-    async def download_and_pre_process_image(self, image: Image):
+        Raises
+        ------
+        DeferError
+            Naming the images whose task could not be deferred, once every
+            image has been tried.
+        """
+        self._defer_each(download_and_pre_process_image, image_uids)
+
+    def download_and_pre_process_image(self, image: Image):
         """Defer pre-processing for one image.
 
-        Same per-image ``lock`` as :meth:`pre_process_images`.
+        Same per-image ``lock`` as :meth:`pre_process_images`. Raises if the
+        task cannot be deferred.
         """
         self._logger.info(f"Downloading and pre-processing image {image.uid}")
-        try:
-            await download_and_pre_process_image.configure(
-                lock=f"image-{image.uid}",
-            ).defer_async(image_uid=str(image.uid))
-        except Exception:
-            self._logger.error(
-                f"Error downloading and pre-processing image {image.uid}",
-                exc_info=True,
-            )
+        download_and_pre_process_image.configure(
+            lock=f"image-{image.uid}",
+        ).defer(image_uid=str(image.uid))
 
-    async def post_process_images(self, image_uids: Iterable[UUID]) -> None:
+    def post_process_images(self, image_uids: Iterable[UUID]) -> None:
         """Defer post-processing for each image.
 
         Each task takes ``lock=f"image-{uid}"`` so at most one task touches
         a given image at a time.
-        """
-        try:
-            for uid in image_uids:
-                await post_process_image.configure(
-                    lock=f"image-{uid}",
-                ).defer_async(image_uid=str(uid))
-        except Exception:
-            self._logger.error("Error deferring post-process tasks", exc_info=True)
 
-    async def post_process_image(self, image: Image):
+        Raises
+        ------
+        DeferError
+            Naming the images whose task could not be deferred, once every
+            image has been tried.
+        """
+        self._defer_each(post_process_image, image_uids)
+
+    def post_process_image(self, image: Image):
         """Defer post-processing for one image.
 
-        Same per-image ``lock`` as :meth:`post_process_images`.
+        Same per-image ``lock`` as :meth:`post_process_images`. Raises if the
+        task cannot be deferred.
         """
         self._logger.info(f"Post processing image {image.uid}")
-        try:
-            await post_process_image.configure(
-                lock=f"image-{image.uid}",
-            ).defer_async(image_uid=str(image.uid))
-        except Exception:
-            self._logger.error(
-                f"Error post-processing image {image.uid}", exc_info=True
-            )
+        post_process_image.configure(
+            lock=f"image-{image.uid}",
+        ).defer(image_uid=str(image.uid))
 
-    async def metadata_project_export(self, project: Project):
+    def _defer_each(self, task: Any, image_uids: Iterable[UUID]) -> None:
+        """Defer the image task for each image, trying every one of them."""
+        failures: dict[UUID, BaseException] = {}
+        for image_uid in image_uids:
+            try:
+                task.configure(lock=f"image-{image_uid}").defer(
+                    image_uid=str(image_uid)
+                )
+            except Exception as exception:
+                self._logger.error(
+                    f"Error deferring {task.name} for image {image_uid}",
+                    exc_info=True,
+                )
+                failures[image_uid] = exception
+        if failures:
+            raise DeferError(failures)
+
+    def metadata_project_export(self, project: Project):
         """Defer metadata export for a project.
 
         ``lock=f"export-{project_uid}"`` serialises export per project.
+        Raises if the task cannot be deferred.
         """
         self._logger.info(f"Exporting metadata for project {project.uid}")
-        try:
-            await process_metadata_export.configure(
-                lock=f"export-{project.uid}",
-            ).defer_async(project_id=str(project.uid))
-        except Exception:
-            self._logger.error(
-                f"Error exporting metadata for project {project.uid}", exc_info=True
-            )
+        process_metadata_export.configure(
+            lock=f"export-{project.uid}",
+        ).defer(project_id=str(project.uid))
 
-    async def plan_migration(self, project_uid: UUID) -> None:
+    def plan_migration(self, project_uid: UUID) -> None:
         """Defer planning the migration of a project to another root schema.
 
         ``lock=f"migrate-{project_uid}"`` serialises the steps of a migration.
         Raises if the task cannot be deferred.
         """
         self._logger.info(f"Planning the migration of project {project_uid}")
-        await plan_schema_migration.configure(
+        plan_schema_migration.configure(
             lock=f"migrate-{project_uid}",
-        ).defer_async(project_uid=str(project_uid))
+        ).defer(project_uid=str(project_uid))
 
-    async def complete_migration(self, project_uid: UUID) -> None:
+    def complete_migration(self, project_uid: UUID) -> None:
         """Defer completing the migration of a project, as `plan_migration`."""
         self._logger.info(f"Completing the migration of project {project_uid}")
-        await complete_schema_migration.configure(
+        complete_schema_migration.configure(
             lock=f"migrate-{project_uid}",
-        ).defer_async(project_uid=str(project_uid))
+        ).defer(project_uid=str(project_uid))
 
-    async def store_images_in_batch(self, batch: Batch):
+    def store_images_in_batch(self, batch: Batch):
         """Defer outbox-move for a batch.
 
         ``lock=f"store-{batch_uid}"`` serialises the outbox move per batch.
+        Raises if the task cannot be deferred.
         """
         self._logger.info(f"Storing images for batch {batch.uid}")
-        try:
-            await store_batch_images_to_outbox.configure(
-                lock=f"store-{batch.uid}",
-            ).defer_async(batch_uid=str(batch.uid))
-        except Exception:
-            self._logger.error(
-                f"Error storing images for batch {batch.uid}", exc_info=True
-            )
+        store_batch_images_to_outbox.configure(
+            lock=f"store-{batch.uid}",
+        ).defer(batch_uid=str(batch.uid))
 
-    async def metadata_batch_import(self, batch: Batch, search_parameters: Any):
+    def metadata_batch_import(self, batch: Batch, search_parameters: Any):
         """Defer a metadata search for the given batch.
 
         ``lock=f"metadata-import-{project_uid}"`` — at most one metadata
@@ -181,10 +198,10 @@ class Scheduler:
         """
         self._logger.info(f"Importing metadata for batch {batch.uid}: {batch.name}")
         try:
-            await process_metadata_import.configure(
+            process_metadata_import.configure(
                 lock=f"metadata-import-{batch.project_uid}",
                 queueing_lock=f"metadata-import-batch-{batch.uid}",
-            ).defer_async(
+            ).defer(
                 batch_uid=str(batch.uid),
                 search_parameters=search_parameters,
             )
@@ -194,34 +211,23 @@ class Scheduler:
                 f"running; ignoring duplicate trigger."
             )
 
-    async def metadata_retry_search_item(self, search_item_uid: UUID):
+    def metadata_retry_search_item(self, search_item_uid: UUID):
+        """Defer the retry of a search item. Raises if it cannot be deferred."""
         self._logger.info(f"Retrying metadata search item {search_item_uid}")
-        try:
-            await retry_metadata_search_item.defer_async(
-                search_item_uid=str(search_item_uid)
-            )
-        except Exception:
-            self._logger.error(
-                f"Error scheduling retry for search item {search_item_uid}",
-                exc_info=True,
-            )
+        retry_metadata_search_item.defer(search_item_uid=str(search_item_uid))
 
-    async def remap_batch_attributes(self, batch_uid: UUID):
+    def remap_batch_attributes(self, batch_uid: UUID):
         """Defer mapper re-application for a batch.
 
-        ``lock=f"remap-batch-{batch_uid}"`` serialises per batch.
+        ``lock=f"remap-batch-{batch_uid}"`` serialises per batch. Raises if the
+        task cannot be deferred.
         """
         self._logger.info(f"Remapping attributes in batch {batch_uid}")
-        try:
-            await remap_batch_attributes.configure(
-                lock=f"remap-batch-{batch_uid}",
-            ).defer_async(batch_uid=str(batch_uid))
-        except Exception:
-            self._logger.error(
-                f"Error scheduling remap for batch {batch_uid}", exc_info=True
-            )
+        remap_batch_attributes.configure(
+            lock=f"remap-batch-{batch_uid}",
+        ).defer(batch_uid=str(batch_uid))
 
-    async def delete_batch(self, batch: Batch) -> None:
+    def delete_batch(self, batch: Batch) -> None:
         """Defer the deletion of a batch marked as deleting.
 
         ``lock=f"delete-project-{project_uid}"`` serialises deletes within a
@@ -235,17 +241,17 @@ class Scheduler:
         """
         self._logger.info(f"Deleting batch {batch.uid}")
         try:
-            await delete_batch.configure(
+            delete_batch.configure(
                 lock=f"delete-project-{batch.project_uid}",
                 queueing_lock=f"delete-batch-{batch.uid}",
-            ).defer_async(batch_uid=str(batch.uid))
+            ).defer(batch_uid=str(batch.uid))
         except AlreadyEnqueued:
             self._logger.info(
                 f"Deletion of batch {batch.uid} is already queued; ignoring "
                 "duplicate trigger."
             )
 
-    async def delete_project(self, project: Project) -> None:
+    def delete_project(self, project: Project) -> None:
         """Defer the deletion of a project marked as deleting.
 
         Same lock as :meth:`delete_batch`, and a
@@ -254,27 +260,23 @@ class Scheduler:
         """
         self._logger.info(f"Deleting project {project.uid}")
         try:
-            await delete_project.configure(
+            delete_project.configure(
                 lock=f"delete-project-{project.uid}",
                 queueing_lock=f"delete-project-{project.uid}",
-            ).defer_async(project_uid=str(project.uid))
+            ).defer(project_uid=str(project.uid))
         except AlreadyEnqueued:
             self._logger.info(
                 f"Deletion of project {project.uid} is already queued; ignoring "
                 "duplicate trigger."
             )
 
-    async def remap_dataset_attributes(self, dataset_uid: UUID):
+    def remap_dataset_attributes(self, dataset_uid: UUID):
         """Defer mapper re-application for a dataset.
 
-        ``lock=f"remap-dataset-{dataset_uid}"`` serialises per dataset.
+        ``lock=f"remap-dataset-{dataset_uid}"`` serialises per dataset. Raises if
+        the task cannot be deferred.
         """
         self._logger.info(f"Remapping attributes in dataset {dataset_uid}")
-        try:
-            await remap_dataset_attributes.configure(
-                lock=f"remap-dataset-{dataset_uid}",
-            ).defer_async(dataset_uid=str(dataset_uid))
-        except Exception:
-            self._logger.error(
-                f"Error scheduling remap for dataset {dataset_uid}", exc_info=True
-            )
+        remap_dataset_attributes.configure(
+            lock=f"remap-dataset-{dataset_uid}",
+        ).defer(dataset_uid=str(dataset_uid))

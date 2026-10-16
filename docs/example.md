@@ -76,6 +76,8 @@ ls ssl/
 >> cert.pem  privkey.pem
 ```
 
+The web server runs as an unprivileged user, so the script makes the copied key readable by all users. With your own certificate, make sure the key is readable by uid 101, and keep `SLIDETAP_PORT` above 1024.
+
 ## Prepare configuration
 
 To run SlideTap you need both an `.env`-file (parsed by Docker) and a `config.yaml`-file (parsed by the Python applications). You can create these with the provide Python cli-script:
@@ -98,11 +100,14 @@ cat .env
 >> SLIDETAP_SSL_CERTIFICATE_FOLDER=/mnt/c/work/SlideTap/example/ssl
 >> SLIDETAP_SSL_CERTIFICATE=cert.pem
 >> SLIDETAP_SSL_CERTIFICATE_KEY=privkey.pem
->> SLIDETAP_SECRET_KEY=DEVELOP
+>> SLIDETAP_SECRET_KEY=<random key of at least 32 bytes>
 >> SLIDETAP_WEBAPP_URL=localhost:3000
+>> POSTGRES_USER=slidetap
+>> POSTGRES_PASSWORD=<random password>
+>> POSTGRES_DB=slidetap
 ```
 
-Where the `SLIDETAP_STORAGE` and `SLIDETAP_SSL_CERTIFICATE_FOLDER` will depend on the example folder.
+Where the `SLIDETAP_STORAGE` and `SLIDETAP_SSL_CERTIFICATE_FOLDER` will depend on the example folder. Docker compose reads the database credentials from the `POSTGRES_*` variables and refuses to start without them. Postgres only applies them when its data volume is first created, so running the script again keeps the password from an existing `.env`. If the volume was created with other credentials, for example by an earlier version of the example that used `user`/`password`, remove it with `sudo docker compose down -v` before starting.
 
 and `config.yaml`-file:
 

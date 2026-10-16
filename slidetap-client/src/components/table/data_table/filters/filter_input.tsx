@@ -45,16 +45,17 @@ function useSettledValue<T>(
   const committedKey = JSON.stringify(committed ?? null)
   const [entered, setEntered] = useState<T>(committed)
   const [enteredKey, setEnteredKey] = useState(committedKey)
+  const [followedKey, setFollowedKey] = useState(committedKey)
 
   // Follows the value when it is changed from outside — a filter cleared from
-  // the toolbar — without fighting what is being entered.
-  useEffect(() => {
+  // the toolbar — without fighting what is being entered. The value itself is
+  // a fresh array on every render for the range boxes, so it is compared by
+  // what it says rather than by identity.
+  if (committedKey !== followedKey) {
+    setFollowedKey(committedKey)
     setEntered(committed)
     setEnteredKey(committedKey)
-    // The value itself is a fresh array on every render for the range boxes, so
-    // it is compared by what it says rather than by identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committedKey])
+  }
 
   // The caller's `onChange` is a fresh arrow on every render of the table, so
   // it is held in a ref rather than depended on: in the dependency list it

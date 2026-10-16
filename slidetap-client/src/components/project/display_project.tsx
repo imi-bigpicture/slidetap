@@ -37,7 +37,7 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Route, useLocation, useSearchParams } from 'react-router-dom'
 import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
@@ -148,7 +148,7 @@ interface DisplayProjectProps {
  *
  * What is remembered is the address, so only what the view puts there comes
  * back — which tab, which filters. `visited` is carried between renders by the
- * caller and written here as the current view is passed through.
+ * caller, with the current view written in by `withVisited`.
  *
  * The batch the bar is on is written into the entries whose view is that
  * batch's, over whatever a remembered address said, so that an entry left
@@ -158,18 +158,10 @@ interface DisplayProjectProps {
  */
 function rememberVisited(
   sections: MenuSection[],
-  current: string,
   visited: Record<string, string>,
   selectedBatchUid: string | undefined,
   batchViewPaths: ReadonlySet<string>,
 ): MenuSection[] {
-  const path = current.split('?')[0]
-  const entry = sections
-    .flatMap((section) => section.items)
-    .find((item) => item.path === path)
-  if (entry !== undefined) {
-    visited[entry.path] = current
-  }
   return sections.map((section) => ({
     ...section,
     items: section.items.map((item) => ({
@@ -180,6 +172,23 @@ function rememberVisited(
       ),
     })),
   }))
+}
+
+/** `visited` with `current` written in for the entry of the bar it is a view
+ * of, or `visited` itself where no entry is or it already says so. */
+function withVisited(
+  sections: MenuSection[],
+  current: string,
+  visited: Record<string, string>,
+): Record<string, string> {
+  const path = current.split('?')[0]
+  const entry = sections
+    .flatMap((section) => section.items)
+    .find((item) => item.path === path)
+  if (entry === undefined || visited[entry.path] === current) {
+    return visited
+  }
+  return { ...visited, [entry.path]: current }
 }
 
 export default function DisplayProject({
@@ -198,7 +207,7 @@ export default function DisplayProject({
     readRememberedBatch(projectUid),
   )
   // Where each entry of the bar was last left, so it can be gone back to.
-  const visitedRef = useRef<Record<string, string>>({})
+  const [visited, setVisited] = useState<Record<string, string>>({})
   // Which view is open is what the address says, not something held beside it:
   // the bar is links now, and so is everything else that opens a view.
   const basePath = `/project/${projectUid}`
@@ -295,13 +304,14 @@ export default function DisplayProject({
   // Held, and kept for the tab, so that the project's own views leave the bar
   // on the batch that was being worked rather than sending it back to the
   // first — whether they are walked to or reloaded.
-  useEffect(() => {
-    if (batchUid === undefined || batchUid === lastBatchUid) {
-      return
-    }
+  if (batchUid !== undefined && batchUid !== lastBatchUid) {
     setLastBatchUid(batchUid)
-    rememberBatch(projectUid, batchUid)
-  }, [batchUid, lastBatchUid, projectUid])
+  }
+  useEffect(() => {
+    if (batchUid !== undefined) {
+      rememberBatch(projectUid, batchUid)
+    }
+  }, [batchUid, projectUid])
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.detail(batchUid || ''),
     queryFn: async () => {
@@ -327,33 +337,35 @@ export default function DisplayProject({
     },
     placeholderData: keepPreviousData,
   })
-  useEffect(() => {
-    if (projectQuery.data !== undefined) {
-      setProject((current) => {
-        if (current === undefined) {
-          return projectQuery.data
-        }
-        // Update server-driven fields (e.g. status) without overwriting local edits
-        // and the schemas, which a conversion moves.
-        return {
-          ...current,
-          status: projectQuery.data.status,
-          rootSchemaUid: projectQuery.data.rootSchemaUid,
-          schemaUid: projectQuery.data.schemaUid,
-        }
-      })
-    }
-  }, [projectQuery.data])
-  useEffect(() => {
-    if (datasetQuery.data !== undefined) {
-      setDataset(datasetQuery.data)
-    }
-  }, [datasetQuery.data])
-  useEffect(() => {
-    if (batchQuery.data !== undefined) {
-      setBatch(batchQuery.data)
-    }
-  }, [batchQuery.data])
+  // Each answer from the server is taken in once, as it arrives. The project
+  // and the dataset are also edited here, so what was last taken in is held
+  // beside them to tell a new answer from a local edit.
+  const [receivedProject, setReceivedProject] = useState<Project>()
+  if (projectQuery.data !== undefined && projectQuery.data !== receivedProject) {
+    const received = projectQuery.data
+    setReceivedProject(received)
+    setProject((current) => {
+      if (current === undefined) {
+        return received
+      }
+      // Update server-driven fields (e.g. status) without overwriting local edits
+      // and the schemas, which a conversion moves.
+      return {
+        ...current,
+        status: received.status,
+        rootSchemaUid: received.rootSchemaUid,
+        schemaUid: received.schemaUid,
+      }
+    })
+  }
+  const [receivedDataset, setReceivedDataset] = useState<Dataset>()
+  if (datasetQuery.data !== undefined && datasetQuery.data !== receivedDataset) {
+    setReceivedDataset(datasetQuery.data)
+    setDataset(datasetQuery.data)
+  }
+  if (batchQuery.data !== undefined && batchQuery.data !== batch) {
+    setBatch(batchQuery.data)
+  }
   if (project === undefined || dataset === undefined || batch === undefined) {
     return <LinearProgress />
   }
@@ -589,15 +601,19 @@ export default function DisplayProject({
             },
           ],
         }
+  const barSections = [
+    projectSection,
+    batchSection,
+    ...extensionSections,
+    ...(itemSection !== undefined ? [itemSection] : []),
+  ]
+  const visitedNow = withVisited(barSections, view + location.search, visited)
+  if (visitedNow !== visited) {
+    setVisited(visitedNow)
+  }
   const sections = rememberVisited(
-    [
-      projectSection,
-      batchSection,
-      ...extensionSections,
-      ...(itemSection !== undefined ? [itemSection] : []),
-    ],
-    view + location.search,
-    visitedRef.current,
+    barSections,
+    visitedNow,
     batchUid,
     // The batch section's own views, which are the batch's and say so.
     new Set(batchSection.items.map((item) => item.path)),

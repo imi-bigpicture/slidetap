@@ -14,10 +14,10 @@
 
 """What deleting a batch leaves behind.
 
-Against a real SQLite database rather than mocks: the delete is a set of bulk
+Against a real database rather than mocks: the delete is a set of bulk
 statements, and what is being pinned is which rows each of them matches. SQLite
-does not enforce foreign keys, so a dependent table the delete misses is not
-caught by the database here; it is caught by counting its rows.
+does not enforce foreign keys, so there a dependent table the delete misses is
+not caught by the database; it is caught by counting its rows.
 """
 
 import datetime
@@ -72,45 +72,45 @@ def schema_service(
 @pytest.fixture()
 def batch_service(
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> BatchService:
-    validation_service = ValidationService(schema_service, sqlite_database_service)
+    validation_service = ValidationService(schema_service, stored_database_service)
     review_service = ReviewService(
-        schema_service, validation_service, sqlite_database_service
+        schema_service, validation_service, stored_database_service
     )
     return BatchService(
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
 
 @pytest.fixture()
 def stored_project(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     dataset: Dataset,
     project: Project,
 ) -> Project:
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        sqlite_database_service.add_project(session, project)
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored_database_service.add_project(session, project)
         session.commit()
     return project
 
 
 @pytest.fixture()
 def default_batch(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     stored_project: Project,
 ) -> UUID:
     """The project's default batch, which shared items are handed to."""
-    with sqlite_database_service.get_session() as session:
-        default = sqlite_database_service.add_batch(
+    with stored_database_service.get_session() as session:
+        default = stored_database_service.add_batch(
             session, BatchCreate(name="default", project_uid=stored_project.uid)
         )
         session.flush()
-        sqlite_database_service.get_project(
+        stored_database_service.get_project(
             session, stored_project.uid
         ).default_batch_uid = default.uid
         session.commit()
@@ -119,17 +119,17 @@ def default_batch(
 
 @pytest.fixture()
 def batches(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     stored_project: Project,
     default_batch: UUID,
 ) -> tuple[UUID, UUID]:
     """Batch A, the one deleted, and batch B, which stays."""
-    with sqlite_database_service.get_session() as session:
-        first = sqlite_database_service.add_batch(
+    with stored_database_service.get_session() as session:
+        first = stored_database_service.add_batch(
             session, BatchCreate(name="A", project_uid=stored_project.uid)
         )
         first.created = datetime.datetime(2026, 1, 1)
-        second = sqlite_database_service.add_batch(
+        second = stored_database_service.add_batch(
             session, BatchCreate(name="B", project_uid=stored_project.uid)
         )
         second.created = datetime.datetime(2026, 2, 1)
@@ -209,7 +209,7 @@ def identifiers(session: Session) -> set[str]:
 class TestDeleteBatch:
     def test_everything_of_the_batch_is_gone(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -218,12 +218,12 @@ class TestDeleteBatch:
         """Every table hanging off an item is cleared, and only for the batch.
 
         SQLite does not enforce foreign keys, so a table the delete misses
-        would leave orphans here and fail the delete on Postgres. Counting
-        every dependent table is what stands in for the database.
+        would leave orphans there and fail the delete on Postgres. Counting
+        every dependent table stands in for the database on SQLite.
         """
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -289,7 +289,7 @@ class TestDeleteBatch:
                     value="value",
                 )
             )
-            sqlite_database_service.add_review_issue(
+            stored_database_service.add_review_issue(
                 session, stored_image, slide, "wrong", ReviewIssueSource.VALIDATION
             )
             session.add(
@@ -310,14 +310,14 @@ class TestDeleteBatch:
                 tags=[DatabaseTag("tag-b")],
             )
             session.commit()
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            assert sqlite_database_service.get_optional_batch(session, first) is None
+        with stored_database_service.get_session() as session:
+            assert stored_database_service.get_optional_batch(session, first) is None
             assert identifiers(session) == {"patient-b"}
             for table in (
                 DatabaseSample.__table__,
@@ -343,7 +343,7 @@ class TestDeleteBatch:
 
     def test_item_another_batch_hangs_off_moves_to_the_default_batch(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -352,7 +352,7 @@ class TestDeleteBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -366,18 +366,18 @@ class TestDeleteBatch:
             )
             session.commit()
             patient_uid = patient.uid
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, patient_uid).batch_uid == default_batch
 
     def test_item_nothing_else_hangs_off_is_deleted(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -385,7 +385,7 @@ class TestDeleteBatch:
     ):
         # Arrange
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -398,18 +398,18 @@ class TestDeleteBatch:
                 parents=[patient],
             )
             session.commit()
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert identifiers(session) == set()
 
     def test_handing_over_reaches_up_through_the_batch(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -421,7 +421,7 @@ class TestDeleteBatch:
         patient is one another batch hangs off."""
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -443,13 +443,13 @@ class TestDeleteBatch:
             )
             session.commit()
             patient_uid, case_uid, specimen_uid = patient.uid, case.uid, specimen.uid
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, patient_uid).batch_uid == default_batch
             assert stored_sample(session, case_uid).batch_uid == default_batch
             assert {
@@ -458,7 +458,7 @@ class TestDeleteBatch:
 
     def test_slide_another_batch_images_is_handed_over_with_its_image(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -467,7 +467,7 @@ class TestDeleteBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             slide = sample(
                 session, dataset.uid, first, schema.slide_schema_uid, "slide-a"
             )
@@ -476,19 +476,19 @@ class TestDeleteBatch:
             )
             session.commit()
             slide_uid = slide.uid
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, slide_uid).batch_uid == default_batch
             assert count(session, DatabaseImage.sample_to_image) == 1
 
     def test_issue_on_a_handed_over_item_answered_elsewhere_is_kept(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -496,7 +496,7 @@ class TestDeleteBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -508,24 +508,24 @@ class TestDeleteBatch:
                 "case-b",
                 parents=[patient],
             )
-            sqlite_database_service.add_review_issue(
+            stored_database_service.add_review_issue(
                 session, patient, case_b, "wrong", ReviewIssueSource.METADATA_IMPORTER
             )
             session.commit()
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             issue = session.scalars(select(DatabaseReviewIssue)).one()
             assert issue.item.identifier == "patient-1"
             assert issue.review_unit.identifier == "case-b"
 
     def test_issue_answered_on_a_deleted_item_goes_with_it(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -533,7 +533,7 @@ class TestDeleteBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -553,23 +553,23 @@ class TestDeleteBatch:
                 "case-b",
                 parents=[patient],
             )
-            sqlite_database_service.add_review_issue(
+            stored_database_service.add_review_issue(
                 session, case_b, case_a, "wrong", ReviewIssueSource.METADATA_IMPORTER
             )
             session.commit()
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert count(session, DatabaseReviewIssue.__table__) == 0
             assert identifiers(session) == {"patient-1", "case-b"}
 
     def test_handed_over_item_is_validated_again(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -582,7 +582,7 @@ class TestDeleteBatch:
         rather than kept from before the delete."""
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             specimen = sample(
                 session, dataset.uid, first, schema.specimen_schema_uid, "specimen-a"
             )
@@ -607,19 +607,19 @@ class TestDeleteBatch:
             )
             session.commit()
             block_uid, specimen_uid = block.uid, specimen.uid
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, specimen_uid).batch_uid == default_batch
             assert stored_sample(session, block_uid).valid_relations is True
 
     def test_returns_the_paths_of_the_deleted_images_only(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -627,7 +627,7 @@ class TestDeleteBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             slide = sample(
                 session, dataset.uid, first, schema.slide_schema_uid, "slide-a"
             )
@@ -655,7 +655,7 @@ class TestDeleteBatch:
                 )
             )
             session.commit()
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
 
         # Act
         paths = batch_service.delete(first)
@@ -676,18 +676,18 @@ class TestDeleteBatch:
 
     def test_project_without_default_batch_cannot_delete(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         stored_project: Project,
         batches: tuple[UUID, UUID],
     ):
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_project(
                 session, stored_project.uid
             ).default_batch_uid = None
             session.commit()
-        mark_deleting(sqlite_database_service, first)
+        mark_deleting(stored_database_service, first)
         with pytest.raises(ValueError):
             batch_service.delete(first)
 
@@ -696,7 +696,7 @@ class TestDeleteBatch:
 class TestDeleteBatchOfProject:
     def test_a_project_being_deleted_stays_deleting(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         stored_project: Project,
         default_batch: UUID,
@@ -706,15 +706,15 @@ class TestDeleteBatchOfProject:
         curated; that is not what completes the project."""
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for uid in (default_batch, second):
-                sqlite_database_service.get_batch(
+                stored_database_service.get_batch(
                     session, uid
                 ).status = BatchStatus.LOCKED
-            sqlite_database_service.get_batch(
+            stored_database_service.get_batch(
                 session, first
             ).status = BatchStatus.DELETING
-            sqlite_database_service.get_project(
+            stored_database_service.get_project(
                 session, stored_project.uid
             ).status = ProjectStatus.DELETING
             session.commit()
@@ -723,8 +723,8 @@ class TestDeleteBatchOfProject:
         batch_service.delete(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, stored_project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, stored_project.uid)
             assert project.status == ProjectStatus.DELETING
 
 
@@ -740,14 +740,14 @@ class TestSetAsDeleting:
 
     def test_refuses_a_batch_of_a_project_being_deleted(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         stored_project: Project,
         batches: tuple[UUID, UUID],
     ):
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_project(
                 session, stored_project.uid
             ).status = ProjectStatus.DELETING
             session.commit()
@@ -769,14 +769,14 @@ class TestSetAsDeleting:
     )
     def test_marks_a_batch_nothing_holds(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         batches: tuple[UUID, UUID],
         status: BatchStatus,
     ):
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, first)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, first)
             batch.status = status
             batch.status_message = "what went wrong last time"
             session.commit()
@@ -799,17 +799,17 @@ class TestSetAsDeleting:
     )
     def test_refuses_a_batch_a_worker_holds_or_that_is_curated(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         batches: tuple[UUID, UUID],
         status: BatchStatus,
     ):
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_batch(session, first).status = status
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_batch(session, first).status = status
             session.commit()
 
         with pytest.raises(NotAllowedActionError):
             batch_service.set_as_deleting(first)
-        with sqlite_database_service.get_session() as session:
-            assert sqlite_database_service.get_batch(session, first).status == status
+        with stored_database_service.get_session() as session:
+            assert stored_database_service.get_batch(session, first).status == status

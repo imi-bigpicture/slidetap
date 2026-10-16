@@ -58,6 +58,25 @@ interface ImageTableProps {
   refresh: boolean
 }
 
+const statusColorMap: Record<
+  ImageStatus,
+  'success' | 'error' | 'primary' | 'secondary' | 'warning'
+> = {
+  [ImageStatus.NOT_STARTED]: 'secondary',
+  [ImageStatus.DOWNLOADING]: 'primary',
+  [ImageStatus.DOWNLOADING_FAILED]: 'error',
+  [ImageStatus.DOWNLOADED]: 'primary',
+  [ImageStatus.PRE_PROCESSING]: 'primary',
+  [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
+  [ImageStatus.PRE_PROCESSED]: 'success',
+  [ImageStatus.POST_PROCESSING]: 'primary',
+  [ImageStatus.POST_PROCESSING_FAILED]: 'error',
+  [ImageStatus.POST_PROCESSED]: 'success',
+  [ImageStatus.STORING]: 'primary',
+  [ImageStatus.STORING_FAILED]: 'error',
+  [ImageStatus.STORED]: 'success',
+}
+
 export function ImageTable({
   project,
   batch,
@@ -103,28 +122,8 @@ export function ImageTable({
           : 0,
     }
   })
-  const statusColorMap: Record<
-    ImageStatus,
-    'success' | 'error' | 'primary' | 'secondary' | 'warning'
-  > = {
-    [ImageStatus.NOT_STARTED]: 'secondary',
-    [ImageStatus.DOWNLOADING]: 'primary',
-    [ImageStatus.DOWNLOADING_FAILED]: 'error',
-    [ImageStatus.DOWNLOADED]: 'primary',
-    [ImageStatus.PRE_PROCESSING]: 'primary',
-    [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
-    [ImageStatus.PRE_PROCESSED]: 'success',
-    [ImageStatus.POST_PROCESSING]: 'primary',
-    [ImageStatus.POST_PROCESSING_FAILED]: 'error',
-    [ImageStatus.POST_PROCESSED]: 'success',
-    [ImageStatus.STORING]: 'primary',
-    [ImageStatus.STORING_FAILED]: 'error',
-    [ImageStatus.STORED]: 'success',
-  }
-
   // Built once per set of inputs. A fresh array on every render makes
   // TanStack discard every column object and the caches on it.
-  // statusColorMap is rebuilt with it and holds only constants.
   const columns = useMemo<Array<ColumnDef<Image>>>(
     () => [
       {
@@ -175,30 +174,6 @@ export function ImageTable({
         // The request builder has no sort for it, and rejects the query for
         // any column it does not know.
         sortable: false,
-      },
-      {
-        id: 'lastHeartbeatAt',
-        header: 'Last heartbeat',
-        accessorKey: 'lastHeartbeatAt',
-        sortable: false,
-        Cell: ({ value }) => {
-          const at = value as string | null
-          if (at == null) {
-            return ''
-          }
-          const date = new Date(at)
-          const elapsedSec = Math.max(
-            0,
-            Math.round((Date.now() - date.getTime()) / 1000),
-          )
-          const label =
-            elapsedSec < 60
-              ? `${elapsedSec}s ago`
-              : elapsedSec < 3600
-                ? `${Math.round(elapsedSec / 60)}m ago`
-                : `${Math.round(elapsedSec / 3600)}h ago`
-          return <span title={date.toLocaleString()}>{label}</span>
-        },
       },
     ],
     [pseudonymMode],

@@ -43,7 +43,7 @@ metadata_search_router = APIRouter(
 
 
 @metadata_search_router.get("/supports-retry")
-async def supports_retry(
+def supports_retry(
     metadata_import_service: FromDishka[MetadataImportService],
 ) -> bool:
     """Whether the active importer supports per-search-item retry."""
@@ -51,7 +51,7 @@ async def supports_retry(
 
 
 @metadata_search_router.get("/items")
-async def list_search_items(
+def list_search_items(
     metadata_import_service: FromDishka[MetadataImportService],
     batch_uid: UUID = Query(..., alias="batchUid"),
 ) -> Iterable[MetadataSearchItem]:
@@ -72,7 +72,7 @@ async def list_search_items(
 
 
 @metadata_search_router.post("/items/{search_item_uid}/retry")
-async def retry_search_item(
+def retry_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
@@ -85,7 +85,7 @@ async def retry_search_item(
         UID of the FAILED search item to retry.
     """
     try:
-        await metadata_import_service.retry_search_item(search_item_uid)
+        metadata_import_service.retry_search_item(search_item_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -102,7 +102,7 @@ async def retry_search_item(
 
 
 @metadata_search_router.post("/items/{search_item_uid}/exclude")
-async def exclude_search_item(
+def exclude_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
 ) -> None:

@@ -26,11 +26,23 @@ status to decide whether to run both phases, only pre-process, take
 over from a dead worker, or skip. ``inject_task_id=True`` makes the
 current job id available as a ``task_id`` parameter for the entry guard
 to record on the image row.
+
+Tasks that are retried on a :class:`TransientTaskError` take a
+``will_retry`` parameter (``inject_will_retry=True``). A transient failure
+that will be retried leaves what the task works on for the retry to claim,
+and one on the last attempt is handled as any other failure, so that the
+image, batch or project is left failed rather than waiting for a retry that
+is not coming.
+
+The image phases hold no database session while they download, read or
+convert an image: what is needed is read in one session, the work is done,
+and what came of it is written in another.
 """
 
 import logging
 from collections.abc import Callable
 from enum import IntEnum, StrEnum
+from functools import partial
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -39,6 +51,7 @@ from dishka import FromDishka
 from procrastinate import App as TaskApp
 from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
+from sqlalchemy.orm import Session
 
 from slidetap.config import TaskConfig
 from slidetap.database import (
@@ -55,9 +68,12 @@ from slidetap.external_interfaces import (
 )
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
 from slidetap.model import (
+    Dataset,
+    Image,
     ImageFile,
     ImageStatus,
     NotAllowedActionError,
+    Project,
 )
 from slidetap.services import (
     AttributeService,
@@ -114,10 +130,67 @@ _TRANSIENT_RETRY = RetryStrategy(
 """Retry policy for tasks that may hit transient failures.
 
 Implementations of the external interfaces signal "retry me" by raising
-:class:`TransientTaskError`. Any other exception is terminal and ends the
-task in its failure path (status FAILED, FAILED batch, etc.). Waits
-scale exponentially: 3 s, 9 s, 27 s — total ~40 s across three attempts.
+:class:`TransientTaskError`. Any other exception, and a transient one on the
+last attempt, is terminal and ends the task in its failure path (status
+FAILED, FAILED batch, etc.). Waits scale exponentially: 3 s, 9 s, 27 s.
 """
+
+
+def _not_retried(exception: BaseException) -> bool:
+    """The ``will_retry`` of a task run outside a worker, which is not retried."""
+    return False
+
+
+def _reset_image(
+    database_service: DatabaseService,
+    image_uid: UUID,
+    reset: Callable[[DatabaseImage], None],
+) -> None:
+    """Set the image back to the status the retry of the task claims it from.
+
+    A reset that fails is logged rather than raised, so that what is raised
+    from the task is the failure that has it retried.
+    """
+    try:
+        with database_service.get_session() as session:
+            database_image = database_service.get_optional_image(session, image_uid)
+            if database_image is not None:
+                reset(database_image)
+    except Exception:
+        logger.error(
+            f"Failed to set image {image_uid} back for a retry.", exc_info=True
+        )
+
+
+def _fail_image(
+    database_service: DatabaseService,
+    image_uid: UUID,
+    exception: BaseException,
+    failed_setter: Callable[[DatabaseImage], None],
+    fallback_status: ImageStatus,
+    on_failed: Callable[[Session], object] | None = None,
+) -> None:
+    """Set the image as failed with what went wrong, in a session of its own.
+
+    An image that is no longer in the database has nothing to record the
+    failure on, and is left as it is.
+    """
+    with database_service.get_session() as session:
+        database_image = database_service.get_optional_image(session, image_uid)
+        if database_image is None:
+            logger.warning(
+                f"Image {image_uid} no longer exists, its failure is not recorded: "
+                f"{exception}"
+            )
+            return
+        _record_image_phase_failure(
+            database_image,
+            exception,
+            partial(failed_setter, database_image),
+            fallback_status,
+        )
+        if on_failed is not None:
+            on_failed(session)
 
 
 def _record_image_phase_failure(
@@ -145,6 +218,7 @@ def _record_image_phase_failure(
     queue=TaskQueue.IMAGE,
     priority=TaskPriority.LOW,
     inject_task_id=True,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def download_and_pre_process_image(
@@ -157,6 +231,7 @@ def download_and_pre_process_image(
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
     schema_service: FromDishka[SchemaService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Download then pre-process the image with given UID.
 
@@ -166,13 +241,17 @@ def download_and_pre_process_image(
     resets status before re-queueing.
 
     Not started for a project on a root the application cannot process images
-    on, as a task queued before a deploy can be.
+    on, as a task queued before a deploy can be, nor for an image that no
+    longer exists.
     """
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
     logger.info(f"Download and pre-process image {image_uid}")
     with database_service.get_session() as session:
-        database_image = database_service.get_image(session, image_uid)
+        database_image = database_service.get_optional_image(session, image_uid)
+        if database_image is None:
+            logger.warning(f"Image {image_uid} does not exist, not processing it.")
+            return
         refusal = schema_service.change_refusal(database_image)
         if refusal is not None:
             logger.warning(f"Image {image_uid} is not processed: {refusal}.")
@@ -228,6 +307,7 @@ def download_and_pre_process_image(
             image_import_interface,
             database_service,
             review_service,
+            will_retry,
         )
         if not downloaded:
             # An image that failed is settled too, and can be the last one the
@@ -252,6 +332,7 @@ def download_and_pre_process_image(
         metadata_import_interface,
         database_service,
         attribute_service,
+        will_retry,
     )
     # Whether it was pre-processed or failed to be, the image is settled.
     batch_service.finish_pre_processing_if_settled(batch_uid)
@@ -262,13 +343,22 @@ def _run_download_phase(
     image_import_interface: ImageImportInterface,
     database_service: DatabaseService,
     review_service: ReviewService,
+    will_retry: Callable[[BaseException], bool],
 ) -> bool:
+    """Download the image, holding no database session while it downloads.
+
+    A failure that has the task retried sets the image back as not started for
+    the retry to claim, and is raised. Any other failure, including writing
+    what was downloaded, sets the image as failed to download.
+    """
+    with database_service.get_session() as session:
+        database_image = database_service.get_image(session, image_uid)
+        image = database_image.model
+        project = database_image.batch.project.model
     try:
+        image_folder, image_files = image_import_interface.download(image, project)
         with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_uid)
-            image_folder, image_files = image_import_interface.download(
-                database_image.model, database_image.batch.project.model
-            )
+            database_image = database_service.get_image_for_update(session, image_uid)
             database_image.files.clear()
             database_image.folder_path = str(image_folder)
             for image_file in image_files:
@@ -277,30 +367,30 @@ def _run_download_phase(
                 database_image.files.add(database_image_file)
             database_image.set_as_downloaded()
         return True
-    except TransientTaskError:
-        # Reset state so the retry's entry guard can re-claim the row.
-        with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_uid)
-            database_image.reset_as_not_started()
-        raise
     except Exception as exception:
-        logger.error(f"Failed to download image {image_uid}", exc_info=True)
-        with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_uid)
-            _record_image_phase_failure(
-                database_image,
-                exception,
-                database_image.set_as_downloading_failed,
-                ImageStatus.DOWNLOADING_FAILED,
+        if will_retry(exception):
+            _reset_image(
+                database_service, image_uid, DatabaseImage.reset_as_not_started
             )
-            # Raised rather than taken out of the project: an image the source
-            # would not hand over is a fact about the case, and which of the
-            # two ways of dealing with it applies — fetch it again, or leave it
-            # out — is a decision, not something to make on a curator's behalf
-            # while nobody is looking. Being failed makes it invalid, so what
-            # is raised here is settled by the same thing that settles anything
-            # else: the image becoming valid, or leaving the project.
-            review_service.item_became_invalid(image_uid, session=session)
+            raise
+        logger.error(f"Failed to download image {image_uid}", exc_info=True)
+        # Raised rather than taken out of the project: an image the source
+        # would not hand over is a fact about the case, and which of the two
+        # ways of dealing with it applies, fetch it again or leave it out, is a
+        # decision, not something to make on a curator's behalf while nobody is
+        # looking. Being failed makes it invalid, so what is raised here is
+        # settled by the same thing that settles anything else: the image
+        # becoming valid, or leaving the project.
+        _fail_image(
+            database_service,
+            image_uid,
+            exception,
+            DatabaseImage.set_as_downloading_failed,
+            ImageStatus.DOWNLOADING_FAILED,
+            on_failed=lambda session: review_service.item_became_invalid(
+                image_uid, session=session
+            ),
+        )
         return False
 
 
@@ -310,47 +400,52 @@ def _run_pre_process_phase(
     metadata_import_interface: MetadataImportInterface,
     database_service: DatabaseService,
     attribute_service: AttributeService,
+    will_retry: Callable[[BaseException], bool],
 ) -> bool:
+    """Read the image's metadata, holding no database session while it reads.
+
+    A failure that has the task retried sets the image back as downloaded for
+    the retry to claim, and is raised. Any other failure, including writing
+    what was read, sets the image as failed to pre-process.
+    """
+    with database_service.get_session() as session:
+        database_image = database_service.get_image(session, image_uid)
+        image = database_image.model
+        batch = database_image.batch.model
+        project = database_image.batch.project.model
     try:
+        pre_processed = metadata_import_interface.import_image_metadata(
+            image, batch, project, task_id
+        )
         with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_uid)
-            image = metadata_import_interface.import_image_metadata(
-                database_image.model,
-                database_image.batch.model,
-                database_image.batch.project.model,
-                task_id,
-            )
-            database_image.folder_path = str(image.folder_path)
+            database_image = database_service.get_image_for_update(session, image_uid)
+            database_image.folder_path = str(pre_processed.folder_path)
             database_image.files.clear()
-            for image_file in image.files:
+            for image_file in pre_processed.files:
                 new_file = DatabaseImageFile(database_image, image_file.filename)
                 session.add(new_file)
                 database_image.files.add(new_file)
             attribute_service.update_for_item(
-                database_image, image.attributes.values(), session
+                database_image, pre_processed.attributes.values(), session
             )
             # What the file said about itself, kept from the reading of it that
             # put these attributes in the item, to write over when the metadata
             # is written into DICOM.
-            database_image.source_metadata = image.source_metadata
+            database_image.source_metadata = pre_processed.source_metadata
             database_image.set_as_pre_processed()
         return True
-    except TransientTaskError:
-        # Reset state so the retry's entry guard can re-claim the row.
-        with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_uid)
-            database_image.reset_as_downloaded()
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            _reset_image(database_service, image_uid, DatabaseImage.reset_as_downloaded)
+            raise
         logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
-        with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_uid)
-            _record_image_phase_failure(
-                database_image,
-                exception,
-                database_image.set_as_pre_processing_failed,
-                ImageStatus.PRE_PROCESSING_FAILED,
-            )
+        _fail_image(
+            database_service,
+            image_uid,
+            exception,
+            DatabaseImage.set_as_pre_processing_failed,
+            ImageStatus.PRE_PROCESSING_FAILED,
+        )
         return False
 
 
@@ -360,6 +455,7 @@ def _run_pre_process_phase(
     queue=TaskQueue.IMAGE,
     priority=TaskPriority.LOW,
     inject_task_id=True,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def post_process_image(
@@ -370,12 +466,24 @@ def post_process_image(
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     schema_service: FromDishka[SchemaService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
+    """Post-process (export) the image with given UID.
+
+    No database session is held while the image is converted. A failure that
+    has the task retried removes what the attempt wrote, sets the image back as
+    pre-processed for the retry to claim, and is raised. Any other failure,
+    including writing what came of the conversion, removes what was written and
+    sets the image as failed to post-process, which settles it for the batch.
+    """
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
     logger.info(f"Post processing image {image_uid}")
     with database_service.get_session() as session:
-        database_image = database_service.get_image(session, image_uid)
+        database_image = database_service.get_optional_image(session, image_uid)
+        if database_image is None:
+            logger.warning(f"Image {image_uid} does not exist, not processing it.")
+            return
         refusal = schema_service.change_refusal(database_image)
         if refusal is not None:
             logger.warning(f"Image {image_uid} is not processed: {refusal}.")
@@ -398,56 +506,51 @@ def post_process_image(
         database_image.set_as_post_processing()
         session.commit()
 
-    project = None
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
         batch_uid = database_image.batch_uid
+        image = database_image.model
+        batch = database_image.batch.model
+        project = database_image.batch.project.model
 
-        try:
-            project = database_image.batch.project.model
-            image = image_export_interface.export(
-                database_image.model,
-                database_image.batch.model,
-                project,
-                task_id=task_id,
-            )
-
-            database_image.folder_path = str(image.folder_path)
+    try:
+        post_processed = image_export_interface.export(
+            image, batch, project, task_id=task_id
+        )
+        with database_service.get_session() as session:
+            database_image = database_service.get_image_for_update(session, image_uid)
+            database_image.folder_path = str(post_processed.folder_path)
             database_image.thumbnail_path = (
-                str(image.thumbnail_path) if image.thumbnail_path else None
+                str(post_processed.thumbnail_path)
+                if post_processed.thumbnail_path
+                else None
             )
             database_image.files.clear()
-            for image_file in image.files:
+            for image_file in post_processed.files:
                 new_file = DatabaseImageFile(database_image, image_file.filename)
                 session.add(new_file)
                 database_image.files.add(new_file)
-            database_image.format = image.format
+            database_image.format = post_processed.format
             # What the files now say, so that storing them can tell whether it
             # has to say it again. From the processing that wrote them; empty
             # where it wrote no metadata of its own.
-            database_image.metadata_digest = image.metadata_digest
+            database_image.metadata_digest = post_processed.metadata_digest
             database_image.set_as_post_processed()
-        except TransientTaskError:
-            session.rollback()
-            if project is not None:
-                storage_service.cleanup_processing_task(project, task_id)
-            # Reset state so the retry's entry guard re-claims the row.
-            database_image.reset_as_pre_processed()
-            session.commit()
-            raise
-        except Exception as exception:
-            session.rollback()
-            logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
-            if project is not None:
-                storage_service.cleanup_processing_task(project, task_id)
-            _record_image_phase_failure(
-                database_image,
-                exception,
-                database_image.set_as_post_processing_failed,
-                ImageStatus.POST_PROCESSING_FAILED,
+    except Exception as exception:
+        storage_service.cleanup_processing_task(project, task_id)
+        if will_retry(exception):
+            _reset_image(
+                database_service, image_uid, DatabaseImage.reset_as_pre_processed
             )
-
-        session.commit()
+            raise
+        logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
+        _fail_image(
+            database_service,
+            image_uid,
+            exception,
+            DatabaseImage.set_as_post_processing_failed,
+            ImageStatus.POST_PROCESSING_FAILED,
+        )
 
     batch_service.finish_post_processing_if_settled(batch_uid)
 
@@ -457,6 +560,7 @@ def post_process_image(
     name="store_batch_images_to_outbox",
     queue=TaskQueue.IMAGE,
     priority=TaskPriority.LOW,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def store_batch_images_to_outbox(
@@ -467,6 +571,7 @@ def store_batch_images_to_outbox(
     schema_service: FromDishka[SchemaService],
     image_export_interface: FromDishka[ImageExportInterface],
     dicom_metadata_writer: FromDishka[DicomMetadataWriter],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Move post-processed images from the processing directory to the outbox.
 
@@ -476,7 +581,8 @@ def store_batch_images_to_outbox(
     only selects images that are post-processed, resumes where the failed attempt
     left off.
 
-    An image that cannot be stored is set as storing failed, and the batch is not
+    An image that cannot be stored, including one whose transient failure is
+    not going to be retried, is set as storing failed, and the batch is not
     completed: the dataset in the outbox is missing an image, and the batch stays
     storing until the image has been retried and stored. An image left as storing
     by a failed attempt is stored again, as storing an already stored image is a
@@ -520,68 +626,36 @@ def store_batch_images_to_outbox(
             database_image = database_service.get_image(session, image_model.uid)
             database_image.set_as_storing()
         try:
-            # What goes in the files is asked for again here rather than
-            # trusted from the export: the items it was read from have been
-            # curated since. Where an export format carries no metadata, the
-            # files are moved across as they are.
-            # Written again only where what they say has changed since they were
-            # written; unchanged, the files are moved across as they are. A
-            # digest that could not be taken counts as changed.
-            # Written over what the image file said about itself. Where that was
-            # not kept — an image converted before it was — there is nothing to
-            # write it over, and the files are moved as they are.
-            base = dicom_metadata_writer.recorded(image_model.source_metadata)
-            metadata = (
-                None
-                if base is None
-                else image_export_interface.create_export_metadata(image_model, base)
+            _store_image(
+                image_model,
+                project,
+                dataset,
+                storage_service,
+                image_export_interface,
+                dicom_metadata_writer,
             )
-            digest = (
-                None if metadata is None else dicom_metadata_writer.digest(metadata)
-            )
-            unchanged = digest is not None and digest == image_model.metadata_digest
-            if metadata is None or unchanged:
-                storage_service.store_image_to_outbox(project, image_model, dataset)
-            else:
-                source = Path(image_model.folder_path or "")
-                with storage_service.stage_image_in_outbox(
-                    project, image_model, dataset
-                ) as staged:
-                    written_files = dicom_metadata_writer.resave(
-                        source, staged, metadata
-                    )
-                # DICOM names its files after the instances in them, and the
-                # instances written are new ones, so the files that were stored
-                # are not the files that were processed.
-                image_model.files = [
-                    ImageFile(uid=uuid4(), filename=str(file.relative_to(staged)))
-                    for file in written_files
-                ]
-            image_model.metadata_digest = digest
-        except TransientTaskError:
-            raise
-        except Exception as exception:
-            logger.error(f"Failed to store image {image_model.uid}", exc_info=True)
             with database_service.get_session() as session:
                 database_image = database_service.get_image(session, image_model.uid)
-                _record_image_phase_failure(
-                    database_image,
-                    exception,
-                    database_image.set_as_storing_failed,
-                    ImageStatus.STORING_FAILED,
-                )
-            continue
-        with database_service.get_session() as session:
-            database_image = database_service.get_image(session, image_model.uid)
-            database_image.folder_path = image_model.folder_path
-            database_image.thumbnail_path = image_model.thumbnail_path
-            database_image.metadata_digest = image_model.metadata_digest
-            database_image.files.clear()
-            for image_file in image_model.files:
-                stored_file = DatabaseImageFile(database_image, image_file.filename)
-                session.add(stored_file)
-                database_image.files.add(stored_file)
-            database_image.set_as_stored()
+                database_image.folder_path = image_model.folder_path
+                database_image.thumbnail_path = image_model.thumbnail_path
+                database_image.metadata_digest = image_model.metadata_digest
+                database_image.files.clear()
+                for image_file in image_model.files:
+                    stored_file = DatabaseImageFile(database_image, image_file.filename)
+                    session.add(stored_file)
+                    database_image.files.add(stored_file)
+                database_image.set_as_stored()
+        except Exception as exception:
+            if will_retry(exception):
+                raise
+            logger.error(f"Failed to store image {image_model.uid}", exc_info=True)
+            _fail_image(
+                database_service,
+                image_model.uid,
+                exception,
+                DatabaseImage.set_as_storing_failed,
+                ImageStatus.STORING_FAILED,
+            )
 
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)
@@ -597,6 +671,54 @@ def store_batch_images_to_outbox(
             )
             return
         batch_service.set_as_completed(database_batch, session=session)
+
+
+def _store_image(
+    image: Image,
+    project: Project,
+    dataset: Dataset,
+    storage_service: StorageService,
+    image_export_interface: ImageExportInterface,
+    dicom_metadata_writer: DicomMetadataWriter,
+) -> None:
+    """Store the image in the outbox, updating its paths, files and digest.
+
+    What goes in the files is asked for again here rather than trusted from the
+    export: the items it was read from have been curated since. The files are
+    written again only where what they say has changed since they were written,
+    and a digest that could not be taken counts as changed. Unchanged, or where
+    an export format carries no metadata, the files are moved across as they
+    are. The metadata is written over what the image file said about itself;
+    where that was not kept, as for an image converted before it was, there is
+    nothing to write it over, and the files are moved as they are.
+
+    An image stored by an attempt that did not get to record it is taken up as
+    it was stored, see ``StorageService.recover_stored_image``.
+    """
+    if storage_service.recover_stored_image(project, image, dataset):
+        return
+    base = dicom_metadata_writer.recorded(image.source_metadata)
+    metadata = (
+        None
+        if base is None
+        else image_export_interface.create_export_metadata(image, base)
+    )
+    digest = None if metadata is None else dicom_metadata_writer.digest(metadata)
+    unchanged = digest is not None and digest == image.metadata_digest
+    if metadata is None or unchanged:
+        storage_service.store_image_to_outbox(project, image, dataset)
+    else:
+        source = Path(image.folder_path or "")
+        with storage_service.stage_image_in_outbox(project, image, dataset) as staged:
+            written_files = dicom_metadata_writer.resave(source, staged, metadata)
+        # DICOM names its files after the instances in them, and the instances
+        # written are new ones, so the files that were stored are not the files
+        # that were processed.
+        image.files = [
+            ImageFile(uid=uuid4(), filename=str(file.relative_to(staged)))
+            for file in written_files
+        ]
+    image.metadata_digest = digest
 
 
 @dishka_task(
@@ -654,6 +776,7 @@ def remap_dataset_attributes(
     name="delete_batch",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def delete_batch(
@@ -661,14 +784,16 @@ def delete_batch(
     batch_service: FromDishka[BatchService],
     database_service: FromDishka[DatabaseService],
     storage_service: FromDishka[StorageService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Delete a batch marked as deleting, rows first and then files.
 
     Idempotent under redelivery: the rows go in one transaction, so a run
     that was cut short left the batch as it was, still marked, and a run
-    after one that finished finds no batch to delete. A delete that fails
-    marks the batch as failed with the reason, and marking it as deleting
-    again reruns it.
+    after one that finished finds no batch to delete. A delete that fails,
+    including one whose transient failure is not going to be retried, marks
+    the batch as failed with the reason, and marking it as deleting again
+    reruns it.
 
     The files go after the commit, so that a worker dying part-way leaves
     files without rows, which is only disk, rather than rows without files.
@@ -690,9 +815,9 @@ def delete_batch(
     logger.info(f"Deleting batch {batch_uid}")
     try:
         image_paths = batch_service.delete(batch_uid)
-    except TransientTaskError:
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            raise
         logger.error(f"Failed to delete batch {batch_uid}", exc_info=True)
         batch_service.set_as_failed(batch_uid, message=f"Delete failed: {exception}")
         return
@@ -707,17 +832,20 @@ def delete_batch(
     name="delete_project",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def delete_project(
     project_uid: UUID | str,
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Delete a project marked as deleting, with everything it holds.
 
-    Idempotent the same way as :func:`delete_batch`. A delete that fails
-    marks the project as failed, and marking it as deleting again reruns it.
+    Idempotent the same way as :func:`delete_batch`. A delete that fails,
+    including one whose transient failure is not going to be retried, marks
+    the project as failed, and marking it as deleting again reruns it.
     """
     if isinstance(project_uid, str):
         project_uid = UUID(project_uid)
@@ -735,9 +863,9 @@ def delete_project(
     logger.info(f"Deleting project {project_uid}")
     try:
         project_service.delete(project_uid)
-    except TransientTaskError:
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            raise
         logger.error(f"Failed to delete project {project_uid}", exc_info=True)
         project_service.set_as_failed(
             project_uid, message=f"Delete failed: {exception}"
@@ -749,6 +877,7 @@ def delete_project(
     name="process_metadata_export",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def process_metadata_export(
@@ -757,7 +886,14 @@ def process_metadata_export(
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
     schema_service: FromDishka[SchemaService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
+    """Export the metadata of a project that is exporting.
+
+    An export that fails, including one whose transient failure is not going
+    to be retried, sets the project back as completed, so that it can be
+    exported again.
+    """
     if isinstance(project_id, str):
         project_id = UUID(project_id)
     logger.info(f"Exporting metadata for project {project_id}")
@@ -775,9 +911,9 @@ def process_metadata_export(
                 database_project.model, database_project.dataset.model
             )
             project_service.set_as_export_complete(database_project, session)
-        except TransientTaskError:
-            raise
-        except Exception:
+        except Exception as exception:
+            if will_retry(exception):
+                raise
             logger.error(
                 f"Failed to export metadata for project {project_id}", exc_info=True
             )
@@ -845,6 +981,7 @@ def complete_schema_migration(
     name="process_metadata_import",
     queue=TaskQueue.METADATA,
     priority=TaskPriority.LOW,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def process_metadata_import(
@@ -856,6 +993,7 @@ def process_metadata_import(
     item_service: FromDishka[ItemService],
     search_item_service: FromDishka[MetadataSearchItemService],
     schema_service: FromDishka[SchemaService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Drive the metadata search for a batch.
 
@@ -864,6 +1002,12 @@ def process_metadata_import(
     persisted; successful units have their items persisted in dependency
     order with a per-unit commit (rollback isolated to that unit on
     persist error).
+
+    A search that fails sets the batch as failed, unless the failure has the
+    task retried, which leaves the batch searching for the retry. A search run
+    again, retried or recovered from a worker that died, skips the results an
+    earlier attempt imported and records the others on the rows that attempt
+    created, see :meth:`MetadataSearchItemService.create_or_resume`.
     """
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
@@ -892,13 +1036,19 @@ def process_metadata_import(
         results = metadata_import_interface.search(batch, dataset, search_parameters)
         for result in results:
             with database_service.get_session() as session:
-                search_item = search_item_service.create(
+                search_item = search_item_service.create_or_resume(
                     batch_uid=batch_uid,
                     identifier=result.identifier,
                     schema_uid=result.schema_uid,
                     search_parameters=result.search_parameters,
                     session=session,
                 )
+                if search_item is None:
+                    logger.info(
+                        f"Skipping search result {result.identifier}: imported by "
+                        f"an earlier attempt."
+                    )
+                    continue
                 if result.is_failure:
                     search_item_service.mark_failed(
                         search_item,
@@ -954,9 +1104,9 @@ def process_metadata_import(
         with database_service.get_session() as session:
             database_batch = database_service.get_batch(session, batch_uid)
             batch_service.set_as_search_complete(database_batch, session)
-    except TransientTaskError:
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            raise
         logger.error(f"Failed to import metadata for batch {batch_uid}", exc_info=True)
         with database_service.get_session() as session:
             database_batch = database_service.get_batch(session, batch_uid)
@@ -970,6 +1120,7 @@ def process_metadata_import(
     name="retry_metadata_search_item",
     queue=TaskQueue.METADATA,
     priority=TaskPriority.HIGH,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def retry_metadata_search_item(
@@ -979,8 +1130,13 @@ def retry_metadata_search_item(
     item_service: FromDishka[ItemService],
     search_item_service: FromDishka[MetadataSearchItemService],
     schema_service: FromDishka[SchemaService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
-    """Re-run metadata import for a single previously-failed search item."""
+    """Re-run metadata import for a single previously-failed search item.
+
+    A failure sets the search item as failed again, unless it has the task
+    retried.
+    """
     if isinstance(search_item_uid, str):
         search_item_uid = UUID(search_item_uid)
     logger.info(f"Retrying metadata search item {search_item_uid}")
@@ -1011,9 +1167,9 @@ def retry_metadata_search_item(
 
     try:
         result = metadata_import_interface.retry_item(search_item, batch, dataset)
-    except TransientTaskError:
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            raise
         logger.error(
             f"Hard failure retrying search item {search_item_uid}", exc_info=True
         )
@@ -1040,9 +1196,9 @@ def retry_metadata_search_item(
                     search_item_service.mark_complete(
                         search_item_uid, item_uid, session=session
                     )
-            except TransientTaskError:
-                raise
             except Exception as exception:
+                if will_retry(exception):
+                    raise
                 logger.error(
                     f"Failed to persist retry result for search item {search_item_uid}",
                     exc_info=True,
@@ -1092,6 +1248,10 @@ async def retry_stalled_jobs(
     stalled_worker_timeout`` is treated as abandoned. Image
     tasks need their domain status reset first because their entry
     guards bail on in-progress status.
+
+    Each job is recovered on its own: one whose status cannot be reset is
+    still retried, and one that cannot be retried is logged, so that neither
+    keeps the other stalled jobs from being recovered.
     """
     threshold = _STALLED_RECOVERY_MARGIN * config.stalled_worker_timeout
     stalled = list(
@@ -1101,14 +1261,25 @@ async def retry_stalled_jobs(
         return
     logger.warning(f"Recovering {len(stalled)} stalled job(s).")
     for job in stalled:
-        _reset_state_for_stalled_job(database_service, job)
-        await app.job_manager.retry_job(job)
+        try:
+            _reset_state_for_stalled_job(database_service, job)
+        except Exception:
+            logger.error(
+                f"Failed to reset the state of stalled job {job.id}.", exc_info=True
+            )
+        try:
+            await app.job_manager.retry_job(job)
+        except Exception:
+            logger.error(f"Failed to retry stalled job {job.id}.", exc_info=True)
 
 
 def _reset_state_for_stalled_job(
     database_service: DatabaseService, job: TaskJob
 ) -> None:
-    """Reset domain status so the retried job's entry guard doesn't bail."""
+    """Reset domain status so the retried job's entry guard doesn't bail.
+
+    An image that no longer exists has nothing to reset.
+    """
     short_name = (job.task_name or "").rsplit(":", 1)[-1]
     kwargs = job.task_kwargs or {}
 
@@ -1117,7 +1288,7 @@ def _reset_state_for_stalled_job(
         if not isinstance(image_uid_str, str):
             return
         with database_service.get_session() as session:
-            image = database_service.get_image(session, UUID(image_uid_str))
+            image = database_service.get_optional_image(session, UUID(image_uid_str))
             if image is None:
                 return
             if image.status == ImageStatus.DOWNLOADING:

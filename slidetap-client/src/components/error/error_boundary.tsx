@@ -13,12 +13,15 @@
 //    limitations under the License.
 
 import { Alert, Box, Button, Container, Typography } from '@mui/material'
+import { useQueryClient } from '@tanstack/react-query'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useNavigate, type NavigateFunction } from 'react-router-dom'
 
 interface ErrorBoundaryProps {
   children: ReactNode
   navigate: NavigateFunction
+  /** Called before the children are shown again. */
+  onReset: () => void
 }
 
 interface ErrorBoundaryState {
@@ -50,6 +53,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   handleReset = (): void => {
+    this.props.onReset()
     this.setState({
       hasError: false,
       error: null,
@@ -58,6 +62,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   handleGoHome = (): void => {
+    this.props.onReset()
     this.setState(
       {
         hasError: false,
@@ -135,7 +140,20 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
  */
 function ErrorBoundaryWithNavigate({ children }: { children: ReactNode }): ReactNode {
   const navigate = useNavigate()
-  return <ErrorBoundary navigate={navigate}>{children}</ErrorBoundary>
+  const queryClient = useQueryClient()
+  // A query that failed keeps its error, and whatever data it had, until it is
+  // fetched again; a component throwing on that error would throw again as soon
+  // as it is shown. The failed queries are reset, so trying again fetches them.
+  const resetFailedQueries = (): void => {
+    void queryClient.resetQueries({
+      predicate: (query) => query.state.status === 'error',
+    })
+  }
+  return (
+    <ErrorBoundary navigate={navigate} onReset={resetFailedQueries}>
+      {children}
+    </ErrorBoundary>
+  )
 }
 
 export default ErrorBoundaryWithNavigate

@@ -314,6 +314,58 @@ class TestStorageService:
         assert processed_image.folder_path == str(image_destination)
         decoy.verify(file_operations.rename(source_folder, Anything()), times=0)
 
+    def test_recover_stored_image_takes_files_from_where_it_was_stored(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        dataset: Dataset,
+        processed_image: Image,
+        image_destination: Path,
+    ) -> None:
+        """An image stored but not recorded is taken up as it was stored."""
+        # Arrange
+        source_folder = Path(processed_image.folder_path)
+        decoy.when(file_operations.exists(source_folder)).then_return(False)
+        decoy.when(file_operations.list_files(image_destination)).then_return(
+            [image_destination.joinpath("a.dcm"), image_destination.joinpath("b.dcm")]
+        )
+        processed_image.metadata_digest = "digest"
+
+        # Act
+        recovered = storage_service.recover_stored_image(
+            project, processed_image, dataset
+        )
+
+        # Assert
+        assert recovered
+        assert processed_image.folder_path == str(image_destination)
+        assert [file.filename for file in processed_image.files] == ["a.dcm", "b.dcm"]
+        assert processed_image.metadata_digest is None
+
+    def test_recover_stored_image_leaves_image_still_on_record(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        dataset: Dataset,
+        processed_image: Image,
+    ) -> None:
+        # Arrange
+        folder_path = processed_image.folder_path
+
+        # Act
+        recovered = storage_service.recover_stored_image(
+            project, processed_image, dataset
+        )
+
+        # Assert
+        assert not recovered
+        assert processed_image.folder_path == folder_path
+        decoy.verify(file_operations.rename(Anything(), Anything()), times=0)
+
     def test_store_image_to_outbox_of_unreachable_image_raises_transient_error(
         self,
         decoy: Decoy,
@@ -404,31 +456,31 @@ class TestStorageFolder:
     def storage_service(
         self,
         config: StorageConfig,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         file_operations: FileOperations,
     ) -> StorageService:
-        return StorageService(config, sqlite_database_service, file_operations)
+        return StorageService(config, stored_database_service, file_operations)
 
     @pytest.fixture()
     def stored_project(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         project: Project,
         dataset: Dataset,
     ) -> Project:
         """A project, with its dataset, in the database and yet to claim."""
         project.storage_folder = None
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
-            sqlite_database_service.add_project(session, project)
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
+            stored_database_service.add_project(session, project)
         return project
 
     @pytest.fixture()
     def stored_dataset(
-        self, sqlite_database_service: DatabaseService, dataset: Dataset
+        self, stored_database_service: DatabaseService, dataset: Dataset
     ) -> Dataset:
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
         return dataset
 
     def rename(
@@ -449,7 +501,7 @@ class TestStorageFolder:
     def test_project_folder_is_claimed_from_the_name(
         self,
         storage_service: StorageService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored_project: Project,
     ) -> None:
         """The first claim gives the folder the project name gives it.
@@ -463,8 +515,8 @@ class TestStorageFolder:
 
         # Assert
         assert folder == f"{stored_project.name}.{stored_project.uid}"
-        with sqlite_database_service.get_session() as session:
-            database_project = sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            database_project = stored_database_service.get_project(
                 session, stored_project
             )
             assert database_project.storage_folder == folder
@@ -472,7 +524,7 @@ class TestStorageFolder:
     def test_project_folder_survives_a_rename(
         self,
         storage_service: StorageService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored_project: Project,
     ) -> None:
         """Renaming the project must not move where its content is stored."""
@@ -480,7 +532,7 @@ class TestStorageFolder:
         claimed = storage_service.project_outbox(stored_project)
 
         # Act
-        self.rename(sqlite_database_service, stored_project, "renamed project")
+        self.rename(stored_database_service, stored_project, "renamed project")
 
         # Assert
         assert storage_service.project_outbox(stored_project) == claimed
@@ -490,7 +542,7 @@ class TestStorageFolder:
     def test_project_folder_claimed_by_another_worker_is_kept(
         self,
         storage_service: StorageService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored_project: Project,
     ) -> None:
         """A claim finds the folder another worker wrote down, and keeps it.
@@ -499,8 +551,8 @@ class TestStorageFolder:
         read of what is written down and only writes when nothing is.
         """
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_project(
                 session, stored_project
             ).storage_folder = "claimed elsewhere"
 
@@ -540,7 +592,7 @@ class TestStorageFolder:
     def test_dataset_folder_survives_a_rename(
         self,
         config: StorageConfig,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         file_operations: FileOperations,
         stored_dataset: Dataset,
         project: Project,
@@ -549,15 +601,144 @@ class TestStorageFolder:
         # Arrange
         storage_service = StorageService(
             dataclasses.replace(config, bundle_prefix="BP-"),
-            sqlite_database_service,
+            stored_database_service,
             file_operations,
         )
         claimed = storage_service.project_bundle(project, stored_dataset)
         assert claimed.name == "BP-dataset_name"
 
         # Act
-        self.rename(sqlite_database_service, stored_dataset, "renamed dataset")
+        self.rename(stored_database_service, stored_dataset, "renamed dataset")
 
         # Assert
         assert storage_service.project_bundle(project, stored_dataset) == claimed
         assert storage_service.dataset_folder(stored_dataset) == "BP-dataset_name"
+
+
+@pytest.mark.unittest
+class TestPathSafety:
+    """Names from outside SlideTap never reach outside the storage folders."""
+
+    @pytest.mark.parametrize(
+        ["name", "expected"],
+        [
+            ("image identifier", "image identifier"),
+            ("A.1", "A.1"),
+            ("../../etc", ".._.._etc"),
+            ("/srv/data", "_srv_data"),
+            ("..\\..\\windows", ".._.._windows"),
+        ],
+    )
+    def test_path_name_is_a_single_name(self, name: str, expected: str):
+        assert StorageService._path_name(name) == expected
+
+    @pytest.mark.parametrize("name", ["", " ", ".", ".."])
+    def test_path_name_without_a_name_of_its_own_is_refused(self, name: str):
+        with pytest.raises(ValueError):
+            StorageService._path_name(name)
+
+    def test_project_folder_name_cannot_leave_the_outbox(self):
+        # Arrange
+        uid = uuid4()
+
+        # Act
+        folder = StorageService._project_folder_name("../../escape", uid)
+
+        # Assert
+        assert folder == f".._.._escape.{uid}"
+
+    def test_download_path_of_traversing_identifier_stays_in_project(
+        self,
+        storage_service: StorageService,
+        project: Project,
+        image: Image,
+        config: StorageConfig,
+    ):
+        # Arrange
+        image.identifier = "../../../outside"
+
+        # Act
+        folder = storage_service.create_download_image_path(project, image)
+
+        # Assert
+        assert folder.parent == config.download.joinpath(project.storage_folder)
+
+    def test_cleanup_of_traversing_identifier_removes_only_inside_download(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        image: Image,
+        config: StorageConfig,
+    ):
+        # Arrange
+        image.identifier = "../.."
+        removed = Captor()
+
+        # Act
+        storage_service.cleanup_download_image_path(project, image)
+
+        # Assert
+        decoy.verify(file_operations.remove(removed), times=1)
+        assert removed.value == config.download.joinpath(
+            project.storage_folder, ".._.."
+        )
+
+    @pytest.mark.parametrize("outside", ["outside", "storage"])
+    def test_remove_refuses_paths_not_inside_storage(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        config: StorageConfig,
+        outside: str,
+    ):
+        # Arrange
+        path = config.outbox.parent.joinpath(outside)
+
+        # Act
+        storage_service._remove_path(path)
+
+        # Assert
+        decoy.verify(file_operations.remove(Anything()), times=0)
+
+
+@pytest.mark.unittest
+class TestCleanupImageSource:
+    def test_a_source_in_the_download_folder_is_removed(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        config: StorageConfig,
+        project: Project,
+        image: Image,
+    ):
+        # Arrange
+        source = config.download.joinpath(project.storage_folder or "", "image")
+
+        # Act
+        storage_service.cleanup_image_source(project, image, source)
+
+        # Assert
+        decoy.verify(file_operations.remove(source), times=1)
+
+    def test_a_source_outside_the_project_folders_is_left(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        image: Image,
+        tmp_path: Path,
+    ):
+        """A folder the import reads the image from in place is not SlideTap's."""
+        # Arrange
+        source = tmp_path.joinpath("scanner", "image")
+
+        # Act
+        storage_service.cleanup_image_source(project, image, source)
+
+        # Assert
+        decoy.verify(file_operations.remove(Anything()), times=0)

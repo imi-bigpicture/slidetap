@@ -230,21 +230,20 @@ export function useDataTable<T extends RowData>(
   // Reported after render rather than during, so a caller storing the selection
   // does not set state while this one is still rendering.
   //
-  // The key is only how the effect notices a change; what it hands over is the
-  // list itself. Rebuilding the ids by splitting the key would tear any id
-  // holding the separator, and `unmapped` already keys its rows on attribute
+  // The list is a fresh array on every render, so the effect runs after each
+  // one and the key is how it tells a change from a repeat; what it hands over
+  // is the list itself. Rebuilding the ids by splitting the key would tear any
+  // id holding the separator, and `unmapped` already keys its rows on attribute
   // values a pathologist wrote.
   const notifySelection = selection?.onChange
   const selectionKey = JSON.stringify(selectedRowIds)
-  const latestSelection = useRef(selectedRowIds)
-  latestSelection.current = selectedRowIds
   const lastReported = useRef<string>('[]')
   useEffect(() => {
     if (notifySelection === undefined) return
     if (selectionKey === lastReported.current) return
     lastReported.current = selectionKey
-    notifySelection(latestSelection.current)
-  }, [selectionKey, notifySelection])
+    notifySelection(selectedRowIds)
+  }, [selectionKey, selectedRowIds, notifySelection])
 
   const toolbar =
     options.toolbar?.({

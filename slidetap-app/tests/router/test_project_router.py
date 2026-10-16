@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import pytest
 from decoy import Decoy
+from decoy.matchers import Anything
 from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
@@ -133,6 +134,45 @@ def test_client(project_router_app: FastAPI):
 
 @pytest.mark.unittest
 class TestSlideTapProjectRouter:
+    def test_update_project_with_a_body_for_another_project_is_refused(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        path_uid = uuid4()
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{path_uid}",
+            json=project.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        decoy.verify(project_service.update(Anything()), times=0)
+
+    def test_update_project_with_a_body_for_the_project_is_saved(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(project_service.update(Anything())).then_return(project)
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{project.uid}",
+            json=project.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+
     def test_delete_project_not_found(
         self, decoy: Decoy, test_client: TestClient, project_service: ProjectService
     ):
@@ -166,8 +206,7 @@ class TestSlideTapProjectRouter:
         assert response.status_code == HTTPStatus.CONFLICT
         assert "exporting" in response.json()["detail"]
 
-    @pytest.mark.asyncio
-    async def test_delete_project_is_scheduled(
+    def test_delete_project_is_scheduled(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -186,7 +225,7 @@ class TestSlideTapProjectRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert response.json() == {"status": "scheduled"}
-        decoy.verify(await scheduler.delete_project(deleting), times=1)
+        decoy.verify(scheduler.delete_project(deleting), times=1)
 
     def test_export_of_a_project_not_wholly_stored_is_refused(
         self,
@@ -286,8 +325,7 @@ class TestSlideTapProjectRouter:
             ProjectStatus.IN_PROGRESS.value
         )
 
-    @pytest.mark.asyncio
-    async def test_creating_a_migration_plans_it_in_a_task(
+    def test_creating_a_migration_plans_it_in_a_task(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -306,11 +344,10 @@ class TestSlideTapProjectRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert response.json()["status"] == MigrationStatus.PLANNING.value
-        decoy.verify(await scheduler.plan_migration(project.uid), times=1)
+        decoy.verify(scheduler.plan_migration(project.uid), times=1)
         decoy.verify(migration_service.revert(project.uid), times=0)
 
-    @pytest.mark.asyncio
-    async def test_a_migration_not_planned_is_reverted(
+    def test_a_migration_not_planned_is_reverted(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -323,7 +360,7 @@ class TestSlideTapProjectRouter:
         decoy.when(migration_service.create(project.uid)).then_return(
             _migration(project, MigrationStatus.PLANNING)
         )
-        decoy.when(await scheduler.plan_migration(project.uid)).then_raise(
+        decoy.when(scheduler.plan_migration(project.uid)).then_raise(
             RuntimeError("no queue")
         )
 
@@ -334,8 +371,7 @@ class TestSlideTapProjectRouter:
         assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
         decoy.verify(migration_service.revert(project.uid), times=1)
 
-    @pytest.mark.asyncio
-    async def test_creating_a_migration_that_is_refused_is_a_conflict(
+    def test_creating_a_migration_that_is_refused_is_a_conflict(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -353,7 +389,7 @@ class TestSlideTapProjectRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.CONFLICT
-        decoy.verify(await scheduler.plan_migration(project.uid), times=0)
+        decoy.verify(scheduler.plan_migration(project.uid), times=0)
 
     @pytest.mark.parametrize("refused", [False, True])
     def test_an_attribute_issue_is_resolved(
@@ -468,8 +504,7 @@ class TestSlideTapProjectRouter:
         assert response.json()["targetAttributeSchemaUid"] is None
 
     @pytest.mark.parametrize("refused", [False, True])
-    @pytest.mark.asyncio
-    async def test_submitting_a_migration_completes_it_in_a_task(
+    def test_submitting_a_migration_completes_it_in_a_task(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -493,14 +528,13 @@ class TestSlideTapProjectRouter:
         # Assert
         if refused:
             assert response.status_code == HTTPStatus.CONFLICT
-            decoy.verify(await scheduler.complete_migration(project.uid), times=0)
+            decoy.verify(scheduler.complete_migration(project.uid), times=0)
         else:
             assert response.status_code == HTTPStatus.OK
             assert response.json()["status"] == MigrationStatus.COMPLETING.value
-            decoy.verify(await scheduler.complete_migration(project.uid), times=1)
+            decoy.verify(scheduler.complete_migration(project.uid), times=1)
 
-    @pytest.mark.asyncio
-    async def test_a_migration_not_completed_is_curated_again(
+    def test_a_migration_not_completed_is_curated_again(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -512,7 +546,7 @@ class TestSlideTapProjectRouter:
         decoy.when(migration_service.submit(project.uid)).then_return(
             _migration(project, MigrationStatus.COMPLETING)
         )
-        decoy.when(await scheduler.complete_migration(project.uid)).then_raise(
+        decoy.when(scheduler.complete_migration(project.uid)).then_raise(
             RuntimeError("no queue")
         )
 

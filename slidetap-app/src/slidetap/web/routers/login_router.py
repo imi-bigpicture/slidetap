@@ -66,7 +66,7 @@ login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRo
 
 
 @login_router.post("/login")
-async def login(
+def login(
     response: Response,
     credentials: BasicAuthCredentials,
     auth_interface: FromDishka[AuthInterface],
@@ -100,19 +100,23 @@ async def login(
             detail="User has not permission to use service.",
         )
     logger.debug(f"Login successful for user {credentials.username}")
-    login_service.set_login_cookies(response, session.username)
+    login_service.set_login_cookies(response, session)
 
     return LoginResponse()
 
 
 @login_router.post("/logout")
-async def logout(
+def logout(
     response: Response,
+    auth_interface: FromDishka[AuthInterface],
     login_service: FromDishka[LoginService],
     logger: Logger,
     user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> LogoutResponse:
     """Logout user.
+
+    Ends the session with the auth interface, so that the access token can no
+    longer be kept alive, and unsets the login cookies.
 
     Returns
     ----------
@@ -120,23 +124,28 @@ async def logout(
         Logout confirmation
 
     """
-    logger.debug(f"Logout user {user_payload}.")
+    logger.debug(f"Logout user {user_payload.get('sub')}.")
+    session = LoginService.session_from_payload(user_payload)
+    if session is not None:
+        auth_interface.logout(session)
     login_service.unset_login_cookies(response)
     return LogoutResponse()
 
 
 @login_router.post("/keepAlive")
-async def keep_alive(
+def keep_alive(
     response: Response,
+    auth_interface: FromDishka[AuthInterface],
     login_service: FromDishka[LoginService],
     logger: Logger,
     user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> KeepAliveResponse:
     """Keep user session alive.
 
-    This endpoint explicitly refreshes the session by generating new tokens.
-    Uses require_valid_token (not require_valid_token_and_refresh) to avoid
-    double-refresh, since we explicitly call set_login_cookies below.
+    Issues new login cookies, but only for a session the auth interface still
+    holds as valid and keeps alive. A session that has been logged out, or
+    whose user the auth interface no longer accepts, is answered with
+    unauthorized.
 
     Returns
     ----------
@@ -144,7 +153,18 @@ async def keep_alive(
         Keep alive confirmation
     """
     logger.debug("Keepalive.")
-    login_service.set_login_cookies(response, user_payload["sub"])
+    session = LoginService.session_from_payload(user_payload)
+    if (
+        session is None
+        or not auth_interface.valid(session)
+        or not auth_interface.keep_alive(session)
+    ):
+        logger.info(f"Refused keep alive for user {user_payload.get('sub')}.")
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="Session is no longer valid",
+        )
+    login_service.set_login_cookies(response, session)
     return KeepAliveResponse()
 
 
@@ -160,9 +180,8 @@ async def get_session_status(
     SessionStatusResponse
         Session status with expiration timestamp
 
-    Note: This endpoint uses require_valid_token (not require_valid_token) so it
-    does NOT refresh the session. This allows accurate monitoring of when
-    the session will actually expire.
+    The session is not extended, so the expiration is when the access token
+    will actually expire unless it is kept alive.
     """
     logger.debug(f"Session status for user {user_payload['sub']}.")
     return SessionStatusResponse(

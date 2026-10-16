@@ -21,20 +21,24 @@ import shutil
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from io import BytesIO, StringIO
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 from uuid import UUID, uuid4
 
 from slidetap.config import StorageConfig
 from slidetap.database import DatabaseDataset, DatabaseProject
 from slidetap.external_interfaces.exceptions import TransientTaskError
-from slidetap.model import Dataset, Image, Project
+from slidetap.model import Dataset, Image, ImageFile, Project
 from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.file_operations import FileOperations
 
 
 class StorageService:
     """Class for storing images and metadata to outbox folder."""
+
+    UNSAFE_PATH_CHARACTERS = re.compile(r"[\\/\x00]")
+    """Characters that would let a name reach outside the folder it is joined
+    to, or that no file system allows in a name."""
 
     def __init__(
         self,
@@ -91,7 +95,7 @@ class StorageService:
             name = image.pseudonym
         else:
             name = image.identifier
-        thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
+        thumbnail_path = thumbnails_folder.joinpath(self._path_name(name) + ".jpeg")
         self._make_folder(thumbnail_path.parent)
         self._logger.info(f"Storing thumbnail for {image.uid} to {thumbnail_path}.")
         with open(thumbnail_path, "wb") as thumbnail_file:
@@ -151,7 +155,7 @@ class StorageService:
     def create_download_image_path(self, project: Project, image: Image) -> Path:
         """Get image storage path for download."""
         project_folder = self._project_download(project)
-        folder = project_folder.joinpath(image.identifier)
+        folder = project_folder.joinpath(self._path_name(image.identifier))
         self._logger.info(f"Creating image download path {folder}.")
         self._make_folder(folder)
         return folder
@@ -159,7 +163,7 @@ class StorageService:
     def cleanup_download_image_path(self, project: Project, image: Image):
         """Cleanup image storage path for download."""
         project_folder = self._project_download(project)
-        self._remove_path(project_folder.joinpath(image.identifier))
+        self._remove_path(project_folder.joinpath(self._path_name(image.identifier)))
 
     def cleanup_image_files(
         self, project: Project, images: Iterable[ImagePaths]
@@ -179,20 +183,45 @@ class StorageService:
             identifier names the image's download folder.
         """
         download = self._project_download(project)
-        own_folders = (download, self._project_processing(project))
         for image in images:
-            self._remove_path(download.joinpath(image.identifier))
+            self._remove_path(download.joinpath(self._path_name(image.identifier)))
             for recorded in (image.folder_path, image.thumbnail_path):
                 if recorded is None:
                     continue
-                path = Path(recorded)
-                if not any(path.is_relative_to(folder) for folder in own_folders):
-                    self._logger.info(
-                        f"Leaving {path} of image {image.identifier} alone: not "
-                        "under the project's download or processing folder."
-                    )
-                    continue
-                self._remove_path(path)
+                self._remove_own_path(project, Path(recorded), image.identifier)
+
+    def cleanup_image_source(self, project: Project, image: Image, path: Path) -> None:
+        """Remove the files an image was processed from.
+
+        Only under the project's download and processing folders, as
+        :meth:`cleanup_image_files` removes. A source anywhere else, such as a
+        folder the import reads the image from in place, is left as it is.
+
+        Parameters
+        ----------
+        project: Project
+            Project the image belongs to.
+        image: Image
+            Image the files are of.
+        path: Path
+            File or folder the image was processed from.
+        """
+        self._remove_own_path(project, path, image.identifier)
+
+    def _remove_own_path(self, project: Project, path: Path, identifier: str) -> None:
+        """Remove the path if it is under the project's download or processing
+        folder, and leave it as it is otherwise."""
+        own_folders = (
+            self._project_download(project),
+            self._project_processing(project),
+        )
+        if not any(path.is_relative_to(folder) for folder in own_folders):
+            self._logger.info(
+                f"Leaving {path} of image {identifier} alone: not "
+                "under the project's download or processing folder."
+            )
+            return
+        self._remove_path(path)
 
     def store_pseudonyms(self, project: Project, pseudonyms: dict[str, dict[str, Any]]):
         """Store pseudonyms for project."""
@@ -309,9 +338,25 @@ class StorageService:
                 )
             return database_dataset.storage_folder
 
-    @staticmethod
-    def _project_folder_name(name: str, uid: UUID) -> str:
-        return name + "." + str(uid)
+    @classmethod
+    def _project_folder_name(cls, name: str, uid: UUID) -> str:
+        """The folder a project name gives: the name made usable as a single
+        folder name, followed by the project uid."""
+        return cls._path_name(f"{name}.{uid}")
+
+    @classmethod
+    def _path_name(cls, name: str) -> str:
+        """A name from outside SlideTap, such as an image identifier or a
+        project name, made usable as a single file or folder name.
+
+        Path separators are replaced with underscores, so that the name cannot
+        reach outside the folder it is joined to. Raises ``ValueError`` if what
+        is left names no file or folder of its own, or names a drive.
+        """
+        safe = cls.UNSAFE_PATH_CHARACTERS.sub("_", name)
+        if safe.strip() in ("", ".", "..") or PurePath(safe).anchor:
+            raise ValueError(f"{name!r} cannot be used as a file or folder name.")
+        return safe
 
     @staticmethod
     def _dataset_folder_name(name: str, prefix: str) -> str:
@@ -362,6 +407,7 @@ class StorageService:
             folder_name = image.pseudonym
         else:
             folder_name = image.identifier
+        folder_name = self._path_name(folder_name)
         self._logger.info(
             f"Storing processed image {image.identifier} to "
             f"{project_folder.joinpath(folder_name)}."
@@ -384,7 +430,7 @@ class StorageService:
             name = image.pseudonym
         else:
             name = image.identifier
-        thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
+        thumbnail_path = thumbnails_folder.joinpath(self._path_name(name) + ".jpeg")
         self._make_folder(thumbnail_path.parent)
         self._logger.info(
             f"Storing processed thumbnail for {image.uid} to {thumbnail_path}."
@@ -392,6 +438,52 @@ class StorageService:
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
+
+    def recover_stored_image(
+        self, project: Project, image: Image, dataset: Dataset
+    ) -> bool:
+        """Take up an image stored by an attempt that did not get to record it.
+
+        An image whose folder is no longer where it is on record was moved or
+        written to the outbox by such an attempt. It is moved as it is, which
+        finds it already stored and updates its paths, and its files are taken
+        from the folder it was stored in. What the stored files say is not
+        known, so the metadata digest is cleared to count it as changed.
+
+        Parameters
+        ----------
+        project: Project
+            Project the image belongs to.
+        image: Image
+            Image to recover.
+        dataset: Dataset
+            Dataset the image is bundled in.
+
+        Returns
+        -------
+        bool
+            True if the image was recovered, False if its folder is still where
+            it is on record and it is to be stored as usual.
+
+        Raises
+        ------
+        TransientTaskError
+            If the image can be found neither where it is on record nor in the
+            outbox.
+        """
+        if image.folder_path is None or self._file_operations.exists(
+            Path(image.folder_path)
+        ):
+            return False
+        self.store_image_to_outbox(project, image, dataset)
+        if image.folder_path is not None:
+            stored = Path(image.folder_path)
+            image.files = [
+                ImageFile(uid=uuid4(), filename=str(file.relative_to(stored)))
+                for file in self._file_operations.list_files(stored)
+            ]
+        image.metadata_digest = None
+        return True
 
     def store_image_to_outbox(
         self, project: Project, image: Image, dataset: Dataset
@@ -671,17 +763,40 @@ class StorageService:
     def _remove_path(self, path: Path):
         """Remove file or folder, logging instead of raising on failure.
 
+        Only what is inside the outbox, download or processing folder is
+        removed; any other path, and these folders themselves, are left alone.
+
         Parameters
         ----------
         path: Path
             File or folder to remove.
         """
+        if not self._is_in_storage(path):
+            self._logger.error(
+                f"Refusing to remove {path}: not inside the outbox, download or "
+                "processing folder."
+            )
+            return
         if not self._file_operations.exists(path):
             return
         try:
             self._file_operations.remove(path)
         except OSError:
             self._logger.error(f"Failed to remove {path}", exc_info=True)
+
+    def _is_in_storage(self, path: Path) -> bool:
+        """Whether the path is inside, and not itself, the outbox, download or
+        processing folder."""
+        resolved = path.resolve()
+        for root in (
+            self._config.outbox,
+            self._config.download,
+            self._config.processing,
+        ):
+            resolved_root = root.resolve()
+            if resolved != resolved_root and resolved.is_relative_to(resolved_root):
+                return True
+        return False
 
     def _copy_folder(self, folder: Path, target_folder: Path, new_name: str) -> Path:
         """Copy folder into target folder under a new name.

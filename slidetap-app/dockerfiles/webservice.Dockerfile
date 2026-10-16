@@ -1,5 +1,12 @@
+# Base images are pinned to exact tags; Dependabot's docker ecosystem bumps
+# them. Build and production use the same Python image, so the interpreter the
+# venv links to exists in production.
+FROM ghcr.io/astral-sh/uv:0.12.21 AS uv
+
 # build stage
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
+FROM python:3.12.15-slim-trixie AS build
+
+COPY --from=uv /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
   UV_LINK_MODE=copy \
@@ -7,15 +14,23 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app/slidetap
 
-COPY . .
+# Dependencies first, from the workspace manifests and lockfile only, so source
+# edits don't invalidate this layer. Installs from uv.lock rather than resolving
+# against PyPI, so the image gets the versions the lockfile pins and the 14-day
+# `exclude-newer` window applies.
+COPY pyproject.toml uv.lock ./
+COPY apps/example/pyproject.toml apps/example/
+RUN --mount=type=cache,target=/root/.cache/uv \
+  uv sync --frozen --no-dev --package slidetap-example --extra web \
+  --no-install-workspace
 
-# Installs from uv.lock rather than resolving against PyPI, so the image gets
-# the versions the lockfile pins and the 14-day `exclude-newer` window applies.
+# Then the source, and the workspace packages themselves.
+COPY . .
 RUN --mount=type=cache,target=/root/.cache/uv \
   uv sync --frozen --no-dev --package slidetap-example --extra web
 
 # production stage
-FROM python:3.12-slim AS production
+FROM python:3.12.15-slim-trixie AS production
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
@@ -29,7 +44,8 @@ RUN apt-get update \
 
 RUN useradd -ms /bin/bash fastapi
 
-COPY --from=build --chown=fastapi:fastapi /app /app
+# Owned by root, so the app user can't modify the installed code.
+COPY --from=build /app /app
 ENV PATH="/app/slidetap/.venv/bin:$PATH"
 
 WORKDIR /app

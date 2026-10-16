@@ -27,6 +27,7 @@ import { useQuery } from '@tanstack/react-query'
 import React from 'react'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
+import { useObjectUrl } from 'src/hooks/use_object_url'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { Image } from 'src/models/item'
 import type { AttributeValueLayout } from 'src/models/schema/attribute_value_layout'
@@ -51,8 +52,16 @@ function ThumbnailCardMedia({ image, size }: ThumbnailProps): React.ReactElement
       return await imageApi.getThumbnail(image.uid, size)
     },
   })
+  const thumbnailUrl = useObjectUrl(thumbnailQuery.data)
 
-  if (thumbnailQuery.data === undefined) {
+  if (thumbnailQuery.isError) {
+    return (
+      <Typography variant="caption" color="error">
+        Thumbnail unavailable
+      </Typography>
+    )
+  }
+  if (thumbnailUrl === undefined) {
     return <LinearProgress />
   }
 
@@ -60,7 +69,7 @@ function ThumbnailCardMedia({ image, size }: ThumbnailProps): React.ReactElement
     <CardMedia
       component="img"
       height="100"
-      src={URL.createObjectURL(thumbnailQuery.data)}
+      src={thumbnailUrl}
       alt={image.name ?? image.identifier}
     />
   )

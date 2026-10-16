@@ -19,6 +19,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.image_processor.image_processing_step import (
     ImageProcessingStep,
 )
@@ -56,6 +57,16 @@ class ImageProcessor:
         project: Project,
         task_id: str,
     ) -> Image:
+        """Run the steps on the image, in the processing directory of the task.
+
+        What an earlier run of the same task left in its processing directory,
+        as a run on a worker that died does before the job is recovered and run
+        again under the same id, is removed first.
+
+        A step that fails with a ``TransientTaskError`` raises it as it is, so
+        that the task is retried. Any other failure is raised as an exception
+        naming the step.
+        """
         self._logger.debug(f"Processing image {image.uid} at {image.folder_path}.")
         if image.folder_path is None:
             raise FileNotFoundError(f"Image {image.uid} does not have a folder path. ")
@@ -63,6 +74,7 @@ class ImageProcessor:
         # The root of the project the image is of, as the steps read the image
         # against it; one processor serves the projects of every root.
         root_schema = self._schema_service.root_of(project).schema
+        self._storage_service.cleanup_processing_task(project, task_id)
         with TemporaryDirectory() as temp_dir:
             try:
                 for index, step in enumerate(self._steps):
@@ -76,6 +88,8 @@ class ImageProcessor:
                             Path(temp_dir).joinpath(f"step_{index}"),
                             task_id,
                         )
+                    except TransientTaskError:
+                        raise
                     except Exception as exception:
                         raise Exception(
                             f"Processing failed for {image.uid} name {image.name} "

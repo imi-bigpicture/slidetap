@@ -61,7 +61,7 @@ batch_router = APIRouter(
 
 
 @batch_router.post("/create")
-async def create_batch(
+def create_batch(
     batch: BatchCreate,
     batch_service: FromDishka[BatchService],
     logger: Logger,
@@ -90,7 +90,7 @@ async def create_batch(
 
 
 @batch_router.get("")
-async def get_batches(
+def get_batches(
     batch_service: FromDishka[BatchService],
     project_uid: UUID | None = Query(None),
     status: BatchStatus | None = Query(None),
@@ -117,7 +117,7 @@ async def get_batches(
 
 
 @batch_router.post("/batch/{batch_uid}")
-async def update_batch(
+def update_batch(
     batch_uid: UUID,
     batch: Batch,
     batch_service: FromDishka[BatchService],
@@ -137,6 +137,11 @@ async def update_batch(
     Batch
         Updated batch data if successful.
     """
+    if batch.uid != batch_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Batch uid {batch.uid} does not match path uid {batch_uid}",
+        )
     try:
         updated_batch = batch_service.update(batch)
         if updated_batch is None:
@@ -153,7 +158,7 @@ async def update_batch(
 
 
 @batch_router.post("/batch/{batch_uid}/uploadFile")
-async def upload_batch_file(
+def upload_batch_file(
     batch_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
@@ -180,7 +185,7 @@ async def upload_batch_file(
             status_code=HTTPStatus.BAD_REQUEST, detail="Invalid file upload"
         )
     try:
-        batch = await metadata_import_service.search(
+        batch = metadata_import_service.search(
             batch_uid, File(file.filename, file.content_type, file.file)
         )
         if batch is None:
@@ -211,7 +216,7 @@ async def upload_batch_file(
 
 
 @batch_router.post("/batch/{batch_uid}/pre_process")
-async def pre_process(
+def pre_process(
     batch_uid: UUID,
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
@@ -230,7 +235,7 @@ async def pre_process(
     """
     logger.info(f"Pre-processing batch {batch_uid}.")
     try:
-        batch = await image_pipeline_service.pre_process_batch(batch_uid)
+        batch = image_pipeline_service.pre_process_batch(batch_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -241,7 +246,7 @@ async def pre_process(
 
 
 @batch_router.post("/batch/{batch_uid}/process")
-async def process(
+def process(
     batch_uid: UUID,
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
@@ -261,7 +266,7 @@ async def process(
     """
     logger.info(f"Processing batch {batch_uid}.")
     try:
-        batch = await image_pipeline_service.export(batch_uid)
+        batch = image_pipeline_service.export(batch_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -272,7 +277,7 @@ async def process(
 
 
 @batch_router.post("/batch/{batch_uid}/complete")
-async def complete(
+def complete(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
     logger: Logger,
@@ -306,7 +311,7 @@ async def complete(
 
 
 @batch_router.post("/batch/{batch_uid}/reopen")
-async def reopen(
+def reopen(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
     logger: Logger,
@@ -325,7 +330,7 @@ async def reopen(
 
 
 @batch_router.get("/batch/{batch_uid}")
-async def get_batch(
+def get_batch(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
 ) -> Batch:
@@ -348,7 +353,7 @@ async def get_batch(
 
 
 @batch_router.post("/batch/{batch_uid}/remap")
-async def remap_batch(
+def remap_batch(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
     scheduler: FromDishka[Scheduler],
@@ -378,12 +383,19 @@ async def remap_batch(
     # Refused here rather than by the task, which nobody would hear.
     batch_service.assert_can_change(batch_uid)
     logger.info(f"Scheduling remap for batch {batch_uid}.")
-    await scheduler.remap_batch_attributes(batch_uid)
+    try:
+        scheduler.remap_batch_attributes(batch_uid)
+    except Exception as exception:
+        logger.error(f"Failed to schedule remap of batch {batch_uid}", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to schedule the remap, try again",
+        ) from exception
     return StatusResponse(status="scheduled")
 
 
 @batch_router.delete("/batch/{batch_uid}")
-async def delete_batch(
+def delete_batch(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
     scheduler: FromDishka[Scheduler],
@@ -417,12 +429,21 @@ async def delete_batch(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     logger.info(f"Scheduling deletion of batch {batch_uid}.")
-    await scheduler.delete_batch(batch)
+    try:
+        scheduler.delete_batch(batch)
+    except Exception as exception:
+        # The batch stays marked as deleting, and deleting it again schedules
+        # the deletion again.
+        logger.error(f"Failed to schedule deletion of batch {batch_uid}", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to schedule the deletion, delete the batch again",
+        ) from exception
     return StatusResponse(status="scheduled")
 
 
 @batch_router.get("/batch/{batch_uid}/validation")
-async def get_validation(
+def get_validation(
     batch_uid: UUID,
     validation_service: FromDishka[ValidationService],
     logger: Logger,

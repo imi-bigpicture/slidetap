@@ -54,16 +54,27 @@ export default function NewMapperModal({
     },
   })
 
-  // Reset the form to the mapper being edited, or to the first attribute schema.
-  React.useEffect(() => {
-    if (!open) {
-      return
+  // Reset the form to the mapper being edited, or to the first attribute schema,
+  // when the dialog opens and whenever what it is reset from changes while open.
+  const [resetFrom, setResetFrom] = React.useState<{
+    open: boolean
+    mapper: Mapper | undefined
+    attributeSchemas: typeof attributeSchemasQuery.data
+  }>()
+  if (
+    resetFrom === undefined ||
+    resetFrom.open !== open ||
+    resetFrom.mapper !== mapper ||
+    resetFrom.attributeSchemas !== attributeSchemasQuery.data
+  ) {
+    setResetFrom({ open, mapper, attributeSchemas: attributeSchemasQuery.data })
+    if (open) {
+      setMapperName(mapper?.name ?? 'New mapper')
+      setAttributeSchemaUid(
+        mapper?.attributeSchemaUid ?? attributeSchemasQuery.data?.[0]?.uid,
+      )
     }
-    setMapperName(mapper?.name ?? 'New mapper')
-    setAttributeSchemaUid(
-      mapper?.attributeSchemaUid ?? attributeSchemasQuery.data?.[0]?.uid,
-    )
-  }, [open, mapper, attributeSchemasQuery.data])
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {

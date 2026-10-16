@@ -311,28 +311,28 @@ class TestGetMatchingExpressionSingle:
 
 @pytest.fixture()
 def writer(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema_service_of: Callable[..., SchemaService],
 ) -> MapperService:
     return MapperService(
         None,  # type: ignore[arg-type]
         None,  # type: ignore[arg-type]
         schema_service_of(ExampleSchema()),
-        sqlite_database_service,
+        stored_database_service,
         None,  # type: ignore[arg-type]
     )
 
 
 @pytest.fixture()
 def reader(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema_service_of: Callable[..., SchemaService],
 ) -> MapperService:
     return MapperService(
         None,  # type: ignore[arg-type]
         None,  # type: ignore[arg-type]
         schema_service_of(ExampleSchema()),
-        sqlite_database_service,
+        stored_database_service,
         None,  # type: ignore[arg-type]
     )
 
@@ -343,12 +343,12 @@ class TestResolverMatchesLinearScan:
     authoritative `_linear_scan_expression` would, for every value — not just
     the hand-picked cases in `TestResolveExpression` above, which mock the DB
     queries and never touch real literal classification. Runs against a real
-    SQLite database, per erikogabrielsson's review on PR #56.
+    database, per erikogabrielsson's review on PR #56.
     """
 
     def test_resolver_matches_linear_scan_for_adversarial_values(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
         writer: MapperService,
@@ -370,9 +370,9 @@ class TestResolverMatchesLinearScan:
             "Female\n",  # newline guard: only a linear scan sees this match
         ]
 
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for expression, hits in expressions:
-                item = sqlite_database_service.add_mapping(
+                item = stored_database_service.add_mapping(
                     session, mapper_uid, expression, code_attribute
                 )
                 item.hits = hits
@@ -395,7 +395,7 @@ class TestResolutionReflectsMutations:
 
     def test_create_mapping_is_visible_to_another_instance(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
         writer: MapperService,
@@ -409,7 +409,7 @@ class TestResolutionReflectsMutations:
             )
         )
 
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert (
                 reader._resolve_expression(session, mapper_uid, "71854001")
                 == "^71854001$"
@@ -417,7 +417,7 @@ class TestResolutionReflectsMutations:
 
     def test_update_mapping_changes_what_resolves(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
         writer: MapperService,
@@ -441,13 +441,13 @@ class TestResolutionReflectsMutations:
             )
         )
 
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert reader._resolve_expression(session, mapper_uid, "Male") == "^Male$"
             assert reader._resolve_expression(session, mapper_uid, "71854001") is None
 
     def test_get_or_create_mapper_renames_rather_than_duplicating(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         writer: MapperService,
     ):
         """The mapper table is unique on the schema pair, not the name. Asking
@@ -457,8 +457,8 @@ class TestResolutionReflectsMutations:
         MapperService."""
         # Arrange
         attribute_schema_uid, root_attribute_schema_uid = uuid4(), uuid4()
-        with sqlite_database_service.get_session() as session:
-            original = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            original = stored_database_service.add_mapper(
                 session, "old-name", attribute_schema_uid, root_attribute_schema_uid
             )
             original_uid = original.uid
@@ -474,7 +474,7 @@ class TestResolutionReflectsMutations:
 
     def test_delete_mapping_removes_what_resolves(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
         writer: MapperService,
@@ -490,7 +490,7 @@ class TestResolutionReflectsMutations:
 
         writer.delete_mapping(created.uid)
 
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert reader._resolve_expression(session, mapper_uid, "71854001") is None
 
 
@@ -519,7 +519,7 @@ class TestDeletingAMappingPutsItsValuesBackToWaiting:
 
     def test_the_value_is_recorded_as_waiting_again(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
         code_attribute_schema: CodeAttributeSchema,
@@ -527,11 +527,12 @@ class TestDeletingAMappingPutsItsValuesBackToWaiting:
         writer: MapperService,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            mapping_uid = sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            mapping_uid = stored_database_service.add_mapping(
                 session, mapper_uid, f"^{mappable_value}$", code_attribute
             ).uid
-            attribute_uid = sqlite_database_service.add_attribute(
+            session.flush()
+            attribute_uid = stored_database_service.add_attribute(
                 session,
                 CodeAttribute(
                     uid=uuid4(),
@@ -542,7 +543,7 @@ class TestDeletingAMappingPutsItsValuesBackToWaiting:
                 ),
                 code_attribute_schema,
             ).uid
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert (
                 session.scalars(
                     select(DatabaseUnmappedValue).where(
@@ -556,7 +557,7 @@ class TestDeletingAMappingPutsItsValuesBackToWaiting:
         writer.delete_mapping(mapping_uid)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             recorded = session.scalars(
                 select(DatabaseUnmappedValue).where(
                     DatabaseUnmappedValue.root_attribute_uid == attribute_uid
@@ -587,13 +588,13 @@ class TestMapperSchemaUids:
     def injector(
         self,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
     ) -> MapperService:
         return MapperService(
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             None,  # type: ignore[arg-type]
         )
 
@@ -606,14 +607,14 @@ class TestMapperSchemaUids:
     def test_mapper_is_moved_to_regenerated_schema_uids(
         self,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
     ):
         # Arrange
         # The uids of a revision of the model that is no longer loaded.
         in_model, _ = self._attribute_schema_uids(schema_service)
-        with sqlite_database_service.get_session() as session:
-            existing_uid = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            existing_uid = stored_database_service.add_mapper(
                 session,
                 "diagnose",
                 uuid4(),
@@ -632,20 +633,20 @@ class TestMapperSchemaUids:
     def test_moved_mapper_keeps_its_mappings(
         self,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
     ):
         # Arrange
         in_model, _ = self._attribute_schema_uids(schema_service)
-        with sqlite_database_service.get_session() as session:
-            existing_uid = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            existing_uid = stored_database_service.add_mapper(
                 session,
                 "diagnose",
                 uuid4(),
                 uuid4(),
                 family_uid=ExampleSchema().family_uid,
             ).uid
-            mapping = sqlite_database_service.add_mapping(
+            mapping = stored_database_service.add_mapping(
                 session,
                 existing_uid,
                 "^C50.9$",
@@ -658,7 +659,7 @@ class TestMapperSchemaUids:
         injector.get_or_create_mapper("diagnose", in_model, in_model)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mappings = session.scalars(
                 select(DatabaseMappingItem).where(
                     DatabaseMappingItem.mapper_uid == existing_uid
@@ -670,15 +671,15 @@ class TestMapperSchemaUids:
     def test_an_orphaned_mapper_of_the_name_is_adopted(
         self,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
     ):
         """Stored before mappers had a family, for an attribute uid the model
         no longer has, and so given no family: the same mapper."""
         # Arrange
         in_model, _ = self._attribute_schema_uids(schema_service)
-        with sqlite_database_service.get_session() as session:
-            existing_uid = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            existing_uid = stored_database_service.add_mapper(
                 session, "diagnose", uuid4(), uuid4()
             ).uid
 
@@ -688,19 +689,19 @@ class TestMapperSchemaUids:
         # Assert
         assert mapper.uid == existing_uid
         assert mapper.attribute_schema_uid == in_model
-        with sqlite_database_service.get_session() as session:
-            adopted = sqlite_database_service.get_mapper(session, existing_uid)
+        with stored_database_service.get_session() as session:
+            adopted = stored_database_service.get_mapper(session, existing_uid)
             assert adopted.family_uid == ExampleSchema().family_uid
 
     def test_stored_mappers_are_given_their_family(
         self,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
     ):
         # Arrange
         in_model, _ = self._attribute_schema_uids(schema_service)
-        with sqlite_database_service.get_session() as session:
-            stored_uid = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            stored_uid = stored_database_service.add_mapper(
                 session, "diagnose", in_model, in_model
             ).uid
 
@@ -709,19 +710,19 @@ class TestMapperSchemaUids:
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             None,  # type: ignore[arg-type]
         ).assign_families()
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            stored = sqlite_database_service.get_mapper(session, stored_uid)
+        with stored_database_service.get_session() as session:
+            stored = stored_database_service.get_mapper(session, stored_uid)
             assert stored.family_uid == ExampleSchema().family_uid
 
     def test_two_mappers_of_a_name_in_one_family_are_refused(
         self,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
     ):
         """By the database: a mapping sheet finds a mapper by its name within
         the family, which two of them would leave to chance."""
@@ -732,12 +733,12 @@ class TestMapperSchemaUids:
         # Act & Assert
         with (
             pytest.raises(IntegrityError),
-            sqlite_database_service.get_session() as session,
+            stored_database_service.get_session() as session,
         ):
-            sqlite_database_service.add_mapper(
+            stored_database_service.add_mapper(
                 session, "diagnose", in_model, in_model, family_uid=family_uid
             )
-            sqlite_database_service.add_mapper(
+            stored_database_service.add_mapper(
                 session, "diagnose", also_in_model, also_in_model, family_uid=family_uid
             )
             session.flush()
@@ -761,19 +762,19 @@ class TestMappersAcrossRoots:
         self,
         decoy: Decoy,
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
     ) -> MapperService:
         return MapperService(
             decoy.mock(cls=AttributeService),
             None,  # type: ignore[arg-type]
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             None,  # type: ignore[arg-type]
         )
 
     def test_a_mapper_is_moved_within_its_family(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
         schema: ExampleSchema,
     ):
@@ -782,8 +783,8 @@ class TestMappersAcrossRoots:
         mapper, moved to the new attribute."""
         # Arrange
         retired_sex = uuid4()
-        with sqlite_database_service.get_session() as session:
-            existing_uid = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            existing_uid = stored_database_service.add_mapper(
                 session,
                 "sex",
                 retired_sex,
@@ -802,7 +803,7 @@ class TestMappersAcrossRoots:
 
     def test_a_mapper_of_a_provided_attribute_is_not_moved(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
         schema: ExampleSchema,
     ):
@@ -810,8 +811,8 @@ class TestMappersAcrossRoots:
         sheet of another root that uses the same name."""
         # Arrange
         example_sex = schema.patient.attributes["sex"].uid
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_mapper(
                 session,
                 "sex",
                 example_sex,
@@ -824,8 +825,8 @@ class TestMappersAcrossRoots:
             injector.get_or_create_mapper(
                 "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
             )
-        with sqlite_database_service.get_session() as session:
-            mapper = sqlite_database_service.get_mapper_by_name(
+        with stored_database_service.get_session() as session:
+            mapper = stored_database_service.get_mapper_by_name(
                 session, "sex", schema.family_uid
             )
             assert mapper is not None
@@ -833,14 +834,14 @@ class TestMappersAcrossRoots:
 
     def test_a_mapper_of_another_family_is_left_alone(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
         schema: ExampleSchema,
     ):
         """The name is only unique within a family."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            existing_uid = sqlite_database_service.add_mapper(
+        with stored_database_service.get_session() as session:
+            existing_uid = stored_database_service.add_mapper(
                 session, "sex", uuid4(), uuid4(), family_uid=uuid4()
             ).uid
 
@@ -851,8 +852,8 @@ class TestMappersAcrossRoots:
 
         # Assert
         assert mapper.uid != existing_uid
-        with sqlite_database_service.get_session() as session:
-            created = sqlite_database_service.get_mapper(session, mapper.uid)
+        with stored_database_service.get_session() as session:
+            created = stored_database_service.get_mapper(session, mapper.uid)
             assert created.family_uid == schema.family_uid
 
     def test_the_copy_is_found_by_its_schemas(
@@ -876,7 +877,7 @@ class TestMappersAcrossRoots:
 
     def test_injecting_a_sheet_again_updates_a_mapping(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         injector: MapperService,
     ):
         # Arrange
@@ -903,8 +904,8 @@ class TestMappersAcrossRoots:
         # Assert
         assert updated.uid == original.uid
         assert updated.attribute.original_value == "Male"
-        with sqlite_database_service.get_session() as session:
-            stored = sqlite_database_service.get_mappings_for_mapper(
+        with stored_database_service.get_session() as session:
+            stored = stored_database_service.get_mappings_for_mapper(
                 session, mapper.uid
             )
             assert [item.attribute.original_value for item in stored] == ["Male"]

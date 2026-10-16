@@ -31,10 +31,32 @@ class ExampleImageImportInterface(ImageImportInterface):
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def download(self, image: Image, project: Project) -> tuple[Path, Iterable[Path]]:
+        """Find the image file in the test data folder.
+
+        The file is ``<identifier>/<identifier><extension>`` in the test data
+        folder. The extension is appended rather than replacing a suffix, so an
+        identifier with a dot, such as ``A.1``, keeps all of its name.
+
+        Raises
+        ------
+        ValueError
+            If the identifier is not a single folder name, so that the file
+            would be looked for outside the test data folder.
+        FileNotFoundError
+            If there is no such file.
+        """
         image_folder = self._image_folder.joinpath(image.identifier)
-        image_path = image_folder.joinpath(image.identifier).with_suffix(
-            self._image_extension
-        )
+        test_data_folder = self._image_folder.resolve()
+        if (
+            Path(image.identifier).name != image.identifier
+            or image.identifier in ("", ".", "..")
+            or image_folder.resolve().parent != test_data_folder
+        ):
+            raise ValueError(
+                f"Image identifier {image.identifier!r} is not a folder name in "
+                "the test data folder."
+            )
+        image_path = image_folder.joinpath(f"{image.identifier}{self._image_extension}")
         self._logger.debug(f"Image path: {image_path}")
         if not image_path.exists():
             raise FileNotFoundError(

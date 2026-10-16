@@ -332,7 +332,7 @@ class DicomProcessingStep(ImageProcessingStep):
                 raise ValueError(
                     f"The conversion of {image.identifier} did not ask for metadata."
                 )
-            return [Path(file) for file in files], written[-1]
+            return [Path(str(file)) for file in files], written[-1]
 
     def _resave_dicom(
         self,
@@ -401,7 +401,7 @@ class DicomProcessingStep(ImageProcessingStep):
         self._logger.info(
             f"Re-saved DICOM for {image.uid} in {path}. Created files {files}."
         )
-        return [Path(file) for file in files]
+        return [Path(str(file)) for file in files]
 
 
 class CreateThumbnails(ImageProcessingStep):
@@ -461,6 +461,13 @@ class CreateThumbnails(ImageProcessingStep):
 
 
 class FinishingStep(ImageProcessingStep):
+    """Step that clears the image's source path, optionally removing the files.
+
+    With ``remove_source`` the file or folder the image was processed from is
+    removed through the storage service, which only removes what is under the
+    project's download or processing folder.
+    """
+
     def __init__(self, remove_source: bool = False):
         self._remove_source = remove_source
         super().__init__()
@@ -475,11 +482,15 @@ class FinishingStep(ImageProcessingStep):
         working_folder: Path,
         task_id: str,
     ) -> tuple[Path, Image]:
+        # Not where the earlier steps left the processed image, which is what
+        # the processing hands on.
         if (
             self._remove_source
             and image.folder_path is not None
-            and Path(image.folder_path).exists()
+            and Path(image.folder_path) != path
         ):
-            os.remove(image.folder_path)
+            storage_service.cleanup_image_source(
+                project, image, Path(image.folder_path)
+            )
         image.folder_path = None
         return path, image

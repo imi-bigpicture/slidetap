@@ -25,7 +25,9 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from procrastinate import App as TaskApp
+from starlette.datastructures import State
 from starlette.routing import Mount, Route, WebSocketRoute
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
@@ -92,18 +94,23 @@ class SlideTapWebAppFactory:
             with database_service.get_session() as session:
                 assert_up_to_date(session)
 
-            if config.cors_origins:
-                cls._setup_cors(app, config.cors_origins)
+            app.state.cors_origins = cls._parse_cors_origins(config.cors_origins)
 
             # Built now rather than on first use, so that a plugin whose roots or
             # migrations do not match the database refuses to start.
             await container.get(SchemaService)
 
+            # Opened synchronously: the routes defer tasks from worker threads,
+            # through the sync pool this opens, and an async pool bound to this
+            # event loop cannot be used from them.
             task_app = await container.get(TaskApp)
-            async with task_app.open_async():
+            task_app.open()
+            try:
                 logger.info("SlideTap FastAPI app started.")
                 yield
                 logger.info("Shutting down SlideTap FastAPI app.")
+            finally:
+                task_app.close()
 
             image_cache = await container.get(ImageCache)
             image_cache.close()
@@ -117,6 +124,7 @@ class SlideTapWebAppFactory:
             lifespan=lifespan,
         )
         setup_dishka(container=container, app=app)
+        app.add_middleware(ConfiguredCorsMiddleware)
         app.add_exception_handler(NotFoundError, cls._not_found)
         app.add_exception_handler(ProjectNotEditableError, cls._refuse_change)
         cls._create_and_register_routers(app, extra_routers)
@@ -210,11 +218,41 @@ class SlideTapWebAppFactory:
         )
 
     @staticmethod
-    def _setup_cors(app: FastAPI, cors_origins: str):
-        """Setup CORS middleware for the FastAPI app."""
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=[cors_origins],
+    def _parse_cors_origins(cors_origins: str | None) -> list[str]:
+        """The origins in a comma-separated list, with empty entries left out."""
+        if cors_origins is None:
+            return []
+        return [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+
+
+class ConfiguredCorsMiddleware:
+    """CORS for the origins in ``app.state.cors_origins``.
+
+    The origins come from the config, which is only read when the app starts,
+    after the middleware stack is built. The CORS middleware is therefore
+    created on the first request, from the origins set at startup. Without
+    origins, requests pass through unchanged.
+    """
+
+    def __init__(self, app: ASGIApp):
+        self._app = app
+        self._handler: ASGIApp | None = None
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self._app(scope, receive, send)
+            return
+        if self._handler is None:
+            self._handler = self._create_handler(scope["app"].state)
+        await self._handler(scope, receive, send)
+
+    def _create_handler(self, state: State) -> ASGIApp:
+        cors_origins: list[str] = getattr(state, "cors_origins", [])
+        if not cors_origins:
+            return self._app
+        return CORSMiddleware(
+            self._app,
+            allow_origins=cors_origins,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],

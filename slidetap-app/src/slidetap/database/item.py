@@ -22,6 +22,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import (
     Any,
+    ClassVar,
     Generic,
     TypeVar,
 )
@@ -130,6 +131,7 @@ class DatabaseItem(Base, Generic[ItemType]):
             Uuid,
             ForeignKey("tag.uid"),
             primary_key=True,
+            index=True,
         ),
     )
 
@@ -155,7 +157,10 @@ class DatabaseItem(Base, Generic[ItemType]):
     )
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
     review_status: Mapped[ReviewStatus] = mapped_column(
-        Enum(ReviewStatus), default=ReviewStatus.NOT_REVIEWED, index=True
+        Enum(ReviewStatus),
+        default=ReviewStatus.NOT_REVIEWED,
+        server_default=ReviewStatus.NOT_REVIEWED.name,
+        index=True,
     )
     last_saved: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     """When a user last saved this item. Empty for one nobody has edited: an
@@ -308,9 +313,13 @@ class DatabaseObservation(DatabaseItem[Observation]):
     )
 
     # For relations
-    image_uid: Mapped[UUID | None] = mapped_column(ForeignKey("image.uid"))
-    sample_uid: Mapped[UUID | None] = mapped_column(ForeignKey("sample.uid"))
-    annotation_uid: Mapped[UUID | None] = mapped_column(ForeignKey("annotation.uid"))
+    image_uid: Mapped[UUID | None] = mapped_column(ForeignKey("image.uid"), index=True)
+    sample_uid: Mapped[UUID | None] = mapped_column(
+        ForeignKey("sample.uid"), index=True
+    )
+    annotation_uid: Mapped[UUID | None] = mapped_column(
+        ForeignKey("annotation.uid"), index=True
+    )
 
     # Relationships
     image: Mapped[DatabaseImage | None] = relationship(
@@ -434,7 +443,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     )
 
     # For relations
-    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
+    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"), index=True)
 
     # Relationships
     image: Mapped[DatabaseImage | None] = relationship(
@@ -489,7 +498,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         observations = defaultdict(list)
         for observation in self.observations:
             if observation.selected:
-                observations[observation.dataset_uid].append(observation.uid)
+                observations[observation.schema_uid].append(observation.uid)
         return Annotation(
             uid=self.uid,
             identifier=self.identifier,
@@ -518,7 +527,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
                 if self.image is not None and self.image.selected
                 else None
             ),
-            observation=observations,
+            observations=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
@@ -532,7 +541,7 @@ class DatabaseImageFile(Base):
 
     # For relations
     # TODO should optional be allowed here?
-    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
+    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"), index=True)
 
     # Relations
     image: Mapped[DatabaseImage] = relationship(
@@ -558,6 +567,16 @@ class DatabaseImageFile(Base):
 
 
 class DatabaseImage(DatabaseItem[Image]):
+    FAILED_STATUSES: ClassVar[tuple[ImageStatus, ...]] = (
+        ImageStatus.DOWNLOADING_FAILED,
+        ImageStatus.PRE_PROCESSING_FAILED,
+        ImageStatus.POST_PROCESSING_FAILED,
+        ImageStatus.STORING_FAILED,
+    )
+    """The statuses of an image a phase failed in. Such an image is not valid,
+    whatever its attributes and relations say, both on the model and in
+    queries."""
+
     # Table for mapping many-to-many samples to images
     sample_to_image = Table(
         "sample_to_image",
@@ -573,6 +592,7 @@ class DatabaseImage(DatabaseItem[Image]):
             Uuid,
             ForeignKey("image.uid"),
             primary_key=True,
+            index=True,
         ),
     )
     uid: Mapped[UUID] = mapped_column(
@@ -679,13 +699,7 @@ class DatabaseImage(DatabaseItem[Image]):
             cls.valid_attributes,
             cls.valid_relations,
             cls.valid_pseudonym,
-            cls.status.notin_(
-                [
-                    ImageStatus.DOWNLOADING_FAILED,
-                    ImageStatus.PRE_PROCESSING_FAILED,
-                    ImageStatus.POST_PROCESSING_FAILED,
-                ]
-            ),
+            cls.status.notin_(cls.FAILED_STATUSES),
         )
 
     @hybrid_property
@@ -751,12 +765,14 @@ class DatabaseImage(DatabaseItem[Image]):
 
     @hybrid_property
     def failed(self) -> bool:
-        return (
-            self.downloading_failed
-            or self.pre_processing_failed
-            or self.post_processing_failed
-            or self.storing_failed
-        )
+        """Return True if a phase of the image failed, see
+        ``FAILED_STATUSES``."""
+        return self.status in self.FAILED_STATUSES
+
+    @failed.inplace.expression
+    @classmethod
+    def _failed_expression(cls):
+        return cls.status.in_(cls.FAILED_STATUSES)
 
     @property
     def model(self) -> Image:
@@ -980,6 +996,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             Uuid,
             ForeignKey("sample.uid"),
             primary_key=True,
+            index=True,
         ),
     )
 

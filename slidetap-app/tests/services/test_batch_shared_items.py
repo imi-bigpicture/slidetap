@@ -14,7 +14,7 @@
 
 """What a batch searched again does to items another batch hangs off.
 
-Against a real SQLite database rather than mocks: what is being pinned is what
+Against a real database rather than mocks: what is being pinned is what
 the delete leaves behind, which is decided by the ORM cascades and by which
 rows the queries match.
 
@@ -62,45 +62,45 @@ def schema_service(
 @pytest.fixture()
 def batch_service(
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> BatchService:
-    validation_service = ValidationService(schema_service, sqlite_database_service)
+    validation_service = ValidationService(schema_service, stored_database_service)
     review_service = ReviewService(
-        schema_service, validation_service, sqlite_database_service
+        schema_service, validation_service, stored_database_service
     )
     return BatchService(
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
 
 @pytest.fixture()
 def stored_project(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     dataset: Dataset,
     project: Project,
 ) -> Project:
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        sqlite_database_service.add_project(session, project)
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored_database_service.add_project(session, project)
         session.commit()
     return project
 
 
 @pytest.fixture()
 def batches(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     stored_project: Project,
 ) -> tuple[UUID, UUID]:
     """Batch A, searched first, and batch B, searched after it."""
-    with sqlite_database_service.get_session() as session:
-        first = sqlite_database_service.add_batch(
+    with stored_database_service.get_session() as session:
+        first = stored_database_service.add_batch(
             session, BatchCreate(name="A", project_uid=stored_project.uid)
         )
         first.created = datetime.datetime(2026, 1, 1)
-        second = sqlite_database_service.add_batch(
+        second = stored_database_service.add_batch(
             session, BatchCreate(name="B", project_uid=stored_project.uid)
         )
         second.created = datetime.datetime(2026, 2, 1)
@@ -149,7 +149,7 @@ def identifiers(session: Session) -> set[str]:
 class TestMoveSharedItemsToOtherBatch:
     def test_item_another_batch_hangs_off_is_moved(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -157,7 +157,7 @@ class TestMoveSharedItemsToOtherBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -185,12 +185,12 @@ class TestMoveSharedItemsToOtherBatch:
 
         # Assert
         assert moved == 1
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, patient_uid).batch_uid == second
 
     def test_item_only_this_batch_hangs_off_is_left(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -198,7 +198,7 @@ class TestMoveSharedItemsToOtherBatch:
     ):
         # Arrange
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -218,12 +218,12 @@ class TestMoveSharedItemsToOtherBatch:
 
         # Assert
         assert moved == 0
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, patient_uid).batch_uid == first
 
     def test_moved_to_earliest_of_the_batches_hanging_off_it(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         stored_project: Project,
         schema: ExampleSchema,
@@ -232,8 +232,8 @@ class TestMoveSharedItemsToOtherBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
-            third = sqlite_database_service.add_batch(
+        with stored_database_service.get_session() as session:
+            third = stored_database_service.add_batch(
                 session, BatchCreate(name="C", project_uid=stored_project.uid)
             )
             third.created = datetime.datetime(2026, 3, 1)
@@ -264,12 +264,12 @@ class TestMoveSharedItemsToOtherBatch:
         batch_service.move_shared_items_to_other_batch(first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, patient_uid).batch_uid == second
 
     def test_search_again_keeps_the_other_batch_whole(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         schema: ExampleSchema,
@@ -278,7 +278,7 @@ class TestMoveSharedItemsToOtherBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -302,10 +302,10 @@ class TestMoveSharedItemsToOtherBatch:
 
         # Act
         batch_service.move_shared_items_to_other_batch(first)
-        clear_batch(sqlite_database_service, schema_service, first)
+        clear_batch(stored_database_service, schema_service, first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert identifiers(session) == {"patient-1", "case-b"}
             case_b = session.scalars(
                 select(DatabaseSample).where(DatabaseSample.identifier == "case-b")
@@ -314,7 +314,7 @@ class TestMoveSharedItemsToOtherBatch:
 
     def test_search_again_keeps_issues_on_a_moved_item(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         schema: ExampleSchema,
@@ -323,7 +323,7 @@ class TestMoveSharedItemsToOtherBatch:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -335,7 +335,7 @@ class TestMoveSharedItemsToOtherBatch:
                 "case-b",
                 parents=[patient],
             )
-            sqlite_database_service.add_review_issue(
+            stored_database_service.add_review_issue(
                 session,
                 patient,
                 case_b,
@@ -346,10 +346,10 @@ class TestMoveSharedItemsToOtherBatch:
 
         # Act
         batch_service.move_shared_items_to_other_batch(first)
-        clear_batch(sqlite_database_service, schema_service, first)
+        clear_batch(stored_database_service, schema_service, first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             issue = session.scalars(select(DatabaseReviewIssue)).one()
             assert issue.item.identifier == "patient-1"
             assert issue.review_unit.identifier == "case-b"
@@ -359,7 +359,7 @@ class TestMoveSharedItemsToOtherBatch:
 class TestDeleteItemsLeavesOtherBatchesAlone:
     def test_child_in_another_batch_survives_its_parent(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -367,7 +367,7 @@ class TestDeleteItemsLeavesOtherBatchesAlone:
     ):
         # Arrange
         first, second = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -383,16 +383,16 @@ class TestDeleteItemsLeavesOtherBatchesAlone:
             case_b_uid = case_b.uid
 
         # Act
-        clear_batch(sqlite_database_service, schema_service, first)
+        clear_batch(stored_database_service, schema_service, first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert stored_sample(session, case_b_uid).parents == set()
             assert identifiers(session) == {"case-b"}
 
     def test_child_in_the_same_batch_goes_with_it(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
         dataset: Dataset,
@@ -400,7 +400,7 @@ class TestDeleteItemsLeavesOtherBatchesAlone:
     ):
         # Arrange
         first, _ = batches
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patient = sample(
                 session, dataset.uid, first, schema.patient_schema_uid, "patient-1"
             )
@@ -423,9 +423,9 @@ class TestDeleteItemsLeavesOtherBatchesAlone:
             session.commit()
 
         # Act
-        clear_batch(sqlite_database_service, schema_service, first)
+        clear_batch(stored_database_service, schema_service, first)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert identifiers(session) == set()
             assert session.execute(select(DatabaseSample.sample_to_sample)).all() == []

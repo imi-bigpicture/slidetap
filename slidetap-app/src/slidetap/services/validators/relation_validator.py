@@ -302,7 +302,7 @@ class RelationValidator:
             subject = None
             relation = None
         satisfied = subject is not None and subject.selected
-        if other_side and satisfied:
+        if other_side and subject is not None and subject.selected:
             self._logger.debug(
                 f"Validation relations for {subject.uid} as other side of "
                 f"observation {observation.uid}."

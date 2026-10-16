@@ -33,14 +33,13 @@ export default function ObservationLinkage({
   handleItemOpen,
   setItem,
 }: ObservationLinkageProps): ReactElement {
-  const handleObservationItemsUpdate = (
-    schema_uid: string,
-    references: string[],
-  ): void => {
-    const updatedItemItem: [string, string] = [schema_uid, references[0]]
-    const updatedItem = { ...item, item: updatedItemItem }
-    setItem(updatedItem)
-  }
+  /** Sets the one relation the observation has, on the field it is held in. */
+  const handleObservationItemsUpdate =
+    (field: 'sample' | 'image' | 'annotation') =>
+    (schema_uid: string, references: string[]): void => {
+      const updatedRelation: [string, string] = [schema_uid, references[0]]
+      setItem({ ...item, [field]: updatedRelation })
+    }
 
   const relation = [item.image, item.sample, item.annotation].find(
     (relation) => relation !== null,
@@ -57,7 +56,7 @@ export default function ObservationLinkage({
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
-        handleItemReferencesUpdate={handleObservationItemsUpdate}
+        handleItemReferencesUpdate={handleObservationItemsUpdate('sample')}
       />
     )
   }
@@ -70,7 +69,7 @@ export default function ObservationLinkage({
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
-        handleItemReferencesUpdate={handleObservationItemsUpdate}
+        handleItemReferencesUpdate={handleObservationItemsUpdate('image')}
       />
     )
   }
@@ -83,7 +82,7 @@ export default function ObservationLinkage({
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
-        handleItemReferencesUpdate={handleObservationItemsUpdate}
+        handleItemReferencesUpdate={handleObservationItemsUpdate('annotation')}
       />
     )
   }

@@ -60,24 +60,30 @@ export default function DisplayCodeValue({
 
   const [inputValue, setInputValue] = React.useState<string>(committedText)
   const [options, setOptions] = React.useState<CodeSuggestion[]>([])
-  const [loading, setLoading] = React.useState(false)
+  /** What the options were last looked up for. The lookup is under way for as
+   * long as that is not what the field holds. */
+  const [searched, setSearched] = React.useState<{
+    schemaUid: string
+    text: string
+  } | null>(null)
+  const loading =
+    !readOnly && (searched?.schemaUid !== schema.uid || searched.text !== inputValue)
   /** The text to map by that was typed here, if any. Kept so that a value on
    * its way to the mappers can be told from one that has already been past
    * them: the first is waiting, the second is what no mapping matched. */
   const [typedMappable, setTypedMappable] = React.useState<string | null>(null)
 
   // Re-sync the input when the parent commits a new value to the attribute.
-  React.useEffect(() => {
+  // The committed text captures every attribute field that affects the display.
+  const [syncedText, setSyncedText] = React.useState<string>(committedText)
+  if (syncedText !== committedText) {
+    setSyncedText(committedText)
     setInputValue(committedText)
-    // Intentionally depend only on committedText: it captures every relevant
-    // attribute field that affects the display.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [committedText])
+  }
 
   React.useEffect(() => {
     if (readOnly) return
     let cancelled = false
-    setLoading(true)
     const handle = window.setTimeout(() => {
       attributeApi
         .searchCodes(schema.uid, inputValue, 20)
@@ -88,7 +94,7 @@ export default function DisplayCodeValue({
           if (!cancelled) setOptions([])
         })
         .finally(() => {
-          if (!cancelled) setLoading(false)
+          if (!cancelled) setSearched({ schemaUid: schema.uid, text: inputValue })
         })
     }, 250)
     return () => {

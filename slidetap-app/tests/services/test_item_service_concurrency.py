@@ -35,7 +35,7 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
     def test_a_result_losing_the_race_uses_the_patient_the_winner_created(
         self,
         item_service,
-        sqlite_database_service,
+        stored_database_service,
         schemas,
         dataset,
         batches,
@@ -45,7 +45,7 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
         # won the race.
         self._import(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas,
             dataset,
             batches[0],
@@ -67,7 +67,7 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
         # The lookup as the loser of the race sees it: at the moment it asks,
         # the winner's patient is inserted but not committed, so it is not
         # there to be found. Once only -- the retry is meant to see it.
-        original = sqlite_database_service.get_items_by_identifier
+        original = stored_database_service.get_items_by_identifier
         blinded = {"used": False}
 
         def blind_once(session, items):
@@ -78,11 +78,11 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
             return {key: item for key, item in found.items() if key[2] != "PATIENT-1"}
 
         monkeypatch.setattr(
-            sqlite_database_service, "get_items_by_identifier", blind_once
+            stored_database_service, "get_items_by_identifier", blind_once
         )
 
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             item_service.add_search_result(result, [], session=session)
             session.commit()
 
@@ -91,7 +91,7 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
             "the lookup was never blinded, so this ran the ordinary dedup and "
             "not the race it is about"
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             patients = (
                 session.scalars(
                     select(DatabaseSample).filter_by(identifier="PATIENT-1")

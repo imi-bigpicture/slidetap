@@ -96,7 +96,7 @@ class DatasetService:
                 attributes = dataset.attributes.values()
             database_dataset.attributes = set(
                 self._attribute_service.create_or_update_attributes(
-                    attributes, session=session
+                    attributes, session=session, held=database_dataset.attributes
                 )
             )
 

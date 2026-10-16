@@ -20,28 +20,43 @@
  * timeout for active users.
  *
  * The hook:
- * - Calls keepAlive every KEEPALIVE_INTERVAL_MS (default: 5 minutes)
- * - Only runs when user is logged in
- * - Stops when user becomes inactive (optional)
+ * - Checks every KEEPALIVE_INTERVAL_MS (default: 5 minutes)
+ * - Only runs while the user is logged in, starting on login
+ * - Calls keepAlive only if the user has used the page (pointer, keyboard or
+ *   wheel) since the last check, so an idle session still times out
  */
 
 import { useEffect, useRef } from 'react'
+import { useIsLoggedIn } from 'src/hooks/use_is_logged_in'
 import loginApi from 'src/services/api/login_api'
-import auth from 'src/services/auth'
 
-// Call keep-alive every 5 minutes
+// Check for activity every 5 minutes
 const KEEPALIVE_INTERVAL_MS = 5 * 60 * 1000
+
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel'] as const
 
 export function usePeriodicKeepAlive(): void {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isLoggedIn = useIsLoggedIn()
 
   useEffect(() => {
-    // Only run if user is logged in
-    if (!auth.isLoggedIn()) {
+    if (!isLoggedIn) {
       return
     }
 
+    let activeSinceLastCheck = false
+    const markActive = (): void => {
+      activeSinceLastCheck = true
+    }
+    for (const eventName of ACTIVITY_EVENTS) {
+      window.addEventListener(eventName, markActive, { passive: true })
+    }
+
     const performKeepAlive = (): void => {
+      if (!activeSinceLastCheck) {
+        return
+      }
+      activeSinceLastCheck = false
       loginApi
         .keepAlive()
         .then(() => {
@@ -58,12 +73,15 @@ export function usePeriodicKeepAlive(): void {
 
     // Cleanup on unmount or when user logs out
     return () => {
+      for (const eventName of ACTIVITY_EVENTS) {
+        window.removeEventListener(eventName, markActive)
+      }
       if (intervalRef.current !== null) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
     }
-  }, []) // Empty dependency array - only set up once
+  }, [isLoggedIn])
 
   // No return value needed - this hook just manages the side effect
 }

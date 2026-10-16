@@ -29,8 +29,12 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     Uuid,
+    inspect,
+    text,
+    update,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
+from sqlalchemy.orm.attributes import set_committed_value
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
@@ -73,6 +77,15 @@ class DatabaseMapper(Base, Generic[AttributeType]):
     __table_args__ = (
         UniqueConstraint("attribute_schema_uid", "root_attribute_schema_uid"),
         UniqueConstraint("name", "family_uid", name="uq_mapper_name_family_uid"),
+        # The constraint above holds nothing for mappers without a family, as
+        # nulls are distinct to it. Their names are unique among themselves.
+        Index(
+            "uq_mapper_name_without_family",
+            "name",
+            unique=True,
+            sqlite_where=text("family_uid IS NULL"),
+            postgresql_where=text("family_uid IS NULL"),
+        ),
     )
     __tablename__ = "mapper"
 
@@ -176,7 +189,30 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         return body
 
     def increment_hits(self):
-        self.hits += 1
+        """Count one more value mapped by the item.
+
+        A stored item is counted by an ``UPDATE ... SET hits = hits + 1`` run
+        at once, so that imports mapping with the same item in parallel each
+        add their own hit rather than writing back the count they read. The
+        count held by the instance goes up by one as well, without marking it
+        changed, so that ordering by hits in the session sees the hit and a
+        flush does not write the count back. An item not yet stored has no row
+        to update, and is counted on the instance for its insert.
+        """
+        state = inspect(self)
+        session = object_session(self)
+        if session is None or not state.persistent:
+            self.hits = (self.hits or 0) + 1
+            return
+        # On the connection rather than the session, so that it neither
+        # flushes first nor synchronizes the instance, whose count is set
+        # below.
+        session.connection().execute(
+            update(DatabaseMappingItem)
+            .where(DatabaseMappingItem.uid == self.uid)
+            .values(hits=DatabaseMappingItem.hits + 1)
+        )
+        set_committed_value(self, "hits", (self.hits or 0) + 1)
 
     @property
     def model(self):

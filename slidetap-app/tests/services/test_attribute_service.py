@@ -373,6 +373,7 @@ class TestAttributeService:
             )
 
 
+@pytest.mark.unittest
 class TestEmptyAttributeFromSchema:
     """A created item carries the schema's defaults, which is the only way a
     read-only attribute — one the curator cannot set — ever gets a value."""

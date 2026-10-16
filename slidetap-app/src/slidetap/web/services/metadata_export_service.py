@@ -40,11 +40,23 @@ class MetadataExportService:
         self._metadata_export_interface = metadata_export_interface
         self._logger = logging.getLogger(__name__)
 
-    async def export(self, project: Project):
+    def export(self, project: Project):
+        """Set the project as exporting and queue the export of its metadata.
+
+        An export that cannot be queued sets the project back as completed,
+        rather than leave it exporting with nothing exporting it, and raises.
+        """
         self._logger.info(f"Exporting project {project}.")
         self._schema_service.assert_can_change(project)
         self._project_service.set_as_exporting(project)
-        await self._scheduler.metadata_project_export(project)
+        try:
+            self._scheduler.metadata_project_export(project)
+        except Exception:
+            self._logger.error(
+                f"Failed to queue export of project {project.uid}", exc_info=True
+            )
+            self._project_service.revert_export(project.uid)
+            raise
 
     def preview_item(self, item_uid: UUID) -> str | None:
         """A preview of the item as it would be exported, None where the

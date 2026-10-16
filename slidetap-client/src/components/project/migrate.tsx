@@ -129,6 +129,8 @@ function StartMigration({ project }: MigrateProps): ReactElement {
   const [open, setOpen] = React.useState(false)
   const startMutation = useMutation({
     mutationFn: () => projectApi.createMigration(project.uid),
+    // Its error is shown beside the action.
+    meta: { handlesError: true },
     onSuccess: (migration) => {
       queryClient.setQueryData(queryKeys.project.migration(project.uid), migration)
       void queryClient.invalidateQueries({
@@ -206,6 +208,7 @@ function MigrationInProgress({
   }
   const revertMutation = useMutation({
     mutationFn: () => projectApi.revertMigration(project.uid),
+    meta: { handlesError: true },
     onSuccess: (updatedProject) => {
       queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
       queryClient.setQueryData(migrationKey, null)
@@ -214,6 +217,7 @@ function MigrationInProgress({
   })
   const submitMutation = useMutation({
     mutationFn: () => projectApi.submitMigration(project.uid),
+    meta: { handlesError: true },
     onSuccess: (submitted) => {
       queryClient.setQueryData(migrationKey, submitted)
     },
@@ -456,6 +460,8 @@ function useResolveIssue(
   return useMutation({
     mutationFn: (attribute: Attribute<AttributeValueTypes> | null) =>
       projectApi.resolveMigrationAttributeIssue(project.uid, issue.uid, attribute),
+    // Its error is shown beside the issue.
+    meta: { handlesError: true },
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.project.migration(project.uid),

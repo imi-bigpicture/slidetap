@@ -25,6 +25,10 @@ const containerBreakpoints: Record<string, number> = {
   xl: 1024,
 }
 
+/** The `sx` a span comes to: the item's own placement, and the span it takes
+ * under each container query. */
+type ContainerSpanSx = Record<string, string | number | { gridColumn: string }>
+
 /**
  * Grid placement for something laid out in twelfths of its container.
  *
@@ -44,11 +48,11 @@ const containerBreakpoints: Record<string, number> = {
 export const getContainerSpanSx = (
   width: Partial<Record<Breakpoint, number>>,
   expand: boolean,
-): Record<string, any> => {
+): ContainerSpanSx => {
   if (expand) {
     return { gridColumn: '1 / -1' }
   }
-  const sx: Record<string, any> = {
+  const sx: ContainerSpanSx = {
     gridColumn: `span ${width.xs ?? 12}`,
     // A grid item will not shrink below its content unless told to, so a long
     // label spills over the cell beside it instead of wrapping inside its own.

@@ -69,18 +69,18 @@ def add_samples(
 class TestItemNames:
     def test_names_are_limited_to_the_batch(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         dataset: Dataset,
         project: Project,
     ):
         # Arrange
-        added = add_samples(sqlite_database_service, sample_schema, dataset, project)
+        added = add_samples(stored_database_service, sample_schema, dataset, project)
         first_uid, first_batch_uid = added["first"]
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            names = sqlite_database_service.get_item_names(
+        with stored_database_service.get_session() as session:
+            names = stored_database_service.get_item_names(
                 session,
                 sample_schema.uid,
                 dataset.uid,
@@ -92,17 +92,17 @@ class TestItemNames:
 
     def test_names_of_every_batch_without_one(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         dataset: Dataset,
         project: Project,
     ):
         # Arrange
-        added = add_samples(sqlite_database_service, sample_schema, dataset, project)
+        added = add_samples(stored_database_service, sample_schema, dataset, project)
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            names = sqlite_database_service.get_item_names(
+        with stored_database_service.get_session() as session:
+            names = stored_database_service.get_item_names(
                 session, sample_schema.uid, dataset.uid
             )
 

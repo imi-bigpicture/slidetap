@@ -24,6 +24,7 @@ rather than written.
 import dataclasses
 from datetime import datetime
 
+import pytest
 from wsidicom.conceptcode import SpecimenStainsCode
 from wsidicom.metadata import (
     Equipment,
@@ -64,6 +65,7 @@ def _metadata(
     )
 
 
+@pytest.mark.unittest
 class TestMetadataDigest:
     def test_same_metadata_fingerprints_the_same(self):
         assert DicomMetadataWriter().digest(
@@ -108,6 +110,7 @@ class TestMetadataDigest:
         assert digest == DicomMetadataWriter().digest(metadata)
 
 
+@pytest.mark.unittest
 class TestSourceMetadata:
     """What the file said about itself, kept from the reading of it."""
 
@@ -170,6 +173,7 @@ class TestSourceMetadata:
         assert DicomMetadataWriter().recorded("{not json") is None
 
 
+@pytest.mark.unittest
 class TestIccProfiles:
     """The one thing json does not carry, taken from the file being written."""
 

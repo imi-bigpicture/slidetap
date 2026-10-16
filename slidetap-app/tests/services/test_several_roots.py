@@ -19,7 +19,7 @@ a new version of a model changes an attribute: the patient schema keeps its
 uid, and holds a sex of another uid with other allowed values. A patient is
 only valid when read against the root of its own project.
 
-Against a real SQLite database: which root an item is read against is decided
+Against a real database: which root an item is read against is decided
 by the project its dataset belongs to.
 """
 
@@ -150,18 +150,18 @@ def schema_service(
 
 @pytest.fixture()
 def validation_service(
-    schema_service: SchemaService, sqlite_database_service: DatabaseService
+    schema_service: SchemaService, stored_database_service: DatabaseService
 ) -> ValidationService:
-    return ValidationService(schema_service, sqlite_database_service)
+    return ValidationService(schema_service, stored_database_service)
 
 
 @pytest.fixture()
 def review_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> ReviewService:
-    return ReviewService(schema_service, validation_service, sqlite_database_service)
+    return ReviewService(schema_service, validation_service, stored_database_service)
 
 
 @pytest.fixture()
@@ -169,16 +169,16 @@ def mapper_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
     review_service: ReviewService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> MapperService:
     attribute_service = AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
     return MapperService(
         attribute_service,
         validation_service,
         schema_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
@@ -189,18 +189,18 @@ def item_service(
     validation_service: ValidationService,
     review_service: ReviewService,
     mapper_service: MapperService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> ItemService:
     attribute_service = AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
     return ItemService(
         attribute_service,
-        TagService(sqlite_database_service),
+        TagService(stored_database_service),
         mapper_service,
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
@@ -247,7 +247,7 @@ class TestProjectsOnTwoRoots:
     @pytest.mark.parametrize("other_is_root", [True, False])
     def test_each_project_is_validated_against_its_own_root(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         item_service: ItemService,
         schema: ExampleSchema,
@@ -259,7 +259,7 @@ class TestProjectsOnTwoRoots:
         the root of new projects."""
         # Arrange
         root = reviewed_other_schema if other_is_root else schema
-        stored = self.store_project(sqlite_database_service, root)
+        stored = self.store_project(stored_database_service, root)
         sex = root.samples[schema.patient_schema_uid].attributes["sex"].uid
 
         # Act
@@ -276,14 +276,14 @@ class TestProjectsOnTwoRoots:
         # Assert
         assert valid.valid_attributes is True
         assert invalid.valid_attributes is False
-        with sqlite_database_service.get_session() as session:
-            item = sqlite_database_service.get_item(session, valid.uid)
+        with stored_database_service.get_session() as session:
+            item = stored_database_service.get_item(session, valid.uid)
             assert schema_service.root_of(item).uid == root.uid
 
     @pytest.mark.parametrize("other_is_root", [True, False])
     def test_each_project_is_reviewed_against_its_own_root(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         item_service: ItemService,
         review_service: ReviewService,
         schema: ExampleSchema,
@@ -294,7 +294,7 @@ class TestProjectsOnTwoRoots:
         to review."""
         # Arrange
         root = reviewed_other_schema if other_is_root else schema
-        stored = self.store_project(sqlite_database_service, root)
+        stored = self.store_project(stored_database_service, root)
         sex = root.samples[schema.patient_schema_uid].attributes["sex"].uid
         item_service.add(self.patient(stored, sex, "Unknown value"), [])
 
@@ -313,20 +313,20 @@ class TestProjectsOnTwoRoots:
 
     def test_the_root_of_a_dataset_is_that_of_its_project(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
         reviewed_other_schema: RootSchema,
     ):
         """By its uid, in the session given or one of its own, or as it is."""
         # Arrange
-        example = self.store_project(sqlite_database_service, schema)
-        other = self.store_project(sqlite_database_service, reviewed_other_schema)
+        example = self.store_project(stored_database_service, schema)
+        other = self.store_project(stored_database_service, reviewed_other_schema)
 
         # Act & Assert
         assert schema_service.root_of_dataset(example.dataset.uid).uid == schema.uid
-        with sqlite_database_service.get_session() as session:
-            dataset = sqlite_database_service.get_dataset(session, other.dataset.uid)
+        with stored_database_service.get_session() as session:
+            dataset = stored_database_service.get_dataset(session, other.dataset.uid)
             assert (
                 schema_service.root_of_dataset(other.dataset.uid, session).uid
                 == reviewed_other_schema.uid
@@ -338,22 +338,22 @@ class TestProjectsOnTwoRoots:
 
     def test_a_dataset_without_a_project_has_no_root(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
     ):
         """Refused rather than put on a root it may not be on."""
         # Arrange
         dataset = Dataset(uid=uuid4(), name="dataset", schema_uid=schema.dataset.uid)
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
             session.commit()
 
         # Act & Assert
         with pytest.raises(ValueError, match="has no project"):
             schema_service.root_of_dataset(dataset.uid)
-        with sqlite_database_service.get_session() as session:
-            database_dataset = sqlite_database_service.get_dataset(session, dataset.uid)
+        with stored_database_service.get_session() as session:
+            database_dataset = stored_database_service.get_dataset(session, dataset.uid)
             with pytest.raises(ValueError, match="has no project"):
                 schema_service.root_of(database_dataset, session)
             with pytest.raises(ValueError, match="has no project"):
@@ -362,14 +362,14 @@ class TestProjectsOnTwoRoots:
     @pytest.mark.parametrize("other_is_root", [False])
     def test_what_a_root_does_not_have_is_not_found(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         item_service: ItemService,
         review_service: ReviewService,
         schema: ExampleSchema,
     ):
         """An item schema, or a layout, the root of the project does not have."""
         # Arrange
-        stored = self.store_project(sqlite_database_service, schema)
+        stored = self.store_project(stored_database_service, schema)
         patient = item_service.add(
             self.patient(stored, schema.patient.attributes["sex"].uid, "M"), []
         )
@@ -388,7 +388,7 @@ class TestProjectsOnTwoRoots:
 
     def test_each_project_is_mapped_against_its_own_root(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         item_service: ItemService,
         mapper_service: MapperService,
         schema: ExampleSchema,
@@ -398,7 +398,7 @@ class TestProjectsOnTwoRoots:
         a root holding that attribute. What it maps to is validated against the
         root of the project the attribute is in."""
         # Arrange
-        other = self.store_project(sqlite_database_service, reviewed_other_schema)
+        other = self.store_project(stored_database_service, reviewed_other_schema)
         other_sex = reviewed_other_schema.samples[schema.patient_schema_uid]
         other_sex = other_sex.attributes["sex"].uid
         mapper = mapper_service.get_or_create_mapper("sex", other_sex)
@@ -420,7 +420,7 @@ class TestProjectsOnTwoRoots:
 
     def test_a_mapping_injected_again_is_applied_again(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         item_service: ItemService,
         mapper_service: MapperService,
         schema: ExampleSchema,
@@ -429,7 +429,7 @@ class TestProjectsOnTwoRoots:
         """The sheet wins: what an attribute was mapped to is what the sheet
         now says."""
         # Arrange
-        other = self.store_project(sqlite_database_service, reviewed_other_schema)
+        other = self.store_project(stored_database_service, reviewed_other_schema)
         other_sex = reviewed_other_schema.samples[schema.patient_schema_uid]
         other_sex = other_sex.attributes["sex"].uid
         mapper = mapper_service.get_or_create_mapper("sex", other_sex)
@@ -456,7 +456,7 @@ class TestProjectsOnTwoRoots:
     @pytest.mark.parametrize("change", ["sheet", "deleted"])
     def test_an_exported_project_keeps_what_it_was_mapped_to(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         item_service: ItemService,
         mapper_service: MapperService,
         schema: ExampleSchema,
@@ -466,7 +466,7 @@ class TestProjectsOnTwoRoots:
         """What went out stays as it went out, whether the sheet changes what
         the mapping maps to or the mapping is deleted."""
         # Arrange
-        other = self.store_project(sqlite_database_service, reviewed_other_schema)
+        other = self.store_project(stored_database_service, reviewed_other_schema)
         other_sex = reviewed_other_schema.samples[schema.patient_schema_uid]
         other_sex = other_sex.attributes["sex"].uid
         mapper = mapper_service.get_or_create_mapper("sex", other_sex)
@@ -479,8 +479,8 @@ class TestProjectsOnTwoRoots:
         unmapped.attributes["sex"].original_value = None
         unmapped.attributes["sex"].mappable_value = "man"
         added = item_service.add(unmapped, [mapper.uid])
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, other.project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, other.project.uid)
             project.status = ProjectStatus.EXPORT_COMPLETE
 
         # Act
@@ -502,7 +502,7 @@ class TestProjectList:
     def test_projects_of_every_root_are_listed(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         schema: ExampleSchema,
@@ -515,13 +515,13 @@ class TestProjectList:
             schema_service=schema_service,
             validation_service=validation_service,
             mapper_service=decoy.mock(cls=MapperService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             migration_service=decoy.mock(cls=MigrationService),
         )
-        example = TestProjectsOnTwoRoots.store_project(sqlite_database_service, schema)
+        example = TestProjectsOnTwoRoots.store_project(stored_database_service, schema)
         other = TestProjectsOnTwoRoots.store_project(
-            sqlite_database_service, reviewed_other_schema
+            stored_database_service, reviewed_other_schema
         )
 
         # Act
@@ -536,7 +536,7 @@ class TestProjectList:
     def test_a_project_is_created_on_the_root_of_new_projects(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         review_service: ReviewService,
@@ -547,10 +547,10 @@ class TestProjectList:
         batch, in one go."""
         # Arrange
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         batch_service = BatchService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
         dataset = Dataset(
@@ -576,7 +576,7 @@ class TestProjectList:
                 schema_service,
                 validation_service,
                 mapper_service,
-                sqlite_database_service,
+                stored_database_service,
             ),
             ProjectService(
                 attribute_service=attribute_service,
@@ -584,11 +584,11 @@ class TestProjectList:
                 schema_service=schema_service,
                 validation_service=validation_service,
                 mapper_service=mapper_service,
-                database_service=sqlite_database_service,
+                database_service=stored_database_service,
                 storage_service=decoy.mock(cls=StorageService),
                 migration_service=decoy.mock(cls=MigrationService),
             ),
-            sqlite_database_service,
+            stored_database_service,
             schema_service,
             decoy.mock(cls=MetadataSearchItemService),
             metadata_import_interface,
@@ -599,19 +599,19 @@ class TestProjectList:
 
         # Assert
         assert created.uid == project.uid
-        with sqlite_database_service.get_session() as session:
-            stored = sqlite_database_service.get_project(session, project.uid)
+        with stored_database_service.get_session() as session:
+            stored = stored_database_service.get_project(session, project.uid)
             assert stored.root_schema_uid == reviewed_other_schema.uid
             assert stored.dataset.uid == dataset.uid
             assert stored.dataset.valid_attributes is not None
-            default_batch = sqlite_database_service.get_batch(
+            default_batch = stored_database_service.get_batch(
                 session, stored.default_batch_uid
             )
             assert default_batch.name == "Default"
 
     def test_projects_on_a_root_not_provided_refuse_the_start(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         reviewed_other_schema: RootSchema,
         schema_service_of: Callable[..., SchemaService],
@@ -621,7 +621,7 @@ class TestProjectList:
         # Arrange
         retired = schema.model_copy(update={"uid": uuid4(), "name": "Retired schema"})
         for _ in range(2):
-            TestProjectsOnTwoRoots.store_project(sqlite_database_service, retired)
+            TestProjectsOnTwoRoots.store_project(stored_database_service, retired)
 
         # Act & Assert
         with pytest.raises(ValueError, match="not provided") as refused:
@@ -632,7 +632,7 @@ class TestProjectList:
     def test_projects_on_a_root_not_provided_refuse_the_start_of_a_worker(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         reviewed_other_schema: RootSchema,
         schema_service_of: Callable[..., SchemaService],
@@ -641,7 +641,7 @@ class TestProjectList:
         task app is created."""
         # Arrange
         retired = schema.model_copy(update={"uid": uuid4(), "name": "Retired schema"})
-        TestProjectsOnTwoRoots.store_project(sqlite_database_service, retired)
+        TestProjectsOnTwoRoots.store_project(stored_database_service, retired)
         container = decoy.mock(cls=Container)
         decoy.when(container.get(SchemaService)).then_do(
             lambda *_: schema_service_of(schema, reviewed_other_schema)
@@ -654,7 +654,7 @@ class TestProjectList:
 
     def test_what_is_stored_off_its_root_refuses_the_start(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         reviewed_other_schema: RootSchema,
         schema_service_of: Callable[..., SchemaService],
@@ -663,11 +663,11 @@ class TestProjectList:
         schemas it no longer has: the application does not start, and says
         which roots and what to do."""
         # Arrange
-        example = TestProjectsOnTwoRoots.store_project(sqlite_database_service, schema)
+        example = TestProjectsOnTwoRoots.store_project(stored_database_service, schema)
         other = TestProjectsOnTwoRoots.store_project(
-            sqlite_database_service, reviewed_other_schema
+            stored_database_service, reviewed_other_schema
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for stored, schema_uid in (
                 (example, schema.patient_schema_uid),
                 (example, uuid4()),
@@ -714,25 +714,25 @@ class TestViewOnlyRoot:
 
     @pytest.fixture()
     def example(
-        self, sqlite_database_service: DatabaseService, schema: ExampleSchema
+        self, stored_database_service: DatabaseService, schema: ExampleSchema
     ) -> StoredProject:
-        return TestProjectsOnTwoRoots.store_project(sqlite_database_service, schema)
+        return TestProjectsOnTwoRoots.store_project(stored_database_service, schema)
 
     @pytest.fixture()
     def other(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         reviewed_other_schema: RootSchema,
     ) -> StoredProject:
         return TestProjectsOnTwoRoots.store_project(
-            sqlite_database_service, reviewed_other_schema
+            stored_database_service, reviewed_other_schema
         )
 
     @pytest.fixture()
     def project_service(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
     ) -> ProjectService:
@@ -742,7 +742,7 @@ class TestViewOnlyRoot:
             schema_service=schema_service,
             validation_service=validation_service,
             mapper_service=decoy.mock(cls=MapperService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             migration_service=decoy.mock(cls=MigrationService),
         )
@@ -766,7 +766,7 @@ class TestViewOnlyRoot:
 
     def test_editing_is_refused(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         item_service: ItemService,
         review_service: ReviewService,
         mapper_service: MapperService,
@@ -777,7 +777,7 @@ class TestViewOnlyRoot:
         """Adding an item, review decisions, remapping, and editing the project
         are some of what editing covers."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.add(
                 DatabaseSample(
                     other.dataset.uid,
@@ -804,14 +804,13 @@ class TestViewOnlyRoot:
             project_service.update(other.project)
         with pytest.raises(ProjectNotEditableError):
             item_service.clear_pseudonyms(other.dataset.uid)
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert len(session.scalars(select(DatabaseSample)).all()) == 1
 
-    @pytest.mark.asyncio
-    async def test_search_is_refused(
+    def test_search_is_refused(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         other: StoredProject,
     ):
@@ -822,7 +821,7 @@ class TestViewOnlyRoot:
             decoy.mock(cls=BatchService),
             decoy.mock(cls=DatasetService),
             decoy.mock(cls=ProjectService),
-            sqlite_database_service,
+            stored_database_service,
             schema_service,
             decoy.mock(cls=MetadataSearchItemService),
             metadata_import_interface,
@@ -831,21 +830,21 @@ class TestViewOnlyRoot:
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError):
-            await metadata_import_service.search(other.batch_uid, file)
+            metadata_import_service.search(other.batch_uid, file)
         decoy.verify(metadata_import_interface.parse_file(file), times=0)
 
     def test_the_search_task_is_refused(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         item_service: ItemService,
         other: StoredProject,
     ):
         """Queued before the root became view only, as across a deploy."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, other.batch_uid)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, other.batch_uid)
             batch.status = BatchStatus.METADATA_SEARCHING
         metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
 
@@ -854,10 +853,10 @@ class TestViewOnlyRoot:
             batch_uid=other.batch_uid,
             search_parameters={},
             metadata_import_interface=metadata_import_interface,
-            database_service=sqlite_database_service,
-            batch_service=self._batch_service(sqlite_database_service, schema_service),
+            database_service=stored_database_service,
+            batch_service=self._batch_service(stored_database_service, schema_service),
             item_service=item_service,
-            search_item_service=MetadataSearchItemService(sqlite_database_service),
+            search_item_service=MetadataSearchItemService(stored_database_service),
             schema_service=schema_service,
         )
 
@@ -868,15 +867,14 @@ class TestViewOnlyRoot:
             ),
             times=0,
         )
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, other.batch_uid)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, other.batch_uid)
             assert batch.status == BatchStatus.FAILED
 
-    @pytest.mark.asyncio
-    async def test_image_processing_is_refused(
+    def test_image_processing_is_refused(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         other: StoredProject,
     ):
@@ -886,14 +884,14 @@ class TestViewOnlyRoot:
             decoy.mock(cls=Scheduler),
             batch_service,
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
         )
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError):
-            await image_pipeline_service.pre_process_batch(other.batch_uid)
+            image_pipeline_service.pre_process_batch(other.batch_uid)
         with pytest.raises(ProjectNotEditableError):
-            await image_pipeline_service.export(other.batch_uid)
+            image_pipeline_service.export(other.batch_uid)
         decoy.verify(
             batch_service.set_as_pre_processing(
                 matchers.Anything(), matchers.Anything()
@@ -904,13 +902,13 @@ class TestViewOnlyRoot:
     def test_the_image_tasks_are_refused(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
         other: StoredProject,
     ):
         # Arrange
-        image_uid = self._image(sqlite_database_service, schema, other)
+        image_uid = self._image(stored_database_service, schema, other)
         image_import_interface = decoy.mock(cls=ImageImportInterface)
         image_export_interface = decoy.mock(cls=ImageExportInterface)
         batch_service = decoy.mock(cls=BatchService)
@@ -921,7 +919,7 @@ class TestViewOnlyRoot:
             task_id="task",
             image_import_interface=image_import_interface,
             metadata_import_interface=decoy.mock(cls=MetadataImportInterface),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             review_service=decoy.mock(cls=ReviewService),
             batch_service=batch_service,
             attribute_service=decoy.mock(cls=AttributeService),
@@ -931,7 +929,7 @@ class TestViewOnlyRoot:
             image_uid=image_uid,
             task_id="task",
             image_export_interface=image_export_interface,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             batch_service=batch_service,
             storage_service=decoy.mock(cls=StorageService),
             schema_service=schema_service,
@@ -942,7 +940,7 @@ class TestViewOnlyRoot:
             image_import_interface.download(matchers.Anything(), matchers.Anything()),
             times=0,
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             image = session.get(DatabaseImage, image_uid)
             assert image is not None
             assert image.status == ImageStatus.NOT_STARTED
@@ -956,11 +954,10 @@ class TestViewOnlyRoot:
             times=2,
         )
 
-    @pytest.mark.asyncio
-    async def test_export_is_refused(
+    def test_export_is_refused(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         other: StoredProject,
     ):
@@ -969,7 +966,7 @@ class TestViewOnlyRoot:
         metadata_export_service = MetadataExportService(
             decoy.mock(cls=Scheduler),
             project_service,
-            sqlite_database_service,
+            stored_database_service,
             schema_service,
             decoy.mock(cls=MetadataExportInterface),
         )
@@ -977,29 +974,29 @@ class TestViewOnlyRoot:
             decoy.mock(cls=Scheduler),
             decoy.mock(cls=BatchService),
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
         )
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError):
-            await metadata_export_service.export(other.project)
+            metadata_export_service.export(other.project)
         with pytest.raises(ProjectNotEditableError):
-            await image_pipeline_service.store_project(other.project.uid)
+            image_pipeline_service.store_project(other.project.uid)
         decoy.verify(project_service.set_as_exporting(other.project), times=0)
 
     def test_the_export_tasks_are_refused(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         other: StoredProject,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, other.project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, other.project.uid)
             project.status = ProjectStatus.EXPORTING
-            batch = sqlite_database_service.get_batch(session, other.batch_uid)
+            batch = stored_database_service.get_batch(session, other.batch_uid)
             batch.status = BatchStatus.IMAGE_STORING
         metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
         image_export_interface = decoy.mock(cls=ImageExportInterface)
@@ -1010,7 +1007,7 @@ class TestViewOnlyRoot:
             schema_service=schema_service,
             validation_service=validation_service,
             mapper_service=decoy.mock(cls=MapperService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             migration_service=decoy.mock(cls=MigrationService),
         )
@@ -1020,12 +1017,12 @@ class TestViewOnlyRoot:
             project_id=other.project.uid,
             metadata_export_interface=metadata_export_interface,
             project_service=project_service,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             schema_service=schema_service,
         )
         store_batch_images_to_outbox.func.__wrapped__(
             batch_uid=other.batch_uid,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             batch_service=batch_service,
             storage_service=decoy.mock(cls=StorageService),
             schema_service=schema_service,
@@ -1038,10 +1035,10 @@ class TestViewOnlyRoot:
             metadata_export_interface.export(matchers.Anything(), matchers.Anything()),
             times=0,
         )
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, other.project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, other.project.uid)
             assert project.status == ProjectStatus.COMPLETED
-            batch = sqlite_database_service.get_batch(session, other.batch_uid)
+            batch = stored_database_service.get_batch(session, other.batch_uid)
             assert batch.status == BatchStatus.IMAGE_STORING
         decoy.verify(
             batch_service.set_as_failed(
@@ -1055,18 +1052,18 @@ class TestViewOnlyRoot:
     def test_there_is_no_preview(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
         other: StoredProject,
     ):
         # Arrange
-        image_uid = self._image(sqlite_database_service, schema, other)
+        image_uid = self._image(stored_database_service, schema, other)
         metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
         metadata_export_service = MetadataExportService(
             decoy.mock(cls=Scheduler),
             decoy.mock(cls=ProjectService),
-            sqlite_database_service,
+            stored_database_service,
             schema_service,
             metadata_export_interface,
         )
@@ -1103,7 +1100,7 @@ class TestViewOnlyRoot:
 
     def test_pseudonyms_and_naming_are_not_offered(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         review_service: ReviewService,
@@ -1117,15 +1114,15 @@ class TestViewOnlyRoot:
         pseudonyms of the project changed, on the view-only root."""
         # Arrange
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         item_service = ItemService(
             attribute_service,
-            TagService(sqlite_database_service),
+            TagService(stored_database_service),
             mapper_service,
             schema_service,
             validation_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
             pseudonym_factory=_Pseudonyms(),
             item_naming_factory=_Naming(),

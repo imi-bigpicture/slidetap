@@ -45,11 +45,11 @@ export default function ItemPage(): ReactElement {
   )
   // Followed rather than held: stepping changes the address, and the item shown
   // is whichever one the address names.
-  React.useEffect(() => {
-    if (itemUid !== undefined) {
-      setItemDetailUid(itemUid)
-    }
-  }, [itemUid])
+  const [addressedItemUid, setAddressedItemUid] = React.useState<string>(itemUid)
+  if (addressedItemUid !== itemUid) {
+    setAddressedItemUid(itemUid)
+    setItemDetailUid(itemUid)
+  }
   const [privateOpen, setPrivateOpen] = React.useState(false)
   const [previewOpen, setPreviewOpen] = React.useState(false)
 

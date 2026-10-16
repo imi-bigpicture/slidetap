@@ -64,7 +64,7 @@ import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 import Spinner from 'src/components/spinner'
 import { ItemDetailAction } from 'src/models/action'
 import { ReviewStatus } from 'src/models/review_status'
-import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import { NIL_UID, type Attribute, type AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
 import type { Image } from 'src/models/item'
 import { Item } from 'src/models/item'
@@ -170,6 +170,13 @@ export default function DisplayItemDetails({
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
+  // Tags typed in belong to the item they were typed on, and are not carried
+  // to the next one opened.
+  const [newTagsItemUid, setNewTagsItemUid] = useState(itemUid)
+  if (newTagsItemUid !== itemUid) {
+    setNewTagsItemUid(itemUid)
+    setNewTagsToSave([])
+  }
   const [item, setItem] = useState<Item>()
   const [isDirty, setIsDirty] = useState(false)
   /** The item and whether it is edited, as they are rather than as they were
@@ -182,7 +189,8 @@ export default function DisplayItemDetails({
     isDirtyRef.current = isDirty
   }, [item, isDirty])
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
-  const [pendingNavigationUid, setPendingNavigationUid] = useState<string | null>(null)
+  /** Where to go once the unsaved changes are saved or discarded. */
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [overflowAnchor, setOverflowAnchor] = useState<null | HTMLElement>(null)
   const [selectAnchor, setSelectAnchor] = useState<null | HTMLElement>(null)
   const [actionsNode, setActionsNode] = useState<null | HTMLElement>(null)
@@ -190,14 +198,13 @@ export default function DisplayItemDetails({
   const [flagAnchor, setFlagAnchor] = useState<{ top: number; left: number } | null>(
     null,
   )
-  const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const COMPACT_ACTIONS_THRESHOLD_PX = 600
   const compactActions =
     containerWidth !== null && containerWidth < COMPACT_ACTIONS_THRESHOLD_PX
   const closeOverflow = (): void => setOverflowAnchor(null)
 
-  useEffect(() => {
+  const observeContainer = useCallback((containerNode: HTMLDivElement | null) => {
     if (containerNode === null) return
     setContainerWidth(containerNode.clientWidth)
     const observer = new ResizeObserver((entries) => {
@@ -206,7 +213,7 @@ export default function DisplayItemDetails({
     })
     observer.observe(containerNode)
     return () => observer.disconnect()
-  }, [containerNode])
+  }, [])
 
   const currentIndex = itemUids?.indexOf(itemUid) ?? -1
   const hasPrevious = itemUids !== undefined && currentIndex > 0
@@ -222,16 +229,22 @@ export default function DisplayItemDetails({
     [setItemUid],
   )
 
+  /** Leaves the item shown, asking first what to do with unsaved changes. */
+  const requestLeaving = useCallback((leave: () => void) => {
+    if (isDirtyRef.current) {
+      // Wrapped, as a function given to a state setter is called as an updater.
+      setPendingNavigation(() => leave)
+      setUnsavedDialogOpen(true)
+    } else {
+      leave()
+    }
+  }, [])
+
   const requestNavigation = useCallback(
     (uid: string) => {
-      if (isDirtyRef.current) {
-        setPendingNavigationUid(uid)
-        setUnsavedDialogOpen(true)
-      } else {
-        navigateTo(uid)
-      }
+      requestLeaving(() => navigateTo(uid))
     },
-    [navigateTo],
+    [navigateTo, requestLeaving],
   )
 
   const navigatePrevious = useCallback(() => {
@@ -253,25 +266,36 @@ export default function DisplayItemDetails({
     },
     enabled: itemUid !== undefined,
   })
-  useEffect(() => {
+  /** What was fetched when the item shown was last taken from it. */
+  const [takenData, setTakenData] = useState<Item | undefined>(undefined)
+  if (itemQuery.data !== takenData) {
+    setTakenData(itemQuery.data)
     if (itemQuery.data !== undefined) {
-      setItem(itemQuery.data)
-      setIsDirty(false)
+      const loaded = itemQuery.data
+      if (isDirty && item?.uid === loaded.uid) {
+        // The item is fetched again whenever something invalidates it, such as
+        // marking it reviewed. Edits not yet saved are kept, and only what is
+        // set elsewhere than in this view is taken from what was fetched.
+        setItem({ ...item, reviewStatus: loaded.reviewStatus })
+      } else {
+        setItem(loaded)
+        setIsDirty(false)
+      }
       // The item the panel opened on is only known by its uid until it
       // arrives; named here so stepping back to it can say where back is.
       setOpenedItems((opened) =>
         opened.map((entry) =>
-          entry.uid === itemQuery.data.uid && entry.identifier === ''
+          entry.uid === loaded.uid && entry.identifier === ''
             ? {
-                identifier: itemQuery.data.identifier,
+                identifier: loaded.identifier,
                 uid: entry.uid,
-                pseudonym: itemQuery.data.pseudonym,
+                pseudonym: loaded.pseudonym,
               }
             : entry,
         ),
       )
     }
-  }, [itemQuery.data])
+  }
 
   const changeAction = (action: ItemDetailAction): void => {
     if (action !== ItemDetailAction.VIEW && action !== ItemDetailAction.EDIT) {
@@ -285,15 +309,14 @@ export default function DisplayItemDetails({
       newTagsToSave.map(
         async (tag) =>
           await tagApi.save({
-            uid: '00000000-0000-0000-0000-000000000000',
+            uid: NIL_UID,
             name: tag,
             description: null,
             color: null,
           }),
       ),
     ).then((tags) => tags.map((tag) => tag.uid))
-    item.tags = [...item.tags, ...savedTags]
-    return await itemApi.save(item)
+    return await itemApi.save({ ...item, tags: [...item.tags, ...savedTags] })
   }
 
   const reviewMutation = useMutation({
@@ -363,9 +386,18 @@ export default function DisplayItemDetails({
       void queryClient.invalidateQueries({
         predicate: (query) => query.queryKey.includes('overview'),
       })
+      // The tags typed in are created by the save and are now among the item's
+      // tags, so the list of tags is asked for again to name them.
+      if (newTagsToSave.length > 0) {
+        setNewTagsToSave([])
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tag.all })
+      }
       // Stays editable: saving is a checkpoint in the middle of curating an
       // item, not the end of it.
-      setIsDirty(false)
+      if (itemRef.current?.uid === savedItem.uid) {
+        setItem(savedItem)
+        setIsDirty(false)
+      }
     },
   })
 
@@ -456,6 +488,11 @@ export default function DisplayItemDetails({
     setIsDirty(true)
   }
 
+  const handleLinkageUpdate = (updatedItem: Item): void => {
+    setItem(updatedItem)
+    setIsDirty(true)
+  }
+
   const handleTagsUpdate = (tags: string[]): void => {
     const updatedItem = { ...item, tags }
     setItem(updatedItem)
@@ -467,16 +504,15 @@ export default function DisplayItemDetails({
     uid: string,
     pseudonym?: string | null,
   ): void => {
-    setItemUid(uid)
-    const existingIndex = openedItems.findIndex((i) => i.uid === uid)
-    if (existingIndex >= 0) {
-      setOpenedItems(openedItems.slice(0, existingIndex + 1))
-    } else {
-      setOpenedItems([
-        ...openedItems,
-        { identifier: name, uid: uid, pseudonym: pseudonym ?? null },
-      ])
-    }
+    requestLeaving(() => {
+      setItemUid(uid)
+      setOpenedItems((opened) => {
+        const existingIndex = opened.findIndex((entry) => entry.uid === uid)
+        return existingIndex >= 0
+          ? opened.slice(0, existingIndex + 1)
+          : [...opened, { identifier: name, uid: uid, pseudonym: pseudonym ?? null }]
+      })
+    })
   }
 
   function handleOpenImageChange(image: Image): void {
@@ -504,21 +540,21 @@ export default function DisplayItemDetails({
   // back out, a step at a time. Only the step just taken is offered — a trail
   // of everything passed through on the way says more than it is worth.
   const previousItem = openedItems[openedItems.length - 2]
-  const back =
+  const backIdentifier =
     previousItem === undefined
       ? undefined
-      : {
-          identifier:
-            getDisplayIdentifier(previousItem, pseudonymMode) || 'the previous item',
-          go: () => {
-            setOpenedItems(openedItems.slice(0, -1))
-            setItemUid(previousItem.uid)
-          },
-        }
+      : getDisplayIdentifier(previousItem, pseudonymMode) || 'the previous item'
+  const goBack = (): void => {
+    if (previousItem === undefined) return
+    requestLeaving(() => {
+      setOpenedItems((opened) => opened.slice(0, -1))
+      setItemUid(previousItem.uid)
+    })
+  }
 
   return (
     <Spinner loading={itemQuery.isLoading}>
-      <Box ref={setContainerNode} sx={{ width: '100%', minWidth: 0 }}>
+      <Box ref={observeContainer} sx={{ width: '100%', minWidth: 0 }}>
         {/* The same bar every other view of an item carries. */}
         {pageHeader && item !== undefined && (
           <ItemViewHeader
@@ -535,15 +571,16 @@ export default function DisplayItemDetails({
                     save: handleSave,
                     revert: () => {
                       setItem(itemQuery.data)
+                      setNewTagsToSave([])
                       setIsDirty(false)
                     },
                   }
                 : undefined
             }
           >
-            {back !== undefined && (
-              <Tooltip title={`Back to ${back.identifier}`}>
-                <IconButton onClick={back.go} size="small">
+            {backIdentifier !== undefined && (
+              <Tooltip title={`Back to ${backIdentifier}`}>
+                <IconButton onClick={goBack} size="small">
                   <ArrowBack fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -567,9 +604,9 @@ export default function DisplayItemDetails({
                 borderColor: 'divider',
               }}
             >
-              {back !== undefined && (
-                <Tooltip title={`Back to ${back.identifier}`}>
-                  <IconButton onClick={back.go} size="small" sx={{ ml: -1 }}>
+              {backIdentifier !== undefined && (
+                <Tooltip title={`Back to ${backIdentifier}`}>
+                  <IconButton onClick={goBack} size="small" sx={{ ml: -1 }}>
                     <ArrowBack fontSize="small" />
                   </IconButton>
                 </Tooltip>
@@ -606,14 +643,15 @@ export default function DisplayItemDetails({
                     />
                     <ChipDivider
                       label="Relations"
-                      color={item.validRelations ? 'default' : 'error'}
+                      // Null until validated, which is not shown as an error.
+                      color={item.validRelations === false ? 'error' : 'default'}
                     />
 
                     <ItemLinkage
                       item={item}
                       action={action}
                       handleItemOpen={handleChangeItem}
-                      setItem={setItem}
+                      setItem={handleLinkageUpdate}
                     />
 
                     {isImageItem(item) && (
@@ -630,7 +668,7 @@ export default function DisplayItemDetails({
                       <React.Fragment>
                         <ChipDivider
                           label="Attributes"
-                          color={item.validAttributes ? 'default' : 'error'}
+                          color={item.validAttributes === false ? 'error' : 'default'}
                         />
                         <AttributeDetails
                           schemas={itemSchema.attributes}
@@ -709,6 +747,7 @@ export default function DisplayItemDetails({
                       disabled={!isDirty}
                       onClick={() => {
                         setItem(itemQuery.data)
+                        setNewTagsToSave([])
                         setIsDirty(false)
                       }}
                     >
@@ -745,14 +784,16 @@ export default function DisplayItemDetails({
                         icon: <AutoFixNormal />,
                         label: 'Re-apply mappers to this item',
                         onClick: () => remapMutation.mutate({ hierarchy: false }),
-                        disabled: remapMutation.isPending,
+                        // Saved or reverted first: what remapping writes would be
+                        // overwritten by the edits on the next save.
+                        disabled: remapMutation.isPending || isDirty,
                       },
                       {
                         key: 'remap-tree',
                         icon: <AutoFixHigh />,
                         label: 'Re-apply mappers to this item and all descendants',
                         onClick: () => remapMutation.mutate({ hierarchy: true }),
-                        disabled: remapMutation.isPending,
+                        disabled: remapMutation.isPending || isDirty,
                       },
                     ]
                   : []
@@ -1026,10 +1067,11 @@ export default function DisplayItemDetails({
             onClick={() => {
               setUnsavedDialogOpen(false)
               setItem(itemQuery.data)
+              setNewTagsToSave([])
               setIsDirty(false)
-              if (pendingNavigationUid) {
-                navigateTo(pendingNavigationUid)
-                setPendingNavigationUid(null)
+              if (pendingNavigation !== null) {
+                pendingNavigation()
+                setPendingNavigation(null)
               }
             }}
           >
@@ -1043,9 +1085,9 @@ export default function DisplayItemDetails({
                   { item },
                   {
                     onSuccess: () => {
-                      if (pendingNavigationUid) {
-                        navigateTo(pendingNavigationUid)
-                        setPendingNavigationUid(null)
+                      if (pendingNavigation !== null) {
+                        pendingNavigation()
+                        setPendingNavigation(null)
                       }
                     },
                   },

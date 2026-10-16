@@ -50,7 +50,7 @@ Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 
 @attribute_router.get("/attribute/{attribute_uid}")
-async def get_attribute(
+def get_attribute(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
@@ -67,38 +67,62 @@ async def get_attribute(
 
 
 @attribute_router.post("/attribute/{attribute_uid}")
-async def update_attribute(
+def update_attribute(
     attribute_uid: UUID,
     attribute: AnyAttribute,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
 ) -> AnyAttribute:
-    """Update attribute."""
+    """Update attribute, answering with the attribute as stored."""
     logger.debug(f"Update attribute {attribute_uid}.")
+    if attribute.uid != attribute_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                f"Attribute uid {attribute.uid} does not match path uid {attribute_uid}"
+            ),
+        )
     updated_attribute = attribute_service.update(attribute)
     if updated_attribute is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Attribute not found"
         )
-    return attribute
+    return updated_attribute
 
 
 @attribute_router.post("/create/{attribute_schema_uid}")
-async def create_attribute(
+def create_attribute(
     attribute_schema_uid: UUID,
     attribute_data: dict,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
 ) -> AnyAttribute:
-    """Create attribute."""
+    """Create an attribute of the schema in the path.
+
+    Refused as a bad request if the body says no value type, or one that is
+    not known, or does not hold a valid attribute of the schema in the path.
+    """
     logger.debug("Create attribute.")
-    attribute = attribute_factory(attribute_data)
-    attribute = attribute_service.create(attribute)
-    return attribute
+    try:
+        attribute = attribute_factory(attribute_data)
+    except (KeyError, ValueError) as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Not a valid attribute: {exception}",
+        ) from exception
+    if attribute.schema_uid != attribute_schema_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                f"Attribute schema uid {attribute.schema_uid} does not match path "
+                f"uid {attribute_schema_uid}"
+            ),
+        )
+    return attribute_service.create(attribute)
 
 
 @attribute_router.get("/attribute/{attribute_uid}/mapping")
-async def get_mapping(
+def get_mapping(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
     mapper_service: FromDishka[MapperService],
@@ -123,7 +147,7 @@ async def get_mapping(
 
 
 @attribute_router.get("/schema/{attribute_schema_uid}/codes/search")
-async def search_codes_for_schema(
+def search_codes_for_schema(
     attribute_schema_uid: UUID,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
@@ -145,7 +169,7 @@ async def search_codes_for_schema(
 
 
 @attribute_router.get("/schema/{attribute_schema_uid}")
-async def get_attributes_for_schema(
+def get_attributes_for_schema(
     attribute_schema_uid: UUID,
     attribute_service: FromDishka[AttributeService],
 ) -> Iterable[AnyAttribute]:

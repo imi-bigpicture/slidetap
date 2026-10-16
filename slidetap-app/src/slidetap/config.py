@@ -246,11 +246,24 @@ class DatabaseConfig:
         return cls(database_uri, no_autoflush)
 
 
+MIN_SECRET_KEY_BYTES = 32
+"""The shortest secret key, in bytes, access tokens are signed with (HS256)."""
+
+
 @dataclass(frozen=True)
 class LoginConfig:
     secret_key: str
     access_token_expiration_seconds: int = 3600
     keep_alive_seconds: int = 900
+
+    def __post_init__(self) -> None:
+        key_length = len(self.secret_key.encode())
+        if key_length < MIN_SECRET_KEY_BYTES:
+            raise ValueError(
+                f"SLIDETAP_SECRET_KEY must be at least {MIN_SECRET_KEY_BYTES} bytes "
+                f"long, got {key_length}. Generate one with, for example, "
+                '`python -c "import secrets; print(secrets.token_urlsafe(32))"`.'
+            )
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "LoginConfig":

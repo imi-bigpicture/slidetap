@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from pathlib import Path
 
 import pytest
 
@@ -20,22 +19,20 @@ import pytest
 # commands are invoked through click's runner instead.
 from click.testing import CliRunner
 from slidetap_example import ExampleSchema
-from sqlalchemy import create_engine
 from typer.main import get_command
 
 from slidetap.cli.mappers import app
 from slidetap.config import DatabaseConfig
-from slidetap.database import Base
 from slidetap.services import DatabaseService
+
+pytestmark = pytest.mark.unittest
 
 
 @pytest.fixture
-def uri(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
-    uri = f"sqlite:///{tmp_path.joinpath('test.db')}"
-    Base.metadata.create_all(bind=create_engine(uri))
+def uri(database_uri: str, monkeypatch: pytest.MonkeyPatch) -> str:
     # Set by the command from --db-uri, and so put back after the test.
     monkeypatch.setenv("SLIDETAP_DBURI", "")
-    return uri
+    return database_uri
 
 
 @pytest.fixture

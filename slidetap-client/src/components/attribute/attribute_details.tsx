@@ -126,17 +126,13 @@ export default function AttributeDetails({
   action,
   attributeLayout,
   defaultCollapsed,
-  spacing,
+  spacing = 2,
   marginTop,
   handleAttributeUpdate,
   renderAttributeContent,
   showValueControls = true,
   fillHeight = false,
 }: AttributeDetailsProps): React.ReactElement {
-  if (spacing === undefined) {
-    spacing = 2
-  }
-
   const collapsedSet = React.useMemo(
     () => new Set(defaultCollapsed ?? []),
     [defaultCollapsed],

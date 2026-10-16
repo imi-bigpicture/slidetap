@@ -28,7 +28,12 @@ import pytest
 from decoy import Decoy
 from decoy.matchers import Anything
 
-from slidetap.database import DatabaseBatch, DatabaseImage, DatabaseProject
+from slidetap.database import (
+    DatabaseBatch,
+    DatabaseDataset,
+    DatabaseImage,
+    DatabaseProject,
+)
 from slidetap.model import BatchStatus, ImageFormat, ImageStatus
 from slidetap.services import (
     BatchService,
@@ -46,8 +51,12 @@ def batch_uid() -> UUID:
 
 
 @pytest.fixture()
-def dataset_uid() -> UUID:
-    return uuid4()
+def dataset_uid(stored_database_service: DatabaseService) -> UUID:
+    with stored_database_service.get_session() as session:
+        dataset = DatabaseDataset("dataset", uuid4())
+        session.add(dataset)
+        session.commit()
+        return dataset.uid
 
 
 def _add_image(
@@ -122,13 +131,13 @@ def review_service(decoy: Decoy) -> ReviewService:
 @pytest.fixture()
 def batch_service(
     decoy: Decoy,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     review_service: ReviewService,
 ) -> BatchService:
     return BatchService(
         schema_service=decoy.mock(cls=SchemaService),
         validation_service=decoy.mock(cls=ValidationService),
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         review_service=review_service,
     )
 
@@ -138,7 +147,7 @@ class TestFinishPreProcessingIfSettled:
     def test_images_settling_together_finish_the_batch_once(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         review_service: ReviewService,
         batch_uid: UUID,
@@ -149,14 +158,14 @@ class TestFinishPreProcessingIfSettled:
         batch as pre-processed is refused as the batch already is."""
         # Arrange
         _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             BatchStatus.IMAGE_PRE_PROCESSING,
         )
         for identifier in ("PL1234-20-1", "PL1234-20-2"):
             _add_image(
-                sqlite_database_service,
+                stored_database_service,
                 batch_uid,
                 dataset_uid,
                 identifier,
@@ -169,7 +178,7 @@ class TestFinishPreProcessingIfSettled:
 
         # Assert
         assert (
-            _batch_status(sqlite_database_service, batch_uid)
+            _batch_status(stored_database_service, batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         )
         decoy.verify(
@@ -181,27 +190,27 @@ class TestFinishPreProcessingIfSettled:
 
     def test_a_batch_is_finished_by_an_image_that_failed(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         batch_uid: UUID,
         dataset_uid: UUID,
     ) -> None:
         # Arrange
         _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             BatchStatus.IMAGE_PRE_PROCESSING,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-1",
             ImageStatus.PRE_PROCESSED,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-2",
@@ -213,33 +222,33 @@ class TestFinishPreProcessingIfSettled:
 
         # Assert
         assert (
-            _batch_status(sqlite_database_service, batch_uid)
+            _batch_status(stored_database_service, batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         )
 
     def test_a_batch_waiting_for_an_image_is_not_finished(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         batch_uid: UUID,
         dataset_uid: UUID,
     ) -> None:
         # Arrange
         _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             BatchStatus.IMAGE_PRE_PROCESSING,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-1",
             ImageStatus.PRE_PROCESSED,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-2",
@@ -251,26 +260,26 @@ class TestFinishPreProcessingIfSettled:
 
         # Assert
         assert (
-            _batch_status(sqlite_database_service, batch_uid)
+            _batch_status(stored_database_service, batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING
         )
 
     def test_an_image_retried_after_the_batch_moved_on_leaves_the_batch(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         batch_uid: UUID,
         dataset_uid: UUID,
     ) -> None:
         # Arrange
         _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             BatchStatus.IMAGE_POST_PROCESSING,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-1",
@@ -282,7 +291,7 @@ class TestFinishPreProcessingIfSettled:
 
         # Assert
         assert (
-            _batch_status(sqlite_database_service, batch_uid)
+            _batch_status(stored_database_service, batch_uid)
             == BatchStatus.IMAGE_POST_PROCESSING
         )
 
@@ -291,7 +300,7 @@ class TestFinishPreProcessingIfSettled:
 class TestPreProcessingCompletion:
     def test_a_batch_finishes_around_an_image_that_failed_to_download(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_uid: UUID,
         dataset_uid: UUID,
     ) -> None:
@@ -300,15 +309,21 @@ class TestPreProcessingCompletion:
         goes unflagged, since flagging is what finishing pre-processing does.
         """
         # Arrange
+        _add_batch(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+        )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-1",
             ImageStatus.PRE_PROCESSED,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-2",
@@ -316,29 +331,35 @@ class TestPreProcessingCompletion:
         )
 
         # Act
-        unfinished = _unfinished_image(sqlite_database_service, batch_uid)
+        unfinished = _unfinished_image(stored_database_service, batch_uid)
 
         # Assert
         assert unfinished is None
 
     def test_an_image_still_on_its_way_holds_the_batch(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_uid: UUID,
         dataset_uid: UUID,
     ) -> None:
         """The other half of it: a batch is not finished while an image is
         still going to arrive."""
         # Arrange
+        _add_batch(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+        )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-1",
             ImageStatus.PRE_PROCESSED,
         )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-2",
@@ -346,20 +367,26 @@ class TestPreProcessingCompletion:
         )
 
         # Act
-        unfinished = _unfinished_image(sqlite_database_service, batch_uid)
+        unfinished = _unfinished_image(stored_database_service, batch_uid)
 
         # Assert
         assert unfinished == "PL1234-20-2"
 
     def test_an_image_taken_out_of_the_project_holds_nothing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_uid: UUID,
         dataset_uid: UUID,
     ) -> None:
         # Arrange
+        _add_batch(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+        )
         _add_image(
-            sqlite_database_service,
+            stored_database_service,
             batch_uid,
             dataset_uid,
             "PL1234-20-2",
@@ -368,7 +395,90 @@ class TestPreProcessingCompletion:
         )
 
         # Act
-        unfinished = _unfinished_image(sqlite_database_service, batch_uid)
+        unfinished = _unfinished_image(stored_database_service, batch_uid)
 
         # Assert
         assert unfinished is None
+
+
+@pytest.mark.integration
+class TestFirstImageForBatch:
+    def test_an_image_in_any_of_the_included_statuses_is_found(
+        self,
+        stored_database_service: DatabaseService,
+        batch_uid: UUID,
+        dataset_uid: UUID,
+    ) -> None:
+        """The failure this guards against: each included status narrowing the
+        query on its own, so that asking for more than one finds nothing."""
+        # Arrange
+        _add_batch(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+        )
+        _add_image(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            "PL1234-20-1",
+            ImageStatus.STORED,
+        )
+        _add_image(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            "PL1234-20-2",
+            ImageStatus.POST_PROCESSING_FAILED,
+        )
+
+        # Act
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_first_image_for_batch(
+                session,
+                batch_uid=batch_uid,
+                include_status=[
+                    ImageStatus.STORING_FAILED,
+                    ImageStatus.POST_PROCESSING_FAILED,
+                ],
+            )
+            identifier = image.identifier if image is not None else None
+
+        # Assert
+        assert identifier == "PL1234-20-2"
+
+    def test_an_image_in_none_of_the_included_statuses_is_not_found(
+        self,
+        stored_database_service: DatabaseService,
+        batch_uid: UUID,
+        dataset_uid: UUID,
+    ) -> None:
+        # Arrange
+        _add_batch(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+        )
+        _add_image(
+            stored_database_service,
+            batch_uid,
+            dataset_uid,
+            "PL1234-20-1",
+            ImageStatus.STORED,
+        )
+
+        # Act
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_first_image_for_batch(
+                session,
+                batch_uid=batch_uid,
+                include_status=[
+                    ImageStatus.STORING_FAILED,
+                    ImageStatus.POST_PROCESSING_FAILED,
+                ],
+            )
+
+        # Assert
+        assert image is None

@@ -15,13 +15,36 @@
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import JSON, Dialect, TypeDecorator
+from sqlalchemy import JSON, Dialect, Integer, TypeDecorator
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 
-from slidetap.model import AnyAttribute, Code, Measurement, attribute_factory
+from slidetap.model import (
+    AnyAttribute,
+    Code,
+    Measurement,
+    RejectedValues,
+    attribute_factory,
+)
 
 ValueType = TypeVar("ValueType")
 ModelType = TypeVar("ModelType", bound=BaseModel)
+
+
+class RejectedValuesType(TypeDecorator[RejectedValues]):
+    """Integer column that reads back as ``RejectedValues`` flags."""
+
+    impl = Integer
+    cache_ok = True
+
+    def process_bind_param(self, value: RejectedValues | int | None, dialect: Dialect):
+        if value is None:
+            return value
+        return int(value)
+
+    def process_result_value(self, value, dialect) -> RejectedValues | None:
+        if value is None:
+            return value
+        return RejectedValues(value)
 
 
 class BaseLoadingJson(TypeDecorator[ValueType], Generic[ValueType, ModelType]):

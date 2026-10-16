@@ -14,7 +14,7 @@
 
 import { type ReactElement } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import auth from 'src/services/auth'
+import { useIsLoggedIn } from 'src/hooks/use_is_logged_in'
 
 interface ProtectedRouteProps {
   children: ReactElement
@@ -24,8 +24,12 @@ export default function ProtectedRoute({
   children,
 }: ProtectedRouteProps): ReactElement {
   const location = useLocation()
+  // Followed as it changes, so that a session found to have expired by any
+  // request leads to the login page rather than to the error the request
+  // raises.
+  const isLoggedIn = useIsLoggedIn()
 
-  if (!auth.isLoggedIn()) {
+  if (!isLoggedIn) {
     // Redirect to login page, preserving the intended destination
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }

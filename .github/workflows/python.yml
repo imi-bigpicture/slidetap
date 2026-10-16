@@ -16,6 +16,22 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The tests run on Postgres, which the deployments use. Without
+    # SLIDETAP_TEST_DBURI they run on SQLite, so they also run without it.
+    services:
+      postgres:
+        image: postgres:17.11-trixie
+        env:
+          POSTGRES_USER: slidetap
+          POSTGRES_PASSWORD: slidetap
+          POSTGRES_DB: slidetap
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slidetap"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -28,8 +44,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "slidetap-app/uv.lock"
 
+      # --locked fails when uv.lock is out of date with pyproject.toml, so the
+      # images, which install with --frozen, get what CI tested.
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --locked
 
       # The integration test reads whole slide images that are gitignored.
       - name: Load test images from cache
@@ -54,17 +72,63 @@ jobs:
       - name: Typos
         run: uv run typos
 
-      # Non-blocking for now: pre-existing type errors remain.
-      # Drop `continue-on-error` once `uv run pyright` is clean.
       - name: Pyright
         run: uv run pyright
-        continue-on-error: true
 
-      # The whole suite, integration included: the integration tests run
-      # in-process (SQLite in a tmpdir, Procrastinate's InMemoryConnector,
-      # FastAPI's TestClient) and need no external services.
+      # The whole suite, integration included. Each test that needs a database
+      # gets one of its own on the Postgres service; the tasks run on
+      # Procrastinate's InMemoryConnector and the app on FastAPI's TestClient.
       - name: Tests
         run: uv run pytest
+        env:
+          SLIDETAP_TEST_DBURI: postgresql://slidetap:slidetap@localhost:5432/slidetap
+
+  # The tests make their databases from the models. This runs the migrations
+  # on Postgres and checks that they and the models agree.
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.11-trixie
+        env:
+          POSTGRES_USER: slidetap
+          POSTGRES_PASSWORD: slidetap
+          POSTGRES_DB: slidetap
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slidetap"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SLIDETAP_DBURI: postgresql://slidetap:slidetap@localhost:5432/slidetap
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install native image libraries
+        run: sudo apt-get install -y libturbojpeg libopenslide0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "slidetap-app/uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Upgrade to head
+        run: uv run alembic upgrade head
+
+      - name: Models match the migrations
+        run: uv run alembic check
+
+      - name: Downgrade to base and upgrade again
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
 
   audit:
     runs-on: ubuntu-latest
@@ -81,8 +145,6 @@ jobs:
 
       # Audits slidetap-app/uv.lock against the OSV database; the workflow-level
       # `defaults.run.working-directory` puts this in slidetap-app. Reads the
-      # lockfile directly, so no `uv sync` is needed. `--frozen` rather than
-      # `--locked`: uv.lock is currently out of date with pyproject.toml, and
-      # --locked would fail on that instead of reporting vulnerabilities.
+      # lockfile directly, so no `uv sync` is needed.
       - name: Audit dependencies
-        run: uv audit --frozen --preview-features audit-command
+        run: uv audit --locked --preview-features audit-command

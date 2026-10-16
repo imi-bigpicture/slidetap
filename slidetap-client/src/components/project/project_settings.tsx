@@ -133,24 +133,29 @@ export default function ProjectSettings({
     mutationFn: (projectUid: string) => {
       return projectApi.repseudonymize(projectUid)
     },
+    // Its error is shown beside the action.
+    meta: { handlesError: true },
     onSuccess: invalidateItems,
   })
   const clearPseudonymsMutation = useMutation({
     mutationFn: (projectUid: string) => {
       return projectApi.clearPseudonyms(projectUid)
     },
+    meta: { handlesError: true },
     onSuccess: invalidateItems,
   })
   const pseudonymizeIdentifiersMutation = useMutation({
     mutationFn: (projectUid: string) => {
       return projectApi.pseudonymizeIdentifiers(projectUid)
     },
+    meta: { handlesError: true },
     onSuccess: invalidateItems,
   })
   const removePrivateAttributesMutation = useMutation({
     mutationFn: (projectUid: string) => {
       return projectApi.removePrivateAttributes(projectUid)
     },
+    meta: { handlesError: true },
     onSuccess: () => {
       invalidateItems()
       void queryClient.invalidateQueries({
@@ -171,6 +176,7 @@ export default function ProjectSettings({
     mutationFn: (projectUid: string) => {
       return projectApi.clearSeed(projectUid)
     },
+    meta: { handlesError: true },
     onSuccess: (updatedProject) => {
       queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
     },

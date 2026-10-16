@@ -244,7 +244,7 @@ class TestSchemaServiceRoots:
             SchemaInterface()  # type: ignore[abstract]
 
     def test_a_single_root_is_the_editable_root_of_new_projects(
-        self, sqlite_database_service: DatabaseService
+        self, stored_database_service: DatabaseService
     ):
         # Arrange
         class SingleRoot(SchemaInterface):
@@ -252,7 +252,7 @@ class TestSchemaServiceRoots:
                 return ExampleSchema()
 
         # Act
-        schema_service = SchemaService(SingleRoot(), sqlite_database_service)
+        schema_service = SchemaService(SingleRoot(), stored_database_service)
 
         # Assert
         assert list(schema_service.roots) == [ExampleSchema().uid]

@@ -12,7 +12,15 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { useEffect, useId, useMemo, useState, type ReactElement } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react'
 import { FilterList, FilterListOff } from '@mui/icons-material'
 import {
   Alert,
@@ -65,22 +73,28 @@ export function DataTableView<T extends RowData>({
   const [showFilters, setShowFilters] = useState(false)
   // Which column the filter row was opened for. Opening the row is a render
   // away, so the box to put the cursor in does not exist yet at the moment it
-  // is asked for.
-  const [focusFilter, setFocusFilter] = useState<string | null>(null)
+  // is asked for. A fresh object per ask, so asking for the same column again
+  // puts the cursor there again, and each ask is acted on once.
+  const [focusRequest, setFocusRequest] = useState<{ columnId: string } | null>(null)
+  const handledFocusRequest = useRef<{ columnId: string } | null>(null)
   const idPrefix = useId()
 
-  const filterInputId = (columnId: string): string => `${idPrefix}filter-${columnId}`
+  const filterInputId = useCallback(
+    (columnId: string): string => `${idPrefix}filter-${columnId}`,
+    [idPrefix],
+  )
 
   useEffect(() => {
-    if (focusFilter === null || !showFilters) return
-    document.getElementById(filterInputId(focusFilter))?.focus()
-    setFocusFilter(null)
-  })
+    if (focusRequest === null || !showFilters) return
+    if (focusRequest === handledFocusRequest.current) return
+    handledFocusRequest.current = focusRequest
+    document.getElementById(filterInputId(focusRequest.columnId))?.focus()
+  }, [focusRequest, showFilters, filterInputId])
 
   /** Show every filter box and put the cursor in this column's. */
   const filterByColumn = (columnId: string): void => {
     setShowFilters(true)
-    setFocusFilter(columnId)
+    setFocusRequest({ columnId })
   }
 
   const filterable = columns.some((column) => column.filter !== undefined)

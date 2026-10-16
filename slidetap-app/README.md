@@ -254,7 +254,7 @@ Create an `.env`-file in the project folder setting the following environment
 variables:
 
 - SLIDETAP_CONFIG_FILE: Path to the config.yaml holding the rest of the settings.
-- SLIDETAP_SECRET_KEY: The secret key to use.
+- SLIDETAP_SECRET_KEY: The secret key to sign access tokens with, at least 32 bytes long. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 - SLIDETAP_STORAGE: Path to location where to store data.
 - SLIDETAP_DBURI: URI for database storage, which also holds the task queue.
 - SLIDETAP_CORS_ORIGINS: Origins the front end is served from, if it is not served from the same origin as the API.
@@ -262,7 +262,7 @@ variables:
 
 ```env
 SLIDETAP_CONFIG_FILE=C:\temp\slidetap\config.yaml
-SLIDETAP_SECRET_KEY=DEVELOP
+SLIDETAP_SECRET_KEY=a-development-key-of-at-least-32-bytes
 SLIDETAP_STORAGE=C:\temp\slidetap
 SLIDETAP_DBURI=sqlite:///C:/temp/slidetap/db.sqlite
 SLIDETAP_CORS_ORIGINS=http://localhost:13000
@@ -406,9 +406,19 @@ next `slidetap-task-init-schema` run will detect them by lexicographic
 comparison against the stamp and apply them in order. Review the new
 files first if the bump crosses a major version.
 
-Tests use a separate SQLite fixture that calls `Base.metadata.create_all`
-directly and then stamps the database at `head`, so they do not depend on
-Alembic or this runner, but still pass the startup revision check.
+Tests give each test a database of its own that is made with
+`Base.metadata.create_all` directly, and the app tests stamp it at `head`,
+so they do not depend on Alembic or this runner, but still pass the startup
+revision check. The database is a SQLite file unless `SLIDETAP_TEST_DBURI`
+names a Postgres server, as it does in CI:
+
+```console
+> $env:SLIDETAP_TEST_DBURI = "postgresql://slidetap:slidetap@localhost:5432/slidetap"
+> uv run pytest
+```
+
+Each test then gets a database of its own on that server, so the user needs
+the right to create databases.
 
 Other day-to-day commands:
 

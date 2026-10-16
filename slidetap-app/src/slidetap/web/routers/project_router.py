@@ -64,7 +64,7 @@ project_router = APIRouter(
 
 
 @project_router.post("/create")
-async def create_project(
+def create_project(
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
 ) -> Project:
@@ -86,7 +86,7 @@ async def create_project(
 
 
 @project_router.get("")
-async def get_projects(
+def get_projects(
     project_service: FromDishka[ProjectService],
 ) -> Iterable[Project]:
     """Get status of registered projects.
@@ -103,7 +103,7 @@ async def get_projects(
 
 
 @project_router.post("/project/{project_uid}")
-async def update_project(
+def update_project(
     project_uid: UUID,
     project: Project,
     project_service: FromDishka[ProjectService],
@@ -123,6 +123,11 @@ async def update_project(
     Project
         Updated project data if successful.
     """
+    if project.uid != project_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Project uid {project.uid} does not match path uid {project_uid}",
+        )
     try:
         updated_project = project_service.update(project)
         if updated_project is None:
@@ -139,7 +144,7 @@ async def update_project(
 
 
 @project_router.post("/project/{project_uid}/complete")
-async def complete(
+def complete(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     image_pipeline_service: FromDishka[ImagePipelineService],
@@ -169,7 +174,7 @@ async def complete(
         )
     logger.info(f"Storing images of project {project_uid} to outbox.")
     try:
-        await image_pipeline_service.store_project(project_uid)
+        image_pipeline_service.store_project(project_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -178,7 +183,7 @@ async def complete(
 
 
 @project_router.post("/project/{project_uid}/export")
-async def export(
+def export(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -223,7 +228,7 @@ async def export(
             ),
         )
     try:
-        await metadata_export_service.export(project)
+        metadata_export_service.export(project)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -232,7 +237,7 @@ async def export(
 
 
 @project_router.post("/project/{project_uid}/repseudonymize")
-async def repseudonymize(
+def repseudonymize(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -280,7 +285,7 @@ async def repseudonymize(
 
 
 @project_router.post("/project/{project_uid}/clear_pseudonyms")
-async def clear_pseudonyms(
+def clear_pseudonyms(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -317,7 +322,7 @@ async def clear_pseudonyms(
 
 
 @project_router.post("/project/{project_uid}/pseudonymize_identifiers")
-async def pseudonymize_identifiers(
+def pseudonymize_identifiers(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -363,7 +368,7 @@ async def pseudonymize_identifiers(
 
 
 @project_router.get("/project/{project_uid}/private_attributes")
-async def get_private_attributes(
+def get_private_attributes(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -388,7 +393,7 @@ async def get_private_attributes(
 
 
 @project_router.post("/project/{project_uid}/remove_private_attributes")
-async def remove_private_attributes(
+def remove_private_attributes(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -424,7 +429,7 @@ async def remove_private_attributes(
 
 
 @project_router.post("/project/{project_uid}/clear_seed")
-async def clear_seed(
+def clear_seed(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     logger: Logger,
@@ -458,7 +463,7 @@ async def clear_seed(
 
 
 @project_router.get("/project/{project_uid}")
-async def get_project(
+def get_project(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
 ) -> Project:
@@ -483,7 +488,7 @@ async def get_project(
 
 
 @project_router.get("/project/{project_uid}/actions")
-async def get_project_actions(
+def get_project_actions(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
 ) -> ProjectActions:
@@ -507,7 +512,7 @@ async def get_project_actions(
 
 
 @project_router.get("/project/{project_uid}/migration")
-async def get_project_migration(
+def get_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
 ) -> ProjectMigration:
@@ -534,7 +539,7 @@ async def get_project_migration(
 
 
 @project_router.post("/project/{project_uid}/migration")
-async def create_project_migration(
+def create_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
     scheduler: FromDishka[Scheduler],
@@ -571,7 +576,7 @@ async def create_project_migration(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     try:
-        await scheduler.plan_migration(project_uid)
+        scheduler.plan_migration(project_uid)
     except Exception as exception:
         # Set as migrating already, and nothing would ever plan it.
         logger.error(f"Failed to start migrating project {project_uid}", exc_info=True)
@@ -586,7 +591,7 @@ async def create_project_migration(
 @project_router.put(
     "/project/{project_uid}/migration/attribute-issues/{attribute_issue_uid}"
 )
-async def resolve_project_migration_attribute_issue(
+def resolve_project_migration_attribute_issue(
     project_uid: UUID,
     attribute_issue_uid: UUID,
     migration_service: FromDishka[MigrationService],
@@ -627,7 +632,7 @@ async def resolve_project_migration_attribute_issue(
 
 
 @project_router.post("/project/{project_uid}/migration/submit")
-async def submit_project_migration(
+def submit_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
     scheduler: FromDishka[Scheduler],
@@ -662,7 +667,7 @@ async def submit_project_migration(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     try:
-        await scheduler.complete_migration(project_uid)
+        scheduler.complete_migration(project_uid)
     except Exception as exception:
         logger.error(
             f"Failed to start completing the migration of project {project_uid}",
@@ -677,7 +682,7 @@ async def submit_project_migration(
 
 
 @project_router.delete("/project/{project_uid}/migration")
-async def revert_project_migration(
+def revert_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
 ) -> Project:
@@ -706,7 +711,7 @@ async def revert_project_migration(
 
 
 @project_router.delete("/project/{project_uid}")
-async def delete_project(
+def delete_project(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     scheduler: FromDishka[Scheduler],
@@ -741,12 +746,23 @@ async def delete_project(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     logger.info(f"Scheduling deletion of project {project_uid}.")
-    await scheduler.delete_project(project)
+    try:
+        scheduler.delete_project(project)
+    except Exception as exception:
+        # The project stays marked as deleting, and deleting it again
+        # schedules the deletion again.
+        logger.error(
+            f"Failed to schedule deletion of project {project_uid}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to schedule the deletion, delete the project again",
+        ) from exception
     return StatusResponse(status="scheduled")
 
 
 @project_router.get("/project/{project_uid}/validation")
-async def get_project_validation(
+def get_project_validation(
     project_uid: UUID,
     validation_service: FromDishka[ValidationService],
     logger: Logger,

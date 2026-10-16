@@ -23,6 +23,7 @@ from uuid import UUID
 from slidetap.model.attribute import AnyAttribute
 from slidetap.model.errors import MigrationError
 from slidetap.model.schema.attribute_schema import (
+    AnyAttributeSchema,
     AttributeSchema,
     ListAttributeSchema,
     ObjectAttributeSchema,
@@ -33,6 +34,7 @@ from slidetap.model.schema.hierarchy_layout import HierarchyLayout
 from slidetap.model.schema.images_layout import ImagesLayout
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
+    AnyItemSchema,
     ImageSchema,
     ItemSchema,
     ObservationSchema,
@@ -94,7 +96,7 @@ class RootSchemaIndex:
             new_projects=self.is_default,
         )
 
-    def get_attributes(self) -> Iterable[AttributeSchema]:
+    def get_attributes(self) -> Iterable[AnyAttributeSchema]:
         return self.attributes.values()
 
     def get_attribute_by_name(self, attribute_name: str) -> AttributeSchema:
@@ -108,7 +110,7 @@ class RootSchemaIndex:
             or attribute_schema_uid in self.private_attributes
         )
 
-    def get_item(self, item_schema_uid: UUID) -> ItemSchema:
+    def get_item(self, item_schema_uid: UUID) -> AnyItemSchema:
         return self.items[item_schema_uid]
 
     def get_entity_schema(self, schema_uid: UUID) -> AnyEntitySchema:
@@ -286,14 +288,14 @@ class RootSchemaIndex:
         )
 
     @cached_property
-    def attributes(self) -> dict[UUID, AttributeSchema]:
+    def attributes(self) -> dict[UUID, AnyAttributeSchema]:
         return {attribute.uid: attribute for attribute in self._iter_attributes()}
 
     @cached_property
-    def attributes_by_name(self) -> dict[str, AttributeSchema]:
+    def attributes_by_name(self) -> dict[str, AnyAttributeSchema]:
         return {attribute.name: attribute for attribute in self._iter_attributes()}
 
-    def _iter_attributes(self) -> Iterable[AttributeSchema]:
+    def _iter_attributes(self) -> Iterable[AnyAttributeSchema]:
         """Every public attribute of the root, nested ones included."""
         for schema in self.project.attributes.values():
             yield from self._get_recursive_attributes(schema)
@@ -304,9 +306,9 @@ class RootSchemaIndex:
                 yield from self._get_recursive_attributes(attribute)
 
     @cached_property
-    def private_attributes(self) -> dict[UUID, AttributeSchema]:
+    def private_attributes(self) -> dict[UUID, AnyAttributeSchema]:
         """Get all private attributes."""
-        attributes: list[AttributeSchema] = []
+        attributes: list[AnyAttributeSchema] = []
         attributes.extend(self.project.private_attributes.values())
         attributes.extend(self.dataset.private_attributes.values())
         for item in self.items.values():
@@ -315,8 +317,8 @@ class RootSchemaIndex:
         return {attribute.uid: attribute for attribute in attributes}
 
     @cached_property
-    def items(self) -> dict[UUID, ItemSchema]:
-        items: Mapping[UUID, ItemSchema] = (
+    def items(self) -> dict[UUID, AnyItemSchema]:
+        items: Mapping[UUID, AnyItemSchema] = (
             self.samples | self.images | self.annotations | self.observations
         )
         return dict(items)
@@ -506,8 +508,8 @@ class RootSchemaIndex:
 
     @classmethod
     def _get_recursive_attributes(
-        cls, schema: AttributeSchema
-    ) -> Iterable[AttributeSchema]:
+        cls, schema: AnyAttributeSchema
+    ) -> Iterable[AnyAttributeSchema]:
         yield schema
         if isinstance(schema, ListAttributeSchema):
             yield from cls._get_recursive_attributes(schema.attribute)

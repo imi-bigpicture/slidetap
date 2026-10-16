@@ -144,10 +144,14 @@ export default function OverviewView({
     Record<string, Record<string, Attribute<AttributeValueTypes>>>
   >({})
 
-  useEffect(() => {
+  // Another item passed in replaces the one held here, and drops the edits made
+  // to the last one.
+  const [passedItemUid, setPassedItemUid] = useState(itemUid)
+  if (itemUid !== passedItemUid) {
+    setPassedItemUid(itemUid)
     setCurrentItemUid(itemUid)
     setEditedItems({})
-  }, [itemUid])
+  }
 
   const overviewQuery = useQuery({
     queryKey: [
@@ -172,8 +176,8 @@ export default function OverviewView({
   const navigateTo = useCallback(
     (uid: string) => {
       if (onNavigateToItem !== undefined) {
-        // The address decides which item is shown; the effect above follows it
-        // back down into here.
+        // The address decides which item is shown; the item passed in follows
+        // it back down into here.
         onNavigateToItem(uid)
         return
       }
@@ -183,17 +187,19 @@ export default function OverviewView({
     [onNavigateToItem],
   )
 
+  const previousUid = overviewQuery.data?.previousUid
   const navigatePrevious = useCallback(() => {
-    if (overviewQuery.data?.previousUid) {
-      navigateTo(overviewQuery.data.previousUid)
+    if (previousUid) {
+      navigateTo(previousUid)
     }
-  }, [overviewQuery.data?.previousUid, navigateTo])
+  }, [previousUid, navigateTo])
 
+  const nextUid = overviewQuery.data?.nextUid
   const navigateNext = useCallback(() => {
-    if (overviewQuery.data?.nextUid) {
-      navigateTo(overviewQuery.data.nextUid)
+    if (nextUid) {
+      navigateTo(nextUid)
     }
-  }, [overviewQuery.data?.nextUid, navigateTo])
+  }, [nextUid, navigateTo])
 
   // Build a map of all target schemas from sections
   const allSchemas = {

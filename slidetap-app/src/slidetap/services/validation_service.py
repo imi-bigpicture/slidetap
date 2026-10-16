@@ -15,7 +15,7 @@
 from collections.abc import Iterable
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, select
+from sqlalchemy import ColumnElement, ColumnExpressionArgument, and_, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -34,14 +34,13 @@ from slidetap.model import (
     BatchValidation,
     Dataset,
     DatasetValidation,
-    ImageStatus,
     Item,
     MetadataImportCompleteness,
     Project,
     ProjectValidation,
     RootSchemaIndex,
 )
-from slidetap.model.schema.item_schema import AnyItemSchema, ImageSchema
+from slidetap.model.schema.item_schema import ImageSchema, ItemSchema
 from slidetap.model.validation import NonValidItem
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -226,7 +225,7 @@ class ValidationService:
         return self.item_is_valid_for_now(item, session)
 
     def pending_expression(
-        self, root: RootSchemaIndex, schema: AnyItemSchema
+        self, root: RootSchemaIndex, schema: ItemSchema
     ) -> ColumnElement[bool] | None:
         """The same question as ``item_is_pending``, asked of a query.
 
@@ -262,7 +261,7 @@ class ValidationService:
             for status in BatchStatus
             if status < BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         ]
-        terms: list[ColumnElement[bool]] = [
+        terms: list[ColumnExpressionArgument[bool]] = [
             DatabaseItem.valid_attributes.is_(False),
             DatabaseItem.valid_relations,
             DatabaseItem.valid_pseudonym,
@@ -274,17 +273,9 @@ class ValidationService:
             ),
         ]
         if isinstance(schema, ImageSchema):
-            # As `DatabaseImage.valid` counts it: an image whose download or
-            # processing failed is not waiting for anything.
-            terms.append(
-                DatabaseImage.status.notin_(
-                    [
-                        ImageStatus.DOWNLOADING_FAILED,
-                        ImageStatus.PRE_PROCESSING_FAILED,
-                        ImageStatus.POST_PROCESSING_FAILED,
-                    ]
-                )
-            )
+            # As `DatabaseImage.valid` counts it: an image a phase failed in
+            # is not waiting for anything.
+            terms.append(DatabaseImage.status.notin_(DatabaseImage.FAILED_STATUSES))
         return and_(*terms)
 
     def validate_item_attributes(

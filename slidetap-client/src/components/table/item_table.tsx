@@ -43,7 +43,7 @@ import {
   type PaginationState,
   type SortingState,
 } from './data_table'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { Action, ActionStrings, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
@@ -426,41 +426,31 @@ export function ItemTable({
     onNew?.()
   }
 
-  // Read through a ref by everything the columns build, so a caller that
-  // rebuilds these inline does not rebuild the columns with them.
-  const latestActions = useRef(actions)
-  latestActions.current = actions
-  const latestOnRowView = useRef(onRowView)
-  latestOnRowView.current = onRowView
-
   /** The row's actions, listed in the identifier's hover panel. Delete and
    * restore are two views of the same action, so only the one matching the
    * current recycled filter is offered. */
-  const rowActions = useCallback(
-    (item: Item): ValueAction[] =>
-      (latestActions.current ?? [])
-        .filter((action) =>
-          displayRecycled
-            ? action.action !== Action.DELETE
-            : action.action !== Action.RESTORE,
-        )
-        .filter(
-          (action) =>
-            action.hideWhenDisabled !== true ||
-            action.enabled === undefined ||
-            action.enabled(item),
-        )
-        .map((action) => ({
-          key: `${action.action}`,
-          icon: ActionsIcons[action.action],
-          label: ActionStrings[action.action],
-          onClick: (anchor: HTMLElement) => action.onAction?.(item, anchor),
-          href: action.href?.(item),
-          pin: action.pin,
-          disabled: action.enabled !== undefined && !action.enabled(item),
-        })),
-    [displayRecycled],
-  )
+  const rowActions = (item: Item): ValueAction[] =>
+    (actions ?? [])
+      .filter((action) =>
+        displayRecycled
+          ? action.action !== Action.DELETE
+          : action.action !== Action.RESTORE,
+      )
+      .filter(
+        (action) =>
+          action.hideWhenDisabled !== true ||
+          action.enabled === undefined ||
+          action.enabled(item),
+      )
+      .map((action) => ({
+        key: `${action.action}`,
+        icon: ActionsIcons[action.action],
+        label: ActionStrings[action.action],
+        onClick: (anchor: HTMLElement) => action.onAction?.(item, anchor),
+        href: action.href?.(item),
+        pin: action.pin,
+        disabled: action.enabled !== undefined && !action.enabled(item),
+      }))
 
   const identifierColumnSize = useMemo(() => {
     const longest = (itemsQuery.data?.items ?? []).reduce(
@@ -482,9 +472,10 @@ export function ItemTable({
   // polls every two seconds and re-renders on each keystroke in a filter box is
   // the whole schema, continuously.
   //
-  // The callbacks the columns close over are read through refs rather than
-  // listed below: the caller builds them inline, so depending on them would
-  // rebuild the columns on every render of the page above.
+  // The callbacks the cells use are given through `RowCallbacksContext` rather
+  // than closed over and listed below: the caller builds them inline, so
+  // depending on them would rebuild the columns on every render of the page
+  // above.
   const columns = useMemo<Array<ColumnDef<Item>>>(() => {
     const columns: Array<ColumnDef<Item>> = [
       {
@@ -494,23 +485,7 @@ export function ItemTable({
         size: identifierColumnSize,
         minSize: IDENTIFIER_MIN_WIDTH,
         filter: { variant: 'text' },
-        Cell: ({ row }) => {
-          const item = row
-          return (
-            // The identifier is the way into the item and everything the row can
-            // do hangs off it. Name, pseudonym and comment live in the detail
-            // panel it opens, so no popover here.
-            <ValueActions
-              dense
-              value={getDisplayIdentifier(item, pseudonymMode)}
-              monospace
-              onOpen={() => latestOnRowView.current(item.uid)}
-              copyable
-              copyLabel="Copy identifier"
-              actions={rowActions(item)}
-            />
-          )
-        },
+        Cell: ({ row }) => <IdentifierCell item={row} pseudonymMode={pseudonymMode} />,
       },
       {
         id: 'valid',
@@ -700,13 +675,7 @@ export function ItemTable({
               value={`${value}`}
               quiet
               contentMinWidth={220}
-              content={
-                <ItemRelations
-                  relation={definition}
-                  item={item}
-                  onClick={(uid) => latestOnRowView.current(uid)}
-                />
-              }
+              content={<ItemRelations relation={definition} item={item} />}
             />
           )
         },
@@ -720,7 +689,6 @@ export function ItemTable({
     identifierColumnSize,
     tagsQuery.data,
     relationships,
-    rowActions,
   ])
 
   const table = useDataTable<Item>({
@@ -876,7 +844,45 @@ export function ItemTable({
       )
     },
   })
-  return <DataTableView table={table} />
+  return (
+    <RowCallbacksContext value={{ rowActions, onRowView }}>
+      <DataTableView table={table} />
+    </RowCallbacksContext>
+  )
+}
+
+/** What the cells do on their row, as of the latest render of the table. */
+interface RowCallbacks {
+  rowActions: (item: Item) => ValueAction[]
+  onRowView: (itemUid: string) => void
+}
+
+const RowCallbacksContext = createContext<RowCallbacks>({
+  rowActions: () => [],
+  onRowView: () => {},
+})
+
+interface IdentifierCellProps {
+  item: Item
+  pseudonymMode: boolean
+}
+
+function IdentifierCell({ item, pseudonymMode }: IdentifierCellProps): React.ReactElement {
+  const { rowActions, onRowView } = useContext(RowCallbacksContext)
+  return (
+    // The identifier is the way into the item and everything the row can do
+    // hangs off it. Name, pseudonym and comment live in the detail panel it
+    // opens, so no popover here.
+    <ValueActions
+      dense
+      value={getDisplayIdentifier(item, pseudonymMode)}
+      monospace
+      onOpen={() => onRowView(item.uid)}
+      copyable
+      copyLabel="Copy identifier"
+      actions={rowActions(item)}
+    />
+  )
 }
 
 interface ItemRelationProps {
@@ -909,14 +915,10 @@ function ItemRelation({ itemUid, onClick }: ItemRelationProps): React.ReactEleme
 interface ItemRelationsProps {
   relation: RelationFilterDefinition
   item: Item
-  onClick: (itemUid: string) => void
 }
 
-function ItemRelations({
-  relation,
-  item,
-  onClick,
-}: ItemRelationsProps): React.ReactElement {
+function ItemRelations({ relation, item }: ItemRelationsProps): React.ReactElement {
+  const { onRowView } = useContext(RowCallbacksContext)
   const getRelationItemUids = (item: Item): string[] => {
     if (isSampleItem(item)) {
       if (relation.relationType === RelationFilterType.CHILD) {
@@ -979,7 +981,7 @@ function ItemRelations({
   return (
     <Stack spacing={1} direction={'column'}>
       {relationItemUids.map((uid) => (
-        <ItemRelation key={uid} itemUid={uid} onClick={onClick} />
+        <ItemRelation key={uid} itemUid={uid} onClick={onRowView} />
       ))}
     </Stack>
   )

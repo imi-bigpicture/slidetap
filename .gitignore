@@ -10,3 +10,10 @@ example/ssl
 example/storage
 __pycache__/
 *.out
+
+# Local credentials and logs, never committed.
+credentials.py
+debug.log
+
+# Local Claude Code settings and worktrees.
+.claude/

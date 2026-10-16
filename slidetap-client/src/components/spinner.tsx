@@ -26,12 +26,8 @@ interface SpinnerProps {
 export default function Spinner({
   loading,
   children,
-  style,
   minHeight,
 }: SpinnerProps): React.ReactElement {
-  if (style === undefined) {
-    style = { display: 'flex', justifyContent: 'center' }
-  }
   if (minHeight === undefined) {
     minHeight = '50vh'
   }

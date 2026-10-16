@@ -15,19 +15,21 @@
 import CssBaseline from '@mui/material/CssBaseline'
 import { LocalizationProvider } from '@mui/x-date-pickers'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { Outlet, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import ProtectedRoute from 'src/components/auth/protected_route'
 import SessionTimeoutDialog from 'src/components/auth/session_timeout_dialog'
 import ErrorBoundary from 'src/components/error/error_boundary'
 import Login from 'src/components/login/basic_login'
+import { useError } from 'src/contexts/error/error_context'
 import { ErrorProvider } from 'src/contexts/error/error_context_provider'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
 import { PseudonymProvider } from 'src/contexts/pseudonym/pseudonym_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
 import { ExtensionsContext, type AppExtensions } from 'src/extensions'
+import { useIsLoggedIn } from 'src/hooks/use_is_logged_in'
 import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
 import MappingPage from 'src/pages/mapper'
 import MappersPage from 'src/pages/mappers'
@@ -37,6 +39,7 @@ import SchemasPage from 'src/pages/schemas'
 import TasksPage from 'src/pages/tasks'
 import Title from 'src/pages/title'
 import auth from 'src/services/auth'
+import { createQueryClient } from 'src/services/query_client'
 
 /** Layout component that wraps all protected routes with schema context */
 function ProtectedLayout(): ReactElement {
@@ -49,15 +52,29 @@ function ProtectedLayout(): ReactElement {
   )
 }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 30000,
-    },
-  },
-})
+/** Provides the query client, reporting failed mutations in the error display
+ * it is placed under. */
+function QueryProvider({ children }: { children: ReactNode }): ReactElement {
+  const { showError } = useError()
+  // Made once. The `showError` it is made with only sets the error display's
+  // state, so it keeps reporting for as long as the display is up.
+  const [queryClient] = useState(() => createQueryClient(showError))
+
+  const isLoggedIn = useIsLoggedIn()
+  // What was fetched for one user is not shown to the next one logging in.
+  useEffect(() => {
+    if (!isLoggedIn) {
+      queryClient.clear()
+    }
+  }, [isLoggedIn, queryClient])
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  )
+}
 
 interface AppProps {
   extensions?: AppExtensions
@@ -72,10 +89,12 @@ function App({ extensions = {} }: AppProps): ReactElement {
   // Enable periodic keep-alive to maintain session for active users
   usePeriodicKeepAlive()
 
+  const isLoggedIn = useIsLoggedIn()
+
   return (
     <ExtensionsContext.Provider value={extensions}>
-      <QueryClientProvider client={queryClient}>
-        <ErrorProvider>
+      <ErrorProvider>
+        <QueryProvider>
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <ThemeContextProvider>
               <PseudonymProvider>
@@ -101,15 +120,14 @@ function App({ extensions = {} }: AppProps): ReactElement {
                         <Route path="/tasks" element={<TasksPage />} />
                       </Route>
                     </Routes>
-                    {auth.isLoggedIn() && <SessionTimeoutDialog />}
+                    {isLoggedIn && <SessionTimeoutDialog />}
                   </ErrorBoundary>
                 </Router>
               </PseudonymProvider>
             </ThemeContextProvider>
           </LocalizationProvider>
-        </ErrorProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
+        </QueryProvider>
+      </ErrorProvider>
     </ExtensionsContext.Provider>
   )
 }

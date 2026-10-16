@@ -1,14 +1,16 @@
 services:
   dbservice:
-    image: postgres:17
+    # Pinned to an exact tag; Dependabot's docker-compose ecosystem bumps it.
+    image: postgres:17.11-trixie
     volumes:
       - slidetap_postgres_data:/var/lib/postgresql/data/
+    # Credentials come from .env, written by prepare-example-config.py.
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=slidetap
+      POSTGRES_USER: ${POSTGRES_USER:?run prepare-example-config.py to create .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run prepare-example-config.py to create .env}
+      POSTGRES_DB: ${POSTGRES_DB:?run prepare-example-config.py to create .env}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d slidetap"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -17,7 +19,7 @@ services:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage
-      SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+      SLIDETAP_DBURI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@dbservice:5432/${POSTGRES_DB}
       # The package whose container module the mapper set-up creates its
       # container from.
       SLIDETAP_TASK_APP: ${SLIDETAP_TASK_APP}
@@ -40,7 +42,7 @@ services:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage
-      SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+      SLIDETAP_DBURI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@dbservice:5432/${POSTGRES_DB}
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
     build:
       context: ../slidetap-app
@@ -55,7 +57,7 @@ services:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage
-      SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+      SLIDETAP_DBURI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@dbservice:5432/${POSTGRES_DB}
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
       SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
     build:
@@ -68,7 +70,14 @@ services:
         condition: service_completed_successfully
 
   webserver:
-    env_file: .env
+    # Only what the nginx template needs, so the database password and secret
+    # key stay out of the internet-facing container.
+    environment:
+      SLIDETAP_SERVERNAME: ${SLIDETAP_SERVERNAME}
+      SLIDETAP_PORT: ${SLIDETAP_PORT}
+      SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
+      SLIDETAP_SSL_CERTIFICATE: ${SLIDETAP_SSL_CERTIFICATE}
+      SLIDETAP_SSL_CERTIFICATE_KEY: ${SLIDETAP_SSL_CERTIFICATE_KEY}
     build:
       context: ../slidetap-client
       dockerfile: dockerfiles/webserver.Dockerfile

@@ -30,12 +30,18 @@ function getCookie(name: string): string {
   return ''
 }
 
+/** Raised in this window when it logs in or out. Another window logging in or
+ * out is told by the storage event instead. */
+const AUTH_CHANGE_EVENT = 'slidetap-auth-change'
+
 const setLoggedIn = (): void => {
   localStorage.setItem('isLoggedIn', 'true')
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT))
 }
 
 const clearLoggedIn = (): void => {
   localStorage.removeItem('isLoggedIn')
+  window.dispatchEvent(new Event(AUTH_CHANGE_EVENT))
 }
 
 const getLoggedIn = (): boolean => {
@@ -54,6 +60,24 @@ const BasicAuth = {
 
   isLoggedIn: () => {
     return getLoggedIn()
+  },
+
+  /**
+   * Call `listener` whenever this or another window logs in or out. Returns
+   * the function that stops it, as `useSyncExternalStore` expects.
+   */
+  subscribe: (listener: () => void) => {
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key === 'isLoggedIn' || event.key === null) {
+        listener()
+      }
+    }
+    window.addEventListener(AUTH_CHANGE_EVENT, listener)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, listener)
+      window.removeEventListener('storage', onStorage)
+    }
   },
 
   getHeaders: () => {

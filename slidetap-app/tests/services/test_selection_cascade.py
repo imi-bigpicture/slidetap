@@ -306,52 +306,52 @@ def schema(diagnoses_cardinality: Cardinality) -> RootSchema:
 
 @pytest.fixture()
 def batch_uid(
-    sqlite_database_service: DatabaseService, dataset: Dataset, project: Project
+    stored_database_service: DatabaseService, dataset: Dataset, project: Project
 ) -> UUID:
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        sqlite_database_service.add_project(session, project)
-        return sqlite_database_service.add_batch(
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored_database_service.add_project(session, project)
+        return stored_database_service.add_batch(
             session, BatchCreate(name="batch", project_uid=project.uid)
         ).uid
 
 
 @pytest.fixture()
 def validation_service(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema: RootSchema,
     schema_service_of: Callable[..., SchemaService],
 ) -> ValidationService:
-    return ValidationService(schema_service_of(schema), sqlite_database_service)
+    return ValidationService(schema_service_of(schema), stored_database_service)
 
 
 @pytest.fixture()
 def item_service(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema: RootSchema,
     validation_service: ValidationService,
     schema_service_of: Callable[..., SchemaService],
 ) -> ItemService:
     schema_service = schema_service_of(schema)
     review_service = ReviewService(
-        schema_service, validation_service, sqlite_database_service
+        schema_service, validation_service, stored_database_service
     )
     attribute_service = AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
     return ItemService(
         attribute_service,
-        TagService(sqlite_database_service),
+        TagService(stored_database_service),
         MapperService(
             attribute_service,
             validation_service,
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         ),
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
@@ -428,10 +428,10 @@ class Hierarchy:
 
 @pytest.fixture()
 def hierarchy(
-    sqlite_database_service: DatabaseService, dataset: Dataset, batch_uid: UUID
+    stored_database_service: DatabaseService, dataset: Dataset, batch_uid: UUID
 ) -> dict[str, UUID]:
     """The hierarchy stored, as the uid of each item by name."""
-    with sqlite_database_service.get_session() as session:
+    with stored_database_service.get_session() as session:
         built = Hierarchy(dataset, batch_uid)
         session.add(built.patient)
         session.commit()
@@ -439,46 +439,46 @@ def hierarchy(
 
 
 def _selected(
-    sqlite_database_service: DatabaseService, hierarchy: dict[str, UUID]
+    stored_database_service: DatabaseService, hierarchy: dict[str, UUID]
 ) -> set[str]:
     """The names of what is in the project."""
-    with sqlite_database_service.get_session() as session:
+    with stored_database_service.get_session() as session:
         return {
             name
             for name, uid in hierarchy.items()
-            if sqlite_database_service.get_item(session, uid).selected
+            if stored_database_service.get_item(session, uid).selected
         }
 
 
 def _valid_relations(
-    sqlite_database_service: DatabaseService, hierarchy: dict[str, UUID], name: str
+    stored_database_service: DatabaseService, hierarchy: dict[str, UUID], name: str
 ) -> bool:
-    with sqlite_database_service.get_session() as session:
+    with stored_database_service.get_session() as session:
         return bool(
-            sqlite_database_service.get_item(session, hierarchy[name]).valid_relations
+            stored_database_service.get_item(session, hierarchy[name]).valid_relations
         )
 
 
 def _curator_excluded(
-    sqlite_database_service: DatabaseService, hierarchy: dict[str, UUID]
+    stored_database_service: DatabaseService, hierarchy: dict[str, UUID]
 ) -> set[str]:
     """The names of what a curator took out by name."""
-    with sqlite_database_service.get_session() as session:
+    with stored_database_service.get_session() as session:
         return {
             name
             for name, uid in hierarchy.items()
-            if sqlite_database_service.get_item(session, uid).curator_excluded
+            if stored_database_service.get_item(session, uid).curator_excluded
         }
 
 
 def _forget_curation(
-    sqlite_database_service: DatabaseService, hierarchy: dict[str, UUID]
+    stored_database_service: DatabaseService, hierarchy: dict[str, UUID]
 ) -> None:
     """Clear every curation mark, as if everything out had gone with
     something else rather than by name."""
-    with sqlite_database_service.get_session() as session:
+    with stored_database_service.get_session() as session:
         for uid in hierarchy.values():
-            sqlite_database_service.get_item(session, uid).curator_excluded = False
+            stored_database_service.get_item(session, uid).curator_excluded = False
         session.commit()
 
 
@@ -487,7 +487,7 @@ class TestDeselecting:
     def test_a_slide_goes_with_its_image_and_nothing_above_it(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """The block still has a slide, so it and everything above it stay,
@@ -500,12 +500,12 @@ class TestDeselecting:
 
         # Assert
         gone = {"slide_1", "image_1", "annotation", "finding", "note"}
-        assert _selected(sqlite_database_service, hierarchy) == everything - gone
+        assert _selected(stored_database_service, hierarchy) == everything - gone
 
     def test_the_last_slide_takes_the_block_and_everything_above_with_it(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """Every level requires at least one of the next, so nothing above is
@@ -517,12 +517,12 @@ class TestDeselecting:
         item_service.select_item(hierarchy["slide_2"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == set()
+        assert _selected(stored_database_service, hierarchy) == set()
 
     def test_the_last_image_takes_its_slide(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """A slide requires an image, so a slide with no image left is not
@@ -535,20 +535,20 @@ class TestDeselecting:
 
         # Assert
         gone = {"image_2", "slide_2"}
-        assert _selected(sqlite_database_service, hierarchy) == everything - gone
+        assert _selected(stored_database_service, hierarchy) == everything - gone
 
     def test_a_macro_image_stays_while_one_of_its_blocks_is_in(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
     ):
         """The macro image is over two blocks and needs one of them."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            block = sqlite_database_service.get_sample(session, hierarchy["block"])
+        with stored_database_service.get_session() as session:
+            block = stored_database_service.get_sample(session, hierarchy["block"])
             other_block = DatabaseSample(
                 dataset.uid,
                 batch_uid,
@@ -566,7 +566,7 @@ class TestDeselecting:
                     parents=other_block,
                 )
             )
-            macro = sqlite_database_service.get_image(session, hierarchy["macro"])
+            macro = stored_database_service.get_image(session, hierarchy["macro"])
             macro.samples.add(other_block)
             session.commit()
             hierarchy["other_block"] = other_block.uid
@@ -575,12 +575,12 @@ class TestDeselecting:
         item_service.select_item(hierarchy["other_block"], False)
 
         # Assert
-        assert "macro" in _selected(sqlite_database_service, hierarchy)
+        assert "macro" in _selected(stored_database_service, hierarchy)
 
     def test_a_block_stays_while_one_of_its_specimens_is_in(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -590,14 +590,14 @@ class TestDeselecting:
         item_service.select_item(hierarchy["specimen_1"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == everything - {
+        assert _selected(stored_database_service, hierarchy) == everything - {
             "specimen_1"
         }
 
     def test_a_block_goes_with_the_last_of_its_specimens(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -607,12 +607,12 @@ class TestDeselecting:
         item_service.select_item(hierarchy["specimen_2"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == set()
+        assert _selected(stored_database_service, hierarchy) == set()
 
     def test_a_diagnosis_goes_alone(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -622,7 +622,7 @@ class TestDeselecting:
         item_service.select_item(hierarchy["diagnosis"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == everything - {
+        assert _selected(stored_database_service, hierarchy) == everything - {
             "diagnosis"
         }
 
@@ -630,7 +630,7 @@ class TestDeselecting:
     def test_a_case_that_needs_a_diagnosis_goes_with_the_last_one(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """A diagnosis is a requirement like any other: the case is not a case
@@ -641,13 +641,13 @@ class TestDeselecting:
         item_service.select_item(hierarchy["diagnosis"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == set()
+        assert _selected(stored_database_service, hierarchy) == set()
 
     def test_what_is_left_short_by_a_selection_is_marked_not_valid(
         self,
         item_service: ItemService,
         validation_service: ValidationService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """Selecting a slide brings its block, but not the block's other
@@ -655,34 +655,34 @@ class TestDeselecting:
         and so is everything the cascade brought in with it."""
         # Arrange
         item_service.select_item(hierarchy["case"], False)
-        _forget_curation(sqlite_database_service, hierarchy)
+        _forget_curation(stored_database_service, hierarchy)
 
         # Act
         item_service.select_item(hierarchy["slide_1"], True)
 
         # Assert
         for name in ("slide_1", "image_1", "block", "specimen_1", "case", "patient"):
-            assert _valid_relations(sqlite_database_service, hierarchy, name), name
+            assert _valid_relations(stored_database_service, hierarchy, name), name
 
     def test_nothing_moves_when_a_locked_item_would(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
         item_service.select_item(hierarchy["slide_1"], False)
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_item(session, hierarchy["block"]).locked = True
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_item(session, hierarchy["block"]).locked = True
             session.commit()
-        before = _selected(sqlite_database_service, hierarchy)
+        before = _selected(stored_database_service, hierarchy)
 
         # Act
         with pytest.raises(NotAllowedActionError):
             item_service.select_item(hierarchy["slide_2"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == before
+        assert _selected(stored_database_service, hierarchy) == before
 
 
 @pytest.mark.unittest
@@ -691,20 +691,20 @@ class TestSelecting:
     def hierarchy(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ) -> dict[str, UUID]:
         """The hierarchy with everything out, and none of it by name, so that
         what a selection brings back is only what the schema asks for."""
         item_service.select_item(hierarchy["case"], False)
-        _forget_curation(sqlite_database_service, hierarchy)
-        assert _selected(sqlite_database_service, hierarchy) == set()
+        _forget_curation(stored_database_service, hierarchy)
+        assert _selected(stored_database_service, hierarchy) == set()
         return hierarchy
 
     def test_a_slide_brings_what_it_needs_and_nothing_else(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """Up: the block, its specimens, the case. Down: an image, since a
@@ -716,7 +716,7 @@ class TestSelecting:
         item_service.select_item(hierarchy["slide_1"], True)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == {
+        assert _selected(stored_database_service, hierarchy) == {
             "patient",
             "case",
             "specimen_1",
@@ -730,7 +730,7 @@ class TestSelecting:
     def test_a_case_that_needs_a_diagnosis_brings_it_back(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -739,12 +739,12 @@ class TestSelecting:
         item_service.select_item(hierarchy["slide_1"], True)
 
         # Assert
-        assert "diagnosis" in _selected(sqlite_database_service, hierarchy)
+        assert "diagnosis" in _selected(stored_database_service, hierarchy)
 
     def test_a_case_brings_back_what_the_schema_says_a_case_is_made_of(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """Every level requires the next, down to the images. Annotations,
@@ -756,7 +756,7 @@ class TestSelecting:
         item_service.select_item(hierarchy["case"], True)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == {
+        assert _selected(stored_database_service, hierarchy) == {
             "patient",
             "case",
             "specimen_1",
@@ -771,7 +771,7 @@ class TestSelecting:
     def test_a_finding_brings_its_annotation_and_the_image_and_slide_it_is_on(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -780,7 +780,7 @@ class TestSelecting:
         item_service.select_item(hierarchy["finding"], True)
 
         # Assert
-        selected = _selected(sqlite_database_service, hierarchy)
+        selected = _selected(stored_database_service, hierarchy)
         assert {"finding", "annotation", "image_1", "slide_1", "block", "case"} <= (
             selected
         )
@@ -789,7 +789,7 @@ class TestSelecting:
     def test_a_macro_image_brings_a_block_to_be_over(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -798,7 +798,7 @@ class TestSelecting:
         item_service.select_item(hierarchy["macro"], True)
 
         # Assert
-        assert {"macro", "block"} <= _selected(sqlite_database_service, hierarchy)
+        assert {"macro", "block"} <= _selected(stored_database_service, hierarchy)
 
 
 def _request(select: bool, **options) -> ItemSelect:
@@ -815,7 +815,7 @@ class TestCuration:
     def test_what_is_taken_out_by_name_is_marked_and_what_goes_with_it_is_not(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -824,12 +824,12 @@ class TestCuration:
         item_service.select(hierarchy["slide_1"], _request(False))
 
         # Assert
-        assert _curator_excluded(sqlite_database_service, hierarchy) == {"slide_1"}
+        assert _curator_excluded(stored_database_service, hierarchy) == {"slide_1"}
 
     def test_bringing_back_a_block_leaves_its_slides_taken_out_by_name(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """Both slides were taken out by name, and the block and everything
@@ -839,7 +839,7 @@ class TestCuration:
         # Arrange
         item_service.select(hierarchy["slide_1"], _request(False))
         item_service.select(hierarchy["slide_2"], _request(False))
-        assert _curator_excluded(sqlite_database_service, hierarchy) == {
+        assert _curator_excluded(stored_database_service, hierarchy) == {
             "slide_1",
             "slide_2",
         }
@@ -850,7 +850,7 @@ class TestCuration:
         # Assert
         assert result is not None
         assert _names(hierarchy, result.kept_out) == {"slide_1", "slide_2"}
-        selected = _selected(sqlite_database_service, hierarchy)
+        selected = _selected(stored_database_service, hierarchy)
         assert "block" in selected
         assert not {"slide_1", "slide_2"} & selected
         assert "block" in _names(hierarchy, result.left_invalid)
@@ -858,7 +858,7 @@ class TestCuration:
     def test_what_a_cascade_would_bring_back_against_curation_is_reported(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """The case was taken out by name; a slide under it asks for it."""
@@ -871,13 +871,13 @@ class TestCuration:
         # Assert
         assert result is not None
         assert _names(hierarchy, result.kept_out) == {"case"}
-        assert "case" not in _selected(sqlite_database_service, hierarchy)
+        assert "case" not in _selected(stored_database_service, hierarchy)
         assert {"specimen_1", "specimen_2"} <= _names(hierarchy, result.left_invalid)
 
     def test_overriding_curation_brings_it_back_and_clears_the_mark(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -892,13 +892,13 @@ class TestCuration:
         assert result is not None
         overridden = [change for change in result.changed if change.overrode_curation]
         assert _names(hierarchy, overridden) == {"case"}
-        assert {"case", "patient"} <= _selected(sqlite_database_service, hierarchy)
-        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+        assert {"case", "patient"} <= _selected(stored_database_service, hierarchy)
+        assert _curator_excluded(stored_database_service, hierarchy) == set()
 
     def test_asking_for_an_item_by_name_clears_its_own_mark(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -908,8 +908,8 @@ class TestCuration:
         item_service.select(hierarchy["slide_1"], _request(True))
 
         # Assert
-        assert "slide_1" in _selected(sqlite_database_service, hierarchy)
-        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+        assert "slide_1" in _selected(stored_database_service, hierarchy)
+        assert _curator_excluded(stored_database_service, hierarchy) == set()
 
 
 @pytest.mark.unittest
@@ -917,7 +917,7 @@ class TestScope:
     def test_not_cascading_up_leaves_the_block_without_slides(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -930,7 +930,7 @@ class TestScope:
 
         # Assert
         assert result is not None
-        selected = _selected(sqlite_database_service, hierarchy)
+        selected = _selected(stored_database_service, hierarchy)
         assert "block" in selected
         assert "image_2" not in selected
         assert "block" in _names(hierarchy, result.left_invalid)
@@ -938,7 +938,7 @@ class TestScope:
     def test_not_cascading_down_leaves_the_image_on_a_slide_that_is_out(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -950,13 +950,13 @@ class TestScope:
 
         # Assert
         assert result is not None
-        assert "image_1" in _selected(sqlite_database_service, hierarchy)
+        assert "image_1" in _selected(stored_database_service, hierarchy)
         assert "image_1" in _names(hierarchy, result.left_invalid)
 
     def test_a_skipped_schema_is_left_as_it_is(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -967,7 +967,7 @@ class TestScope:
         )
 
         # Assert
-        selected = _selected(sqlite_database_service, hierarchy)
+        selected = _selected(stored_database_service, hierarchy)
         assert "annotation" in selected
         assert "note" not in selected
 
@@ -1005,11 +1005,11 @@ class TestDryRun:
     def test_a_dry_run_reports_what_the_request_would_do_and_changes_nothing(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
-        before = _selected(sqlite_database_service, hierarchy)
+        before = _selected(stored_database_service, hierarchy)
 
         # Act
         preview = item_service.select(
@@ -1019,8 +1019,8 @@ class TestDryRun:
         # Assert
         assert preview is not None
         assert preview.dry_run
-        assert _selected(sqlite_database_service, hierarchy) == before
-        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+        assert _selected(stored_database_service, hierarchy) == before
+        assert _curator_excluded(stored_database_service, hierarchy) == set()
         applied = item_service.select(hierarchy["slide_1"], _request(False))
         assert applied is not None
         assert _names(hierarchy, preview.changed) == _names(hierarchy, applied.changed)
@@ -1088,15 +1088,15 @@ class TestSelectionTree:
     def test_a_patient_with_another_case_is_shown_but_not_offered(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
     ):
         """Taking the patient out would take the other case with it."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            patient = sqlite_database_service.get_sample(session, hierarchy["patient"])
+        with stored_database_service.get_session() as session:
+            patient = stored_database_service.get_sample(session, hierarchy["patient"])
             session.add(
                 DatabaseSample(
                     dataset.uid, batch_uid, Uids.case, "other_case", parents=patient
@@ -1116,23 +1116,23 @@ class TestSelectionTree:
     def test_nothing_changes_while_the_tree_is_worked_out(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
-        before = _selected(sqlite_database_service, hierarchy)
+        before = _selected(stored_database_service, hierarchy)
 
         # Act
         _tree(item_service, hierarchy["case"], False)
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == before
-        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+        assert _selected(stored_database_service, hierarchy) == before
+        assert _curator_excluded(stored_database_service, hierarchy) == set()
 
     def test_choosing_every_default_does_what_the_cascade_does(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -1146,12 +1146,12 @@ class TestSelectionTree:
         )
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == set()
+        assert _selected(stored_database_service, hierarchy) == set()
 
     def test_stopping_at_the_specimens_leaves_what_is_below_them(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """What the curator did not choose stays in, and is marked as not
@@ -1164,11 +1164,11 @@ class TestSelectionTree:
 
         # Assert
         assert result is not None
-        selected = _selected(sqlite_database_service, hierarchy)
+        selected = _selected(stored_database_service, hierarchy)
         assert {"patient", "block", "slide_1", "slide_2"} <= selected
         assert not {"case", "diagnosis", "specimen_1", "specimen_2"} & selected
         assert "block" in _names(hierarchy, result.left_invalid)
-        assert _curator_excluded(sqlite_database_service, hierarchy) == {"case"}
+        assert _curator_excluded(stored_database_service, hierarchy) == {"case"}
 
     def test_restoring_shows_what_was_removed_by_hand_as_not_chosen(
         self,
@@ -1194,7 +1194,7 @@ class TestSelectionTree:
     def test_choosing_something_removed_by_hand_brings_it_back(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -1210,14 +1210,14 @@ class TestSelectionTree:
 
         # Assert
         assert result is not None
-        assert {"slide_1", "image_1"} <= _selected(sqlite_database_service, hierarchy)
+        assert {"slide_1", "image_1"} <= _selected(stored_database_service, hierarchy)
         overridden = [change for change in result.changed if change.overrode_curation]
         assert _names(hierarchy, overridden) == {"slide_1"}
 
     def test_items_taken_together_offer_what_none_would_alone(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         """One slide leaves the block its other slide; both leave it nothing,
@@ -1242,7 +1242,7 @@ class TestSelectionTree:
     def test_choosing_every_default_for_several_does_what_the_cascade_does(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
@@ -1258,8 +1258,8 @@ class TestSelectionTree:
 
         # Assert
         assert result is not None
-        assert _selected(sqlite_database_service, hierarchy) == set()
-        assert _curator_excluded(sqlite_database_service, hierarchy) == {
+        assert _selected(stored_database_service, hierarchy) == set()
+        assert _curator_excluded(stored_database_service, hierarchy) == {
             "slide_1",
             "slide_2",
         }
@@ -1267,11 +1267,11 @@ class TestSelectionTree:
     def test_a_bulk_dry_run_changes_nothing(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
-        before = _selected(sqlite_database_service, hierarchy)
+        before = _selected(stored_database_service, hierarchy)
 
         # Act
         preview = item_service.select_many(
@@ -1285,7 +1285,7 @@ class TestSelectionTree:
         # Assert
         assert preview is not None
         assert "block" in _names(hierarchy, preview.left_invalid)
-        assert _selected(sqlite_database_service, hierarchy) == before
+        assert _selected(stored_database_service, hierarchy) == before
 
 
 @pytest.mark.unittest
@@ -1296,14 +1296,14 @@ class TestShortcuts:
     @pytest.fixture()
     def hierarchy(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ) -> dict[str, UUID]:
-        with sqlite_database_service.get_session() as session:
-            specimen = sqlite_database_service.get_sample(
+        with stored_database_service.get_session() as session:
+            specimen = stored_database_service.get_sample(
                 session, hierarchy["specimen_1"]
             )
-            patient = sqlite_database_service.get_sample(session, hierarchy["patient"])
+            patient = stored_database_service.get_sample(session, hierarchy["patient"])
             specimen.parents.add(patient)
             session.commit()
         return hierarchy
@@ -1367,7 +1367,7 @@ class TestBulkSelectGuards:
     @pytest.fixture()
     def item_service(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         validation_service: ValidationService,
         review_service: ReviewService,
@@ -1377,36 +1377,36 @@ class TestBulkSelectGuards:
         is told."""
         schema_service = schema_service_of(schema)
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         return ItemService(
             attribute_service,
-            TagService(sqlite_database_service),
+            TagService(stored_database_service),
             MapperService(
                 attribute_service,
                 validation_service,
                 schema_service,
-                sqlite_database_service,
+                stored_database_service,
                 review_service,
             ),
             schema_service,
             validation_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         )
 
     @pytest.fixture()
     def hierarchy(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         validation_service: ValidationService,
         hierarchy: dict[str, UUID],
     ) -> dict[str, UUID]:
         """Everything valid to begin with, so what a change leaves not valid
         is a crossing the review has to hear about."""
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for uid in hierarchy.values():
-                sqlite_database_service.get_item(session, uid).valid_attributes = True
+                stored_database_service.get_item(session, uid).valid_attributes = True
             validation_service.validate_relations_for(hierarchy.values(), session)
             session.commit()
         return hierarchy
@@ -1439,40 +1439,40 @@ class TestBulkSelectGuards:
     def test_an_unknown_chosen_item_is_not_found(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ):
         # Arrange
-        before = _selected(sqlite_database_service, hierarchy)
+        before = _selected(stored_database_service, hierarchy)
 
         # Act
         result = item_service.select_many(_bulk([hierarchy["case"]], False, [uuid4()]))
 
         # Assert
         assert result is None
-        assert _selected(sqlite_database_service, hierarchy) == before
+        assert _selected(stored_database_service, hierarchy) == before
 
     def test_an_item_from_another_hierarchy_is_refused(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             other = DatabaseSample(dataset.uid, batch_uid, Uids.patient, "other")
             session.add(other)
             session.commit()
             other_uid = other.uid
-        before = _selected(sqlite_database_service, hierarchy)
+        before = _selected(stored_database_service, hierarchy)
 
         # Act
         with pytest.raises(NotAllowedActionError):
             item_service.select_many(_bulk([hierarchy["case"]], False, [other_uid]))
 
         # Assert
-        assert _selected(sqlite_database_service, hierarchy) == before
-        with sqlite_database_service.get_session() as session:
-            assert sqlite_database_service.get_item(session, other_uid).selected
+        assert _selected(stored_database_service, hierarchy) == before
+        with stored_database_service.get_session() as session:
+            assert stored_database_service.get_item(session, other_uid).selected

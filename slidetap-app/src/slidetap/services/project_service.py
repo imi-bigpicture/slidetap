@@ -261,7 +261,7 @@ class ProjectService:
             )
             database_project.attributes = set(
                 self._attribute_service.create_or_update_attributes(
-                    attributes, session=session
+                    attributes, session=session, held=database_project.attributes
                 )
             )
             database_project.mapper_groups = set(mapper_groups)

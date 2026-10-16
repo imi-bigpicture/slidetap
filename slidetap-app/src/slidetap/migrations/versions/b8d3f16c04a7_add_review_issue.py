@@ -53,3 +53,5 @@ def downgrade() -> None:
     op.drop_index("ix_review_issue_review_unit_uid", table_name="review_issue")
     op.drop_index("ix_review_issue_item_uid", table_name="review_issue")
     op.drop_table("review_issue")
+    # Postgres keeps the enum type after its table is dropped.
+    sa.Enum(name="reviewissuesource").drop(op.get_bind(), checkfirst=True)

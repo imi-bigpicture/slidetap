@@ -70,9 +70,10 @@ class DicomMetadataWriter:
         if source_metadata is None:
             return None
         try:
-            return self.as_dicomizer_metadata(
-                self._schema.load(json.loads(source_metadata))
-            )
+            loaded = self._schema.load(json.loads(source_metadata))
+            if not isinstance(loaded, WsiMetadata):
+                raise TypeError(f"Loaded {type(loaded).__name__}, not WsiMetadata.")
+            return self.as_dicomizer_metadata(loaded)
         except Exception:
             self._logger.warning(
                 "Could not read back what the file said about itself.",
@@ -125,7 +126,7 @@ class DicomMetadataWriter:
         self._logger.info(
             f"Re-saved DICOM from {source} to {destination} with new metadata."
         )
-        return [Path(file) for file in files]
+        return [Path(str(file)) for file in files]
 
     def _with_icc_profiles(
         self, metadata: WsiDicomizerMetadata, found: WsiMetadata

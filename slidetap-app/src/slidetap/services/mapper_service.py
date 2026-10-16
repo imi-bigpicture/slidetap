@@ -60,6 +60,18 @@ from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import ChangeSubject, SchemaService
 from slidetap.services.validation_service import ValidationService
 
+MAX_MAPPING_EXPRESSION_LENGTH = 128
+"""The longest mapping expression that is accepted from a user, as long as the
+expression column holds."""
+
+_REPETITION = r"(?:[*+]|\{\d*,\d*\})"
+"""A quantifier that can repeat more than once: ``*``, ``+`` or ``{m,n}``."""
+
+_NESTED_REPETITION = re.compile(
+    rf"\((?:[^()\\]|\\.)*{_REPETITION}(?:[^()\\]|\\.)*\){_REPETITION}"
+)
+"""A group without groups inside it that holds a repetition and is repeated."""
+
 
 @dataclass
 class MapperCache:
@@ -258,6 +270,45 @@ class MapperService:
     @lru_cache(1000)
     def create_pattern(pattern: str) -> Pattern:
         return re.compile(pattern)
+
+    @staticmethod
+    def validate_expression(expression: str) -> None:
+        """Check that a mapping expression can be matched safely.
+
+        An expression is refused if it is longer than
+        ``MAX_MAPPING_EXPRESSION_LENGTH``, if it does not compile, or if it
+        repeats a group that itself holds a repetition, such as ``(a+)+``.
+        Such a nested repetition can take exponential time to fail a match.
+        The check of nested repetitions looks at groups without groups inside
+        them, so it catches the common forms rather than every one.
+
+        Parameters
+        ----------
+        expression: str
+            The expression to check.
+
+        Raises
+        ------
+        ValueError
+            Saying why the expression is refused.
+        """
+        if len(expression) > MAX_MAPPING_EXPRESSION_LENGTH:
+            raise ValueError(
+                f"Mapping expression is {len(expression)} characters long, at most "
+                f"{MAX_MAPPING_EXPRESSION_LENGTH} are allowed."
+            )
+        try:
+            re.compile(expression)
+        except re.error as exception:
+            raise ValueError(
+                f"Mapping expression {expression!r} is not a valid regular "
+                f"expression: {exception}"
+            ) from exception
+        if _NESTED_REPETITION.search(expression) is not None:
+            raise ValueError(
+                f"Mapping expression {expression!r} repeats a group that holds a "
+                "repetition, which can make matching take exponential time."
+            )
 
     def get_all_mapper_groups(
         self, session: Session | None = None
@@ -621,6 +672,7 @@ class MapperService:
             ).model
 
     def create_mapping(self, mapping: MappingItemCreate) -> MappingItem:
+        self.validate_expression(mapping.expression)
         with self._database_service.get_session() as session:
             database_mapping = self._database_service.add_mapping(
                 session, mapping.mapper_uid, mapping.expression, mapping.attribute
@@ -638,6 +690,7 @@ class MapperService:
             return database_mapper.model
 
     def update_mapping(self, mapping: MappingItem) -> MappingItem:
+        self.validate_expression(mapping.expression)
         with self._database_service.get_session() as session:
             database_mapping = self._database_service.get_mapping(session, mapping.uid)
             database_mapping.update(mapping.expression, mapping.attribute)
@@ -835,14 +888,14 @@ class MapperService:
         root_attribute_schema_uid: UUID,
         mapper_uids: Sequence[UUID],
         cache: MapperCache | None,
-    ) -> list[DatabaseMapper]:
+    ) -> Sequence[DatabaseMapper]:
         """The mappers that apply, from the cache when it holds them."""
         if cache is None:
             return self._database_service.get_mappers_for_root_attribute(
                 session, root_attribute_schema_uid, mapper_uids
             ).all()
         if root_attribute_schema_uid not in cache.mappers_for_root:
-            cache.mappers_for_root[root_attribute_schema_uid] = (
+            cache.mappers_for_root[root_attribute_schema_uid] = list(
                 self._database_service.get_mappers_for_root_attribute(
                     session, root_attribute_schema_uid, mapper_uids
                 ).all()
@@ -851,7 +904,7 @@ class MapperService:
 
     def _cached_regex_items(
         self, session: Session, mapper_uid: UUID, cache: MapperCache | None
-    ) -> Iterable[Row[tuple[str, int, UUID]] | DatabaseMappingItem]:
+    ) -> Iterable[Row[str, int, UUID] | DatabaseMappingItem]:
         """The mapper's regex-shaped mapping items, hits-ordered.
 
         Ordered here rather than by the database when the cache holds them,
@@ -874,7 +927,7 @@ class MapperService:
         mapper_uid: UUID,
         value: str,
         cache: MapperCache | None,
-    ) -> Row[tuple[str, int, UUID]] | DatabaseMappingItem | None:
+    ) -> Row[str, int, UUID] | DatabaseMappingItem | None:
         """The mapping item whose literal is exactly this value, the most hit
         of them where there is more than one."""
         if cache is None or mapper_uid not in cache.items_by_mapper:
@@ -1071,7 +1124,7 @@ class MapperService:
             # values; never on the hot path.
             return self._linear_scan_expression(session, mapper_uid, value)
 
-        candidates: list[Row[tuple[str, int, UUID]]] = []
+        candidates: list[Row[str, int, UUID] | DatabaseMappingItem] = []
         exact = self._cached_literal_item(session, mapper_uid, value, cache)
         if exact is not None:
             candidates.append(exact)

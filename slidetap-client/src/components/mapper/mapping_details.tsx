@@ -91,8 +91,27 @@ export default function MappingDetails({
     enabled: mappingUid === undefined || mappingQuery.data !== undefined,
   })
 
-  // Seed the form from the loaded mapping, or from an empty attribute when new.
-  React.useEffect(() => {
+  // Seed the form from the loaded mapping, or from an empty attribute when new,
+  // whenever what it is seeded from changes.
+  const [seededFrom, setSeededFrom] = useState<{
+    mappingUid: string | undefined
+    mapping: typeof mappingQuery.data
+    schema: typeof schemaQuery.data
+    initialExpression: string | undefined
+  }>()
+  if (
+    seededFrom === undefined ||
+    seededFrom.mappingUid !== mappingUid ||
+    seededFrom.mapping !== mappingQuery.data ||
+    seededFrom.schema !== schemaQuery.data ||
+    seededFrom.initialExpression !== initialExpression
+  ) {
+    setSeededFrom({
+      mappingUid,
+      mapping: mappingQuery.data,
+      schema: schemaQuery.data,
+      initialExpression,
+    })
     if (mappingUid === undefined) {
       setExpression(initialExpression ?? '')
       setAttribute(
@@ -102,7 +121,7 @@ export default function MappingDetails({
       setExpression(mappingQuery.data.expression)
       setAttribute(mappingQuery.data.attribute)
     }
-  }, [mappingUid, mappingQuery.data, schemaQuery.data, initialExpression])
+  }
 
   // What else already resolves to this, so that a seventh spelling of the same
   // thing is added knowing it is the seventh. Compared on the display value:

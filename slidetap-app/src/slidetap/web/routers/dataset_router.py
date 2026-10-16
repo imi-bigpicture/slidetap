@@ -14,8 +14,10 @@
 
 """FastAPI router for handling datasets."""
 
+import logging
 from collections.abc import Iterable
 from http import HTTPStatus
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -27,8 +29,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
 from slidetap.task import Scheduler
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.responses import StatusResponse
 from slidetap.web.services.login_service import require_valid_token
+
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 dataset_router = APIRouter(
     prefix="/api/datasets",
@@ -39,7 +44,7 @@ dataset_router = APIRouter(
 
 
 @dataset_router.get("/importable")
-async def importable_datasets() -> Iterable[Dataset]:
+def importable_datasets() -> Iterable[Dataset]:
     """Get importable datasets.
 
     Returns
@@ -56,7 +61,7 @@ async def importable_datasets() -> Iterable[Dataset]:
 
 
 @dataset_router.post("/import")
-async def import_dataset(dataset: Dataset) -> Dataset:
+def import_dataset(dataset: Dataset) -> Dataset:
     """Import a dataset.
 
     Parameters
@@ -78,7 +83,7 @@ async def import_dataset(dataset: Dataset) -> Dataset:
 
 
 @dataset_router.get("")
-async def get_datasets() -> Iterable[Dataset]:
+def get_datasets() -> Iterable[Dataset]:
     """Get all datasets.
 
     Returns
@@ -95,7 +100,7 @@ async def get_datasets() -> Iterable[Dataset]:
 
 
 @dataset_router.delete("/dataset/{dataset_uid}")
-async def delete_dataset(dataset_uid: UUID) -> dict:
+def delete_dataset(dataset_uid: UUID) -> dict:
     """Delete dataset specified by id.
 
     Parameters
@@ -117,7 +122,7 @@ async def delete_dataset(dataset_uid: UUID) -> dict:
 
 
 @dataset_router.get("/dataset/{dataset_uid}")
-async def get_dataset(
+def get_dataset(
     dataset_uid: UUID,
     dataset_service: FromDishka[DatasetService],
 ) -> Dataset:
@@ -143,10 +148,11 @@ async def get_dataset(
 
 
 @dataset_router.post("/dataset/{dataset_uid}/remap")
-async def remap_dataset(
+def remap_dataset(
     dataset_uid: UUID,
     dataset_service: FromDishka[DatasetService],
     scheduler: FromDishka[Scheduler],
+    logger: Logger,
 ) -> StatusResponse:
     """Schedule a remap of every attribute in the dataset.
 
@@ -162,12 +168,21 @@ async def remap_dataset(
         )
     # Refused here rather than by the task, which nobody would hear.
     dataset_service.assert_can_change(dataset_uid)
-    await scheduler.remap_dataset_attributes(dataset_uid)
+    try:
+        scheduler.remap_dataset_attributes(dataset_uid)
+    except Exception as exception:
+        logger.error(
+            f"Failed to schedule remap of dataset {dataset_uid}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to schedule the remap, try again",
+        ) from exception
     return StatusResponse(status="scheduled")
 
 
 @dataset_router.post("/dataset/{dataset_uid}")
-async def update_dataset(
+def update_dataset(
     dataset_uid: UUID,
     dataset: Dataset,
     dataset_service: FromDishka[DatasetService],
@@ -186,6 +201,11 @@ async def update_dataset(
     Dataset
         Updated dataset.
     """
+    if dataset.uid != dataset_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Dataset uid {dataset.uid} does not match path uid {dataset_uid}",
+        )
     updated_dataset = dataset_service.update(dataset)
     if updated_dataset is None:
         raise HTTPException(

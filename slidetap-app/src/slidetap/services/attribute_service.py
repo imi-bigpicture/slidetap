@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 
 import logging
-from collections.abc import Iterable, MutableMapping
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import overload
 from uuid import UUID, uuid4
 
@@ -159,16 +159,18 @@ class AttributeService:
     ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
+            held_by_schema = self._held_by_schema(item.attributes)
             for attribute in attributes:
                 self.set_display_value(attribute)
                 database_attribute = self._database_service.get_optional_attribute(
                     session, attribute.uid
                 )
                 if database_attribute is None:
-                    database_attribute = self._database_service.add_attribute(
-                        session,
+                    database_attribute = self._replace_or_add(
                         attribute,
-                        self._schema_service.get_attribute(attribute.schema_uid),
+                        held_by_schema,
+                        self._schema_service.get_attribute,
+                        session,
                     )
                     item.attributes.add(database_attribute)
                 else:
@@ -261,6 +263,7 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session | None = None,
         existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
+        held: Iterable[DatabaseAttribute] = (),
     ) -> list[DatabaseAttribute]:
         """Store attributes, updating those already stored.
 
@@ -276,21 +279,30 @@ class AttributeService:
             more than one of them may carry the same one, so an attribute is
             matched only against what was stored before the group began -- as
             it was when each was looked up on its own.
+        held: Iterable[DatabaseAttribute]
+            The attributes the owner the attributes are stored for holds now.
+            An attribute whose uid is not stored, given for a schema the owner
+            holds an attribute of, replaces that attribute in its row, see
+            :py:meth:`DatabaseAttribute.replace_values`. The owner holds one
+            attribute of each schema, so a row beside it would be refused.
         """
         with self._database_service.get_session(session) as session:
-            return self._create_or_update_attributes(attributes, session, existing)
+            return self._create_or_update_attributes(
+                attributes, session, existing, held
+            )
 
     def create_or_update_private_attributes(
         self,
         attributes: Iterable[AnyAttribute],
         session: Session | None = None,
         existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
+        held: Iterable[DatabaseAttribute] = (),
     ) -> list[DatabaseAttribute]:
         """Store private attributes, see
         :py:meth:`create_or_update_attributes`."""
         with self._database_service.get_session(session) as session:
             return self._create_or_update_private_attributes(
-                attributes, session, existing
+                attributes, session, existing, held
             )
 
     def _create_or_update_attributes(
@@ -298,6 +310,7 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session,
         existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
+        held: Iterable[DatabaseAttribute] = (),
     ) -> list[DatabaseAttribute]:
         attributes = list(attributes)
         # Looked up as a group rather than one at a time: an item carries
@@ -308,6 +321,7 @@ class AttributeService:
             existing = self._database_service.get_optional_attributes(
                 session, attributes
             )
+        held_by_schema = self._held_by_schema(held)
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
@@ -315,10 +329,11 @@ class AttributeService:
             if database_attribute:
                 database_attribute.set_value(attribute.value, attribute.display_value)
             else:
-                database_attribute = self._database_service.add_attribute(
-                    session,
+                database_attribute = self._replace_or_add(
                     attribute,
-                    self._schema_service.get_attribute(attribute.schema_uid),
+                    held_by_schema,
+                    self._schema_service.get_attribute,
+                    session,
                 )
 
             database_attributes.append(database_attribute)
@@ -329,12 +344,14 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session,
         existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
+        held: Iterable[DatabaseAttribute] = (),
     ) -> list[DatabaseAttribute]:
         attributes = list(attributes)
         if existing is None:
             existing = self._database_service.get_optional_attributes(
                 session, attributes
             )
+        held_by_schema = self._held_by_schema(held)
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
@@ -343,13 +360,43 @@ class AttributeService:
             if database_attribute:
                 database_attribute.set_value(attribute.value, attribute.display_value)
             else:
-                database_attribute = self._database_service.add_attribute(
-                    session,
+                database_attribute = self._replace_or_add(
                     attribute,
-                    self._schema_service.get_private_attribute(attribute.schema_uid),
+                    held_by_schema,
+                    self._schema_service.get_private_attribute,
+                    session,
                 )
             database_attributes.append(database_attribute)
         return database_attributes
+
+    @staticmethod
+    def _held_by_schema(
+        held: Iterable[DatabaseAttribute],
+    ) -> dict[UUID, DatabaseAttribute]:
+        """The attributes an owner holds, by attribute schema."""
+        return {held_attribute.schema_uid: held_attribute for held_attribute in held}
+
+    def _replace_or_add(
+        self,
+        attribute: AnyAttribute,
+        held_by_schema: Mapping[UUID, DatabaseAttribute],
+        get_schema: Callable[[UUID], AttributeSchema],
+        session: Session,
+    ) -> DatabaseAttribute:
+        """Store an attribute whose uid is not stored.
+
+        Written over the attribute the owner holds of its schema where there is
+        one, keeping that row and its uid, and added as a row of its own where
+        there is none.
+        """
+        held_attribute = held_by_schema.get(attribute.schema_uid)
+        if held_attribute is None:
+            return self._database_service.add_attribute(
+                session, attribute, get_schema(attribute.schema_uid)
+            )
+        held_attribute.replace_values(attribute)
+        self._database_service.record_unmapped_values(held_attribute, session)
+        return held_attribute
 
     def set_display_value(self, attribute: Attribute) -> None:
         """Set ``attribute.display_value`` from its schema's renderer.
@@ -575,6 +622,11 @@ class AttributeService:
         directly, so leaving it stale after a child-swap blanks the column.
         """
         schema = self._schema_service.get_any_attribute(parent.schema_uid)
+        if not isinstance(schema, ObjectAttributeSchema):
+            raise TypeError(
+                f"Object attribute {parent.uid} has schema {schema.uid} of type "
+                f"{type(schema).__name__}."
+            )
         value = parent.value
         if value is None or not value:
             parent.display_value = None

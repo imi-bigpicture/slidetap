@@ -21,7 +21,7 @@ has no counterpart to the curator, and moves every other attribute as it is,
 of every item schema unless it is asked to leave the items of some as they
 are.
 
-Against a real SQLite database: what is checked is what is saved.
+Against a real database: what is checked is what is saved.
 """
 
 import dataclasses
@@ -221,18 +221,18 @@ def schema_service(
 
 @pytest.fixture()
 def validation_service(
-    schema_service: SchemaService, sqlite_database_service: DatabaseService
+    schema_service: SchemaService, stored_database_service: DatabaseService
 ) -> ValidationService:
-    return ValidationService(schema_service, sqlite_database_service)
+    return ValidationService(schema_service, stored_database_service)
 
 
 @pytest.fixture()
 def review_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> ReviewService:
-    return ReviewService(schema_service, validation_service, sqlite_database_service)
+    return ReviewService(schema_service, validation_service, stored_database_service)
 
 
 @pytest.fixture()
@@ -240,10 +240,10 @@ def attribute_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
     review_service: ReviewService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> AttributeService:
     return AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
 
 
@@ -253,13 +253,13 @@ def mapper_service(
     validation_service: ValidationService,
     review_service: ReviewService,
     attribute_service: AttributeService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> MapperService:
     return MapperService(
         attribute_service,
         validation_service,
         schema_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
@@ -271,15 +271,15 @@ def item_service(
     review_service: ReviewService,
     attribute_service: AttributeService,
     mapper_service: MapperService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> ItemService:
     return ItemService(
         attribute_service,
-        TagService(sqlite_database_service),
+        TagService(stored_database_service),
         mapper_service,
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
@@ -292,17 +292,17 @@ def migration(schema: ExampleSchema, other_schema: RootSchema) -> _SexMigration:
 @pytest.fixture()
 def migration_service(
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     attribute_service: AttributeService,
     validation_service: ValidationService,
     review_service: ReviewService,
 ) -> MigrationService:
     return MigrationService(
         schema_service,
-        sqlite_database_service,
+        stored_database_service,
         ProjectMigrationPlanner(schema_service),
         ProjectMigrationExecutor(
-            sqlite_database_service,
+            stored_database_service,
             attribute_service,
             validation_service,
             review_service,
@@ -313,11 +313,11 @@ def migration_service(
 @pytest.fixture()
 def mapper_migration_service(
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     mapper_service: MapperService,
 ) -> MapperMigrationService:
     return MapperMigrationService(
-        schema_service, sqlite_database_service, mapper_service
+        schema_service, stored_database_service, mapper_service
     )
 
 
@@ -444,36 +444,36 @@ class _StoredProject:
 
 @pytest.fixture()
 def stored(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema: ExampleSchema,
     schema_service_of: Callable[..., SchemaService],
 ) -> _StoredProject:
     """Stored while the example root was the root of new projects, before
     the application was upgraded to the second root."""
     schema_service = schema_service_of(schema)
-    validation_service = ValidationService(schema_service, sqlite_database_service)
+    validation_service = ValidationService(schema_service, stored_database_service)
     review_service = ReviewService(
-        schema_service, validation_service, sqlite_database_service
+        schema_service, validation_service, stored_database_service
     )
     attribute_service = AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
     item_service = ItemService(
         attribute_service,
-        TagService(sqlite_database_service),
+        TagService(stored_database_service),
         MapperService(
             attribute_service,
             validation_service,
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         ),
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
-    return _StoredProject(sqlite_database_service, item_service, schema)
+    return _StoredProject(stored_database_service, item_service, schema)
 
 
 @pytest.mark.integration
@@ -488,7 +488,7 @@ class TestLoadingMigrations:
         decoy: Decoy,
         schema: ExampleSchema,
         other_schema: RootSchema,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
     ):
         # Arrange
         schema_interface = decoy.mock(cls=SchemaInterface)
@@ -496,7 +496,7 @@ class TestLoadingMigrations:
         decoy.when(schema_interface.previous_roots()).then_return([schema])
 
         # Act
-        SchemaService(schema_interface, sqlite_database_service)
+        SchemaService(schema_interface, stored_database_service)
 
         # Assert
         decoy.verify(schema_interface.migration_from(schema), times=1)
@@ -632,7 +632,7 @@ class TestMigratingAProject:
     @classmethod
     def _migrate(
         cls,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
         resolve: Callable[[AttributeMigrationIssue], AnyAttribute | None] | None = None,
@@ -641,12 +641,12 @@ class TestMigratingAProject:
         cls._plan(migration_service, stored)
         cls._resolve_all(migration_service, stored, resolve)
         migration_service.submit(stored.project.uid)
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             migration_service.complete(stored.project.uid, session=session)
 
     def test_planning_stores_attribute_issues_and_what_is_dropped_changing_nothing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         item_service: ItemService,
@@ -701,7 +701,7 @@ class TestMigratingAProject:
         )
         assert dropped.resolved_at is None
         # Nothing of the project is changed.
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == schema.uid
             assert project.status == ProjectStatus.MIGRATING
@@ -789,7 +789,7 @@ class TestMigratingAProject:
 
     def test_a_migration_is_not_submitted_until_a_dropped_attribute_is_accepted(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         item_service: ItemService,
@@ -812,7 +812,7 @@ class TestMigratingAProject:
             migration_service.submit(stored.project.uid)
         self._resolve_all(migration_service, stored)
         migration_service.submit(stored.project.uid)
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             migration_service.complete(stored.project.uid, session=session)
         assert "report" not in item_service.get(stored.observation.uid).attributes
 
@@ -838,22 +838,22 @@ class TestMigratingAProject:
 
     def test_completing_puts_the_resolved_values_at_their_tags_and_restores_the_status(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         item_service: ItemService,
         stored: _StoredProject,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.get_one(
                 DatabaseProject, stored.project.uid
             ).status = ProjectStatus.COMPLETED
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored)
+        self._migrate(stored_database_service, migration_service, stored)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
             assert project.status == ProjectStatus.COMPLETED
@@ -869,7 +869,7 @@ class TestMigratingAProject:
 
     def test_a_tag_left_empty_is_unset(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         item_service: ItemService,
         stored: _StoredProject,
@@ -878,7 +878,7 @@ class TestMigratingAProject:
         review on the new root."""
         # Act
         self._migrate(
-            sqlite_database_service,
+            stored_database_service,
             migration_service,
             stored,
             lambda issue: self._sex(issue, None),
@@ -888,7 +888,7 @@ class TestMigratingAProject:
         other_patient = item_service.get(stored.other_patient.uid)
         assert "sex" not in other_patient.attributes
         assert other_patient.valid_attributes is False
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert session.scalars(
                 select(DatabaseReviewIssue).where(
                     DatabaseReviewIssue.item_uid == stored.other_patient.uid
@@ -897,7 +897,7 @@ class TestMigratingAProject:
 
     def test_a_private_attribute_is_resolved(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         item_service: ItemService,
@@ -913,7 +913,7 @@ class TestMigratingAProject:
             return issue.proposed.model_copy(update={"updated_value": "Malignant"})
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored, resolve)
+        self._migrate(stored_database_service, migration_service, stored, resolve)
 
         # Assert
         observation = item_service.get(stored.observation.uid)
@@ -924,7 +924,7 @@ class TestMigratingAProject:
 
     def test_a_resolved_value_keeps_the_row_of_the_attribute_it_resolves(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         item_service: ItemService,
         stored: _StoredProject,
@@ -933,7 +933,7 @@ class TestMigratingAProject:
         with."""
         # Arrange
         other_sex = stored.other_patient.attributes["sex"].uid
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             row = session.get_one(DatabaseAttribute, other_sex)
             row.locked, row.read_only = True, True
 
@@ -945,27 +945,27 @@ class TestMigratingAProject:
             )
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored, resolve)
+        self._migrate(stored_database_service, migration_service, stored, resolve)
 
         # Assert
         sex = item_service.get(stored.other_patient.uid).attributes["sex"]
         assert (sex.uid, sex.value) == (other_sex, "Female")
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             row = session.get_one(DatabaseAttribute, other_sex)
             assert (row.locked, row.read_only) == (True, True)
 
     def test_every_entity_is_moved(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         item_service: ItemService,
         stored: _StoredProject,
     ):
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored)
+        self._migrate(stored_database_service, migration_service, stored)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
             assert project.status == ProjectStatus.IN_PROGRESS
@@ -985,7 +985,7 @@ class TestMigratingAProject:
 
     def test_the_items_of_item_schemas_not_migrated_are_left_as_they_are(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         other_schema: RootSchema,
         schema_service_of: Callable[..., SchemaService],
@@ -1004,28 +1004,28 @@ class TestMigratingAProject:
         )
         migration_service = MigrationService(
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             ProjectMigrationPlanner(schema_service),
             ProjectMigrationExecutor(
-                sqlite_database_service,
+                stored_database_service,
                 attribute_service,
                 validation_service,
                 review_service,
             ),
         )
         staining = stored.slide.attributes["staining"].uid
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.get_one(DatabaseAttribute, staining).display_value = "untouched"
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored)
+        self._migrate(stored_database_service, migration_service, stored)
 
         # Assert
         assert set(migration.migrated) == {
             stored.patient.uid,
             stored.other_patient.uid,
         }
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
             assert (
@@ -1037,7 +1037,7 @@ class TestMigratingAProject:
 
     def test_the_locks_and_read_only_flags_of_attributes_are_kept(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
@@ -1046,16 +1046,16 @@ class TestMigratingAProject:
         sex = stored.patient.attributes["sex"].uid
         other_sex = stored.other_patient.attributes["sex"].uid
         staining = stored.slide.attributes["staining"].uid
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.get_one(DatabaseAttribute, sex).locked = True
             session.get_one(DatabaseAttribute, other_sex).locked = True
             session.get_one(DatabaseAttribute, staining).read_only = True
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored)
+        self._migrate(stored_database_service, migration_service, stored)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             sex_row = session.get_one(DatabaseAttribute, sex)
             assert sex_row.schema_uid == OTHER_SEX_SCHEMA_UID
             assert (sex_row.locked, sex_row.read_only) == (True, False)
@@ -1067,23 +1067,23 @@ class TestMigratingAProject:
 
     def test_unmapped_values_are_recorded_again_on_the_target_schemas(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         """They go with the rows they are of, which are written anew."""
         # Arrange
         sex = stored.patient.attributes["sex"].uid
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             row = session.get_one(DatabaseAttribute, sex)
             row.mappable_value = "man"
-            sqlite_database_service.record_unmapped_values(row, session)
+            stored_database_service.record_unmapped_values(row, session)
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored)
+        self._migrate(stored_database_service, migration_service, stored)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             unmapped = session.scalars(
                 select(DatabaseUnmappedValue).where(
                     DatabaseUnmappedValue.root_attribute_uid == sex
@@ -1096,7 +1096,7 @@ class TestMigratingAProject:
     def test_search_items_are_moved_where_the_migration_puts_them(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         stored: _StoredProject,
@@ -1114,14 +1114,14 @@ class TestMigratingAProject:
 
         monkeypatch.setattr(migration, "migrate_item_schema", block_to_specimen)
         failed_uid, found_uid = self._add_search_items(
-            sqlite_database_service, stored, schema
+            stored_database_service, stored, schema
         )
 
         # Act
-        self._migrate(sqlite_database_service, migration_service, stored)
+        self._migrate(stored_database_service, migration_service, stored)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             failed = session.get_one(DatabaseMetadataSearchItem, failed_uid)
             assert failed.schema_uid == schema.specimen_schema_uid
             found = session.get_one(DatabaseMetadataSearchItem, found_uid)
@@ -1131,7 +1131,7 @@ class TestMigratingAProject:
     def test_a_search_item_moved_off_the_target_item_schemas_is_refused(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         stored: _StoredProject,
@@ -1146,7 +1146,7 @@ class TestMigratingAProject:
             else schema.images[schema.image_schema_uid]
         )
         monkeypatch.setattr(migration, "migrate_item_schema", lambda _: target)
-        self._add_search_items(sqlite_database_service, stored, schema)
+        self._add_search_items(stored_database_service, stored, schema)
         migration_service.create(stored.project.uid)
 
         # Act & Assert
@@ -1158,13 +1158,13 @@ class TestMigratingAProject:
 
     @staticmethod
     def _add_search_items(
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored: _StoredProject,
         schema: ExampleSchema,
     ) -> tuple[UUID, UUID]:
         """A search item of a block whose search failed, and one of the patient
         found."""
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             failed = DatabaseMetadataSearchItem(
                 stored.batch_uid,
                 "block-1",
@@ -1185,7 +1185,7 @@ class TestMigratingAProject:
     @pytest.mark.parametrize("breakage", ["wrong_kind", "wrong_tag"])
     def test_a_migration_off_the_target_schemas_is_refused(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         stored: _StoredProject,
@@ -1201,10 +1201,10 @@ class TestMigratingAProject:
         # Act & Assert
         with (
             pytest.raises(MigrationError),
-            sqlite_database_service.get_session() as session,
+            stored_database_service.get_session() as session,
         ):
             migration_service.complete(stored.project.uid, session=session)
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == ExampleSchema().uid
         migration_service.revert(stored.project.uid)
@@ -1243,7 +1243,7 @@ class TestMigratingAProject:
     def test_completing_fails_where_the_migration_no_longer_matches_the_plan(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         stored: _StoredProject,
@@ -1267,7 +1267,7 @@ class TestMigratingAProject:
         failed = migration_service.get(stored.project.uid)
         assert failed.status == MigrationStatus.FAILED
         assert failed.error is not None and "no longer" in failed.error
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == ExampleSchema().uid
             assert project.status == ProjectStatus.MIGRATING
@@ -1279,12 +1279,12 @@ class TestMigratingAProject:
 
     def test_reverting_restores_the_status_and_removes_the_plan(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.get_one(
                 DatabaseProject, stored.project.uid
             ).status = ProjectStatus.COMPLETED
@@ -1301,9 +1301,9 @@ class TestMigratingAProject:
             migration_service.get(stored.project.uid)
         with pytest.raises(NotFoundError):
             migration_service.revert(stored.project.uid)
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert session.scalars(select(DatabaseAttributeMigrationIssue)).all() == []
-        assert stored.can_migrate(sqlite_database_service, migration_service) is True
+        assert stored.can_migrate(stored_database_service, migration_service) is True
 
     def test_a_migration_reverted_before_it_is_planned_is_not_planned(
         self,
@@ -1324,7 +1324,7 @@ class TestMigratingAProject:
 
     def test_a_migrating_project_is_not_migrated_again(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
@@ -1332,32 +1332,32 @@ class TestMigratingAProject:
         migration_service.create(stored.project.uid)
 
         # Act & Assert
-        assert stored.can_migrate(sqlite_database_service, migration_service) is False
+        assert stored.can_migrate(stored_database_service, migration_service) is False
         with pytest.raises(NotAllowedActionError):
             migration_service.create(stored.project.uid)
 
     def test_a_migration_is_refused_while_a_batch_is_busy(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, stored.batch_uid)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, stored.batch_uid)
             batch.status = BatchStatus.METADATA_SEARCHING
 
         # Act & Assert
         with pytest.raises(NotAllowedActionError, match="being searched"):
             migration_service.create(stored.project.uid)
-        assert stored.can_migrate(sqlite_database_service, migration_service) is False
+        assert stored.can_migrate(stored_database_service, migration_service) is False
         with pytest.raises(NotFoundError):
             migration_service.get(stored.project.uid)
 
     def test_the_planning_task_plans(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
@@ -1378,13 +1378,13 @@ class TestMigratingAProject:
     def test_the_completing_task_sets_the_project_back_to_its_status(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         """A completed project stays completed, and is validated again."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.get_one(
                 DatabaseProject, stored.project.uid
             ).status = ProjectStatus.COMPLETED
@@ -1401,11 +1401,11 @@ class TestMigratingAProject:
         )
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.status == ProjectStatus.COMPLETED
             assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
-            other_patient = sqlite_database_service.get_item(
+            other_patient = stored_database_service.get_item(
                 session, stored.other_patient.uid
             )
             assert other_patient.valid_attributes is False
@@ -1413,7 +1413,7 @@ class TestMigratingAProject:
     def test_the_completing_task_fails_the_migration_and_changes_nothing(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         migration: _SexMigration,
         stored: _StoredProject,
@@ -1434,17 +1434,17 @@ class TestMigratingAProject:
         assert migration_service.get(stored.project.uid).status == (
             MigrationStatus.FAILED
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.status == ProjectStatus.MIGRATING
             assert project.root_schema_uid == ExampleSchema().uid
-            slide = sqlite_database_service.get_item(session, stored.slide.uid)
+            slide = stored_database_service.get_item(session, stored.slide.uid)
             assert slide.schema_uid == ExampleSchema().slide_schema_uid
 
     def test_the_actions_of_a_project_offer_migrating_it_as_its_rules_do(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         migration_service: MigrationService,
@@ -1457,7 +1457,7 @@ class TestMigratingAProject:
             schema_service=schema_service,
             validation_service=validation_service,
             mapper_service=decoy.mock(cls=MapperService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             migration_service=migration_service,
         )
@@ -1472,7 +1472,7 @@ class TestMigratingAProject:
         assert before.migrate_refusal is None
         assert while_migrating.migration_available is True
         assert while_migrating.migrate_refusal == "the project is being migrated"
-        assert stored.can_migrate(sqlite_database_service, migration_service) is False
+        assert stored.can_migrate(stored_database_service, migration_service) is False
         assert not any(
             while_migrating.model_dump(
                 exclude={"migration_available", "migrate_refusal"}
@@ -1482,7 +1482,7 @@ class TestMigratingAProject:
     def test_a_migrating_project_cannot_be_deleted(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         migration_service: MigrationService,
@@ -1495,7 +1495,7 @@ class TestMigratingAProject:
             schema_service=schema_service,
             validation_service=validation_service,
             mapper_service=decoy.mock(cls=MapperService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             migration_service=migration_service,
         )
@@ -1507,21 +1507,21 @@ class TestMigratingAProject:
 
     def test_a_migrating_project_cannot_be_changed(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         schema_service: SchemaService,
         item_service: ItemService,
         stored: _StoredProject,
     ):
         # Arrange
-        assert stored.can_migrate(sqlite_database_service, migration_service) is True
+        assert stored.can_migrate(stored_database_service, migration_service) is True
         migration_service.create(stored.project.uid)
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError, match="being migrated"):
             item_service.select(stored.slide.uid, ItemSelect(select=False))
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, stored.project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, stored.project.uid)
             assert schema_service.change_refusal(project) == (
                 "the project is being migrated"
             )
@@ -1530,7 +1530,7 @@ class TestMigratingAProject:
     def test_an_exported_project_is_not_migrated(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         migration_service: MigrationService,
@@ -1546,34 +1546,34 @@ class TestMigratingAProject:
             schema_service=schema_service,
             validation_service=validation_service,
             mapper_service=decoy.mock(cls=MapperService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             migration_service=migration_service,
         )
-        assert stored.can_migrate(sqlite_database_service, migration_service) is True
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, stored.project.uid)
+        assert stored.can_migrate(stored_database_service, migration_service) is True
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, stored.project.uid)
             project.status = ProjectStatus.EXPORTING
         project_service.set_as_export_complete(stored.project.uid)
         if taken_back_into_progress:
             project_service.set_as_in_progress(stored.project.uid)
 
         # Act & Assert
-        assert stored.can_migrate(sqlite_database_service, migration_service) is False
+        assert stored.can_migrate(stored_database_service, migration_service) is False
         with pytest.raises(NotAllowedActionError, match="has been exported"):
             migration_service.create(stored.project.uid)
 
     def test_a_project_exported_while_waiting_to_be_planned_is_not(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         """The task checks again."""
         # Arrange
         migration_service.create(stored.project.uid)
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, stored.project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, stored.project.uid)
             project.exported = datetime.datetime(2026, 1, 2)
 
         # Act & Assert
@@ -1582,7 +1582,7 @@ class TestMigratingAProject:
 
     def test_a_project_with_a_search_item_not_yet_searched_is_busy(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
         schema: ExampleSchema,
@@ -1590,8 +1590,8 @@ class TestMigratingAProject:
         """A retried search runs on a batch whose search is complete, and would
         write into what the migration moves."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, stored.batch_uid)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, stored.batch_uid)
             batch.status = BatchStatus.METADATA_SEARCH_COMPLETE
             session.add(
                 DatabaseMetadataSearchItem(
@@ -1600,7 +1600,7 @@ class TestMigratingAProject:
             )
 
         # Act & Assert
-        assert stored.can_migrate(sqlite_database_service, migration_service) is False
+        assert stored.can_migrate(stored_database_service, migration_service) is False
         with pytest.raises(NotAllowedActionError, match="being searched"):
             migration_service.create(stored.project.uid)
 
@@ -1614,7 +1614,7 @@ class TestMigratingAProject:
     )
     def test_a_project_with_images_stored_is_not_migrated(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
         status: BatchStatus,
@@ -1624,13 +1624,13 @@ class TestMigratingAProject:
         processed images are not yet, a locked batch holds what goes into its
         bundle, and stored images carry the metadata of the old schema."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, stored.batch_uid)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, stored.batch_uid)
             batch.status = status
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            project = sqlite_database_service.get_project(session, stored.project.uid)
+        with stored_database_service.get_session() as session:
+            project = stored_database_service.get_project(session, stored.project.uid)
             reason = migration_service.migrate_refusal(project, session)
 
         # Assert
@@ -1718,7 +1718,7 @@ class TestMigratingIntoNewRequirements:
 
     def test_a_newly_required_attribute_is_resolved(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         migration_service: MigrationService,
         item_service: ItemService,
         stored: _StoredProject,
@@ -1740,7 +1740,7 @@ class TestMigratingIntoNewRequirements:
         migration_service.submit(stored.project.uid)
 
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             migration_service.complete(stored.project.uid, session=session)
 
         # Assert
@@ -1754,22 +1754,22 @@ class TestMigratingMappers:
     @pytest.fixture()
     def original(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         schema: ExampleSchema,
     ) -> UUID:
         """A mapper of the example sex, in a group, mapping "man" to "M"."""
         sex = schema.patient.attributes["sex"].uid
         mapper = mapper_service.get_or_create_mapper("sex", sex)
-        with sqlite_database_service.get_session() as session:
-            mapping = sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            mapping = stored_database_service.add_mapping(
                 session,
                 mapper.uid,
                 "^man$",
                 EnumAttribute(uid=uuid4(), schema_uid=sex, original_value="M"),
             )
             mapping.hits = 7
-            sqlite_database_service.add_mapping(
+            stored_database_service.add_mapping(
                 session,
                 mapper.uid,
                 "^other$",
@@ -1782,7 +1782,7 @@ class TestMigratingMappers:
     @staticmethod
     def set_up_mappers(
         schema_service: SchemaService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         attribute_service: AttributeService,
         validation_service: ValidationService,
         review_service: ReviewService,
@@ -1793,20 +1793,20 @@ class TestMigratingMappers:
             attribute_service,
             validation_service,
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
             mapper_injector,
         )
         MapperSetUp(
             mapper_service,
             MapperMigrationService(
-                schema_service, sqlite_database_service, mapper_service
+                schema_service, stored_database_service, mapper_service
             ),
         ).run()
 
     def test_a_mapper_is_not_migrated_where_the_service_is_only_created(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         original: UUID,
         schema: ExampleSchema,
@@ -1814,15 +1814,15 @@ class TestMigratingMappers:
         """As in the web app and a worker, which leave the mappers to
         `slidetap-mappers set-up`."""
         # Act
-        with sqlite_database_service.get_session() as session:
-            mapper = sqlite_database_service.get_mapper(session, original)
+        with stored_database_service.get_session() as session:
+            mapper = stored_database_service.get_mapper(session, original)
 
             # Assert
             assert mapper.attribute_schema_uid == schema.patient.attributes["sex"].uid
 
     def test_a_mapper_of_a_changed_attribute_is_migrated(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_migration_service: MapperMigrationService,
         original: UUID,
     ):
@@ -1831,11 +1831,11 @@ class TestMigratingMappers:
             mapper_migration_service.migrate_mappers()
 
         # Assert
-        self.assert_moved(sqlite_database_service, original)
+        self.assert_moved(stored_database_service, original)
 
     def test_a_mapper_is_migrated_before_the_sheet_of_the_target_is_injected(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         attribute_service: AttributeService,
         validation_service: ValidationService,
@@ -1862,7 +1862,7 @@ class TestMigratingMappers:
         # Act
         self.set_up_mappers(
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             attribute_service,
             validation_service,
             review_service,
@@ -1870,7 +1870,7 @@ class TestMigratingMappers:
         )
 
         # Assert
-        self.assert_moved(sqlite_database_service, original)
+        self.assert_moved(stored_database_service, original)
 
     def test_a_mapper_the_migration_fails_on_is_named(
         self,
@@ -1891,7 +1891,7 @@ class TestMigratingMappers:
 
     def test_a_mapper_migrated_to_another_family_is_given_that_family(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         other_schema: RootSchema,
         migration: _SexMigration,
@@ -1903,18 +1903,18 @@ class TestMigratingMappers:
 
         # Act
         self.migrate_mappers_to_stranger(
-            sqlite_database_service, schema, stranger, migration, schema_service_of
+            stored_database_service, schema, stranger, migration, schema_service_of
         )
 
         # Assert
-        self.assert_moved(sqlite_database_service, original)
-        with sqlite_database_service.get_session() as session:
-            mapper = sqlite_database_service.get_mapper(session, original)
+        self.assert_moved(stored_database_service, original)
+        with stored_database_service.get_session() as session:
+            mapper = stored_database_service.get_mapper(session, original)
             assert mapper.family_uid == stranger.family_uid
 
     def test_a_mapper_migrated_onto_a_name_taken_in_the_family_is_named(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         other_schema: RootSchema,
         migration: _SexMigration,
@@ -1923,21 +1923,21 @@ class TestMigratingMappers:
     ):
         # Arrange
         stranger = other_schema.model_copy(update={"family_uid": uuid4()})
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             taken = uuid4()
-            sqlite_database_service.add_mapper(
+            stored_database_service.add_mapper(
                 session, "sex", taken, taken, family_uid=stranger.family_uid
             )
 
         # Act & Assert
         with pytest.raises(ValueError, match="Mapper 'sex'"):
             self.migrate_mappers_to_stranger(
-                sqlite_database_service, schema, stranger, migration, schema_service_of
+                stored_database_service, schema, stranger, migration, schema_service_of
             )
 
     @staticmethod
     def migrate_mappers_to_stranger(
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         stranger: RootSchema,
         migration: _SexMigration,
@@ -1948,27 +1948,27 @@ class TestMigratingMappers:
         schema_service = schema_service_of(
             stranger, schema, migrations={schema.uid: migration}
         )
-        validation_service = ValidationService(schema_service, sqlite_database_service)
+        validation_service = ValidationService(schema_service, stored_database_service)
         review_service = ReviewService(
-            schema_service, validation_service, sqlite_database_service
+            schema_service, validation_service, stored_database_service
         )
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         mapper_service = MapperService(
             attribute_service,
             validation_service,
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         )
         MapperMigrationService(
-            schema_service, sqlite_database_service, mapper_service
+            schema_service, stored_database_service, mapper_service
         ).migrate_mappers()
 
     @staticmethod
-    def assert_moved(sqlite_database_service: DatabaseService, original: UUID):
-        with sqlite_database_service.get_session() as session:
+    def assert_moved(stored_database_service: DatabaseService, original: UUID):
+        with stored_database_service.get_session() as session:
             mappers = session.scalars(select(DatabaseMapper)).all()
             assert [mapper.uid for mapper in mappers] == [original]
             mapper = mappers[0]
@@ -1990,7 +1990,7 @@ class TestMigratingMappers:
                 )
                 for mapping in mappings
             ] == [("^man$", OTHER_SEX_SCHEMA_UID, "Male", 7)]
-            groups = list(sqlite_database_service.get_mapper_groups(session))
+            groups = list(stored_database_service.get_mapper_groups(session))
             assert {mapper.uid for mapper in groups[0].mappers} == {original}
 
 

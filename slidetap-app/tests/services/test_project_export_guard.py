@@ -14,7 +14,7 @@
 
 """What keeps a project that is not wholly in the outbox from being exported.
 
-Against a real SQLite database: what is being pinned is which images the
+Against a real database: what is being pinned is which images the
 guard counts, which a mocked session says nothing about.
 """
 
@@ -60,15 +60,15 @@ def schema_service(
 def project_service(
     decoy: Decoy,
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> ProjectService:
     return ProjectService(
         attribute_service=decoy.mock(cls=AttributeService),
         batch_service=decoy.mock(cls=BatchService),
         schema_service=schema_service,
-        validation_service=ValidationService(schema_service, sqlite_database_service),
+        validation_service=ValidationService(schema_service, stored_database_service),
         mapper_service=decoy.mock(cls=MapperService),
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         storage_service=decoy.mock(cls=StorageService),
         migration_service=decoy.mock(cls=MigrationService),
     )
@@ -76,17 +76,17 @@ def project_service(
 
 @pytest.fixture()
 def batch_uid(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     dataset: Dataset,
     project: Project,
 ) -> UUID:
     """A completed project of one completed batch, ready to export."""
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        stored = sqlite_database_service.add_project(session, project)
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored = stored_database_service.add_project(session, project)
         stored.status = ProjectStatus.COMPLETED
         stored.valid_attributes = True
-        batch = sqlite_database_service.add_batch(
+        batch = stored_database_service.add_batch(
             session, BatchCreate(name="batch", project_uid=project.uid)
         )
         batch.status = BatchStatus.COMPLETED
@@ -137,22 +137,22 @@ class TestExportGuard:
     def test_a_project_whose_images_are_all_stored_can_be_exported(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         dataset: Dataset,
         project: Project,
         batch_uid: UUID,
     ):
         add_image(
-            sqlite_database_service, schema, dataset, batch_uid, "1", ImageStatus.STORED
+            stored_database_service, schema, dataset, batch_uid, "1", ImageStatus.STORED
         )
 
-        assert_can_export(project_service, sqlite_database_service, project)
+        assert_can_export(project_service, stored_database_service, project)
 
     def test_a_selected_image_never_stored_refuses_the_export(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         dataset: Dataset,
         project: Project,
@@ -161,10 +161,10 @@ class TestExportGuard:
         """What a batch delete that was interrupted once left behind: images
         selected, never processed, and about to be named in the bundle."""
         add_image(
-            sqlite_database_service, schema, dataset, batch_uid, "1", ImageStatus.STORED
+            stored_database_service, schema, dataset, batch_uid, "1", ImageStatus.STORED
         )
         add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             dataset,
             batch_uid,
@@ -173,19 +173,19 @@ class TestExportGuard:
         )
 
         with pytest.raises(NotAllowedActionError, match="1 selected .* not stored"):
-            assert_can_export(project_service, sqlite_database_service, project)
+            assert_can_export(project_service, stored_database_service, project)
 
     def test_an_image_taken_out_of_the_project_is_not_counted(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         dataset: Dataset,
         project: Project,
         batch_uid: UUID,
     ):
         add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             dataset,
             batch_uid,
@@ -194,36 +194,36 @@ class TestExportGuard:
             selected=False,
         )
 
-        assert_can_export(project_service, sqlite_database_service, project)
+        assert_can_export(project_service, stored_database_service, project)
 
     def test_a_batch_being_deleted_refuses_the_export(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         project: Project,
         batch_uid: UUID,
     ):
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_batch(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_batch(
                 session, BatchCreate(name="going", project_uid=project.uid)
             ).status = BatchStatus.DELETING
             session.commit()
 
         with pytest.raises(NotAllowedActionError, match="being deleted"):
-            assert_can_export(project_service, sqlite_database_service, project)
+            assert_can_export(project_service, stored_database_service, project)
 
     def test_a_project_not_completed_refuses_the_export(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         project: Project,
         batch_uid: UUID,
     ):
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_project(
                 session, project.uid
             ).status = ProjectStatus.IN_PROGRESS
             session.commit()
 
         with pytest.raises(NotAllowedActionError, match="COMPLETED"):
-            assert_can_export(project_service, sqlite_database_service, project)
+            assert_can_export(project_service, stored_database_service, project)

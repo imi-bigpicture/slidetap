@@ -22,6 +22,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import (
     Any,
+    ClassVar,
     Generic,
     TypeVar,
 )
@@ -33,15 +34,16 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
-    Integer,
+    Index,
     String,
-    UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from slidetap.database.db import Base
 from slidetap.database.types import (
+    RejectedValuesType,
     attribute_db_type,
     attribute_dict_db_type,
     attribute_list_db_type,
@@ -76,13 +78,24 @@ DatabaseAttributeType = TypeVar("DatabaseAttributeType", bound="DatabaseAttribut
 class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     """An attribute defined by a tag and a value"""
 
+    OWNER_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "attribute_item_uid",
+        "private_attribute_item_uid",
+        "attribute_project_uid",
+        "private_attribute_project_uid",
+        "attribute_dataset_uid",
+        "private_attribute_dataset_uid",
+    )
+    """The columns an attribute row is held by an item, project or dataset
+    through."""
+
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     schema_uid: Mapped[UUID] = mapped_column(Uuid)
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
     display_value: Mapped[str | None] = mapped_column(String())
     mappable_value: Mapped[str | None] = mapped_column(String(512))
     rejected: Mapped[RejectedValues] = mapped_column(
-        Integer, default=RejectedValues.NONE
+        RejectedValuesType, default=RejectedValues.NONE, server_default="0"
     )
     """What the item came in with that a curator has refused, if anything."""
 
@@ -115,17 +128,19 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     mapping_item_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("mapping_item.uid"), index=True
     )
-    __table_args__ = (
-        UniqueConstraint(
+    # An owner holds one attribute of each attribute schema. An attribute row
+    # is held through one of the owner columns and has the others null, so the
+    # invariant is kept by an index per owner column over the rows it holds.
+    __table_args__ = tuple(
+        Index(
+            f"uq_attribute_{owner_column}_schema_uid",
+            owner_column,
             "schema_uid",
-            "attribute_item_uid",
-            "private_attribute_item_uid",
-            "attribute_project_uid",
-            "private_attribute_project_uid",
-            "attribute_dataset_uid",
-            "private_attribute_dataset_uid",
-            "mapping_item_uid",
-        ),
+            unique=True,
+            sqlite_where=text(f"{owner_column} IS NOT NULL"),
+            postgresql_where=text(f"{owner_column} IS NOT NULL"),
+        )
+        for owner_column in OWNER_COLUMNS
     )
 
     def __init__(
@@ -240,6 +255,33 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         self.updated_value = self._mint_nested_uids(value)
         self.display_value = display_value
 
+    def replace_values(self, attribute: Attribute) -> None:
+        """Take every value of an attribute that replaces this one.
+
+        An owner holds one attribute of each attribute schema, so an attribute
+        given for a schema the owner already holds one of, under a uid that is
+        not stored, replaces the stored one. It does so in this row, which
+        keeps its uid, rather than in a new row inserted beside it. What the
+        replaced attribute held is not kept, as it would not be in a new row.
+
+        Parameters
+        ----------
+        attribute: Attribute
+            The attribute that replaces this one, of the same attribute schema.
+        """
+        if attribute.schema_uid != self.schema_uid:
+            raise ValueError(
+                f"Attribute of schema {attribute.schema_uid} cannot replace "
+                f"attribute {self.uid} of schema {self.schema_uid}."
+            )
+        self.original_value = self._mint_nested_uids(attribute.original_value)
+        self.updated_value = self._mint_nested_uids(attribute.updated_value)
+        self.mapped_value = self._mint_nested_uids(attribute.mapped_value)
+        self.mappable_value = attribute.mappable_value
+        self.display_value = attribute.display_value
+        self.mapping_item_uid = attribute.mapping_item_uid
+        self.rejected = attribute.rejected
+
     @classmethod
     def _mint_nested_uids(cls, value: Any) -> Any:
         """Give a uid of its own to every nested attribute that came without one.
@@ -322,11 +364,6 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         self._raise_if_not_editable()
         self.mappable_value = value
 
-    @abstractmethod
-    def copy(self) -> DatabaseAttribute:
-        """Copy the attribute."""
-        raise NotImplementedError()
-
     @property
     @abstractmethod
     def model(self) -> AnyAttribute:
@@ -407,16 +444,6 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseStringAttribute:
-        return DatabaseStringAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
     """An attribute defined by a tag and a string value"""
@@ -484,16 +511,6 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseEnumAttribute:
-        return DatabaseEnumAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
 
 
@@ -565,16 +582,6 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseDatetimeAttribute:
-        return DatabaseDatetimeAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
     """An attribute defined by a tag and a float value"""
@@ -642,16 +649,6 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseNumericAttribute:
-        return DatabaseNumericAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
 
 
@@ -725,16 +722,6 @@ class DatabaseMeasurementAttribute(
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseMeasurementAttribute:
-        return DatabaseMeasurementAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     """An attribute defined by a tag and a code value"""
@@ -804,16 +791,6 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseCodeAttribute:
-        return DatabaseCodeAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
     """An attribute defined by a tag and a boolean value"""
@@ -881,16 +858,6 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseBooleanAttribute:
-        return DatabaseBooleanAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
 
 
@@ -970,16 +937,6 @@ class DatabaseObjectAttribute(
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseObjectAttribute:
-        return DatabaseObjectAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]):
     """Attribute that can hold a list of the same type (defined by schema)."""
@@ -1055,16 +1012,6 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseListAttribute:
-        return DatabaseListAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
     """Attribute that can be of different specified (by schema) type."""
@@ -1133,14 +1080,4 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseUnionAttribute:
-        return DatabaseUnionAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )

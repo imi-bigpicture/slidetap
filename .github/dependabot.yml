@@ -28,9 +28,35 @@ updates:
       interval: weekly
     cooldown:
       default-days: 14
+    # typescript-eslint does not support TypeScript 7 yet, and without it the
+    # client cannot be linted. Lift once a typescript-eslint release does.
+    ignore:
+      - dependency-name: typescript
+        versions: [">=7"]
     groups:
       frontend:
         patterns: ["*"]
+
+  # Base images of the application images
+  - package-ecosystem: docker
+    directories:
+      - /slidetap-app/dockerfiles
+      - /slidetap-client/dockerfiles
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      docker:
+        patterns: ["*"]
+
+  # Images of the example deployment
+  - package-ecosystem: docker-compose
+    directory: /example
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
 
   # GitHub Actions used by workflows
   - package-ecosystem: github-actions

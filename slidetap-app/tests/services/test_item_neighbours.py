@@ -47,38 +47,38 @@ def sample_schema(schema: RootSchema) -> SampleSchema:
 
 @pytest.fixture()
 def item_service(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema: RootSchema,
     schema_service_of: Callable[..., SchemaService],
 ) -> ItemService:
     schema_service = schema_service_of(schema)
-    validation_service = ValidationService(schema_service, sqlite_database_service)
+    validation_service = ValidationService(schema_service, stored_database_service)
     review_service = ReviewService(
-        schema_service, validation_service, sqlite_database_service
+        schema_service, validation_service, stored_database_service
     )
     attribute_service = AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
     return ItemService(
         attribute_service,
-        TagService(sqlite_database_service),
+        TagService(stored_database_service),
         MapperService(
             attribute_service,
             validation_service,
             schema_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         ),
         schema_service,
         validation_service,
-        sqlite_database_service,
+        stored_database_service,
         review_service,
     )
 
 
 @pytest.fixture()
 def samples(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     sample_schema: SampleSchema,
     dataset: Dataset,
     project: Project,
@@ -89,11 +89,11 @@ def samples(
     two: stepping that reached across the batches would land on it.
     """
     added: dict[str, tuple[UUID, UUID]] = {}
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        sqlite_database_service.add_project(session, project)
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored_database_service.add_project(session, project)
         for batch_name, identifiers in (("first", ("a", "c")), ("second", ("b",))):
-            batch = sqlite_database_service.add_batch(
+            batch = stored_database_service.add_batch(
                 session, BatchCreate(name=batch_name, project_uid=project.uid)
             )
             for identifier in identifiers:
@@ -106,7 +106,7 @@ def samples(
                     schema_uid=sample_schema.uid,
                 )
                 added[identifier] = (
-                    sqlite_database_service.add_item(session, sample, [], []).uid,
+                    stored_database_service.add_item(session, sample, [], []).uid,
                     batch.uid,
                 )
     return added

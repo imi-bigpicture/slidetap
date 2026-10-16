@@ -33,7 +33,7 @@ task_router = APIRouter(
 
 
 @task_router.get("/jobs")
-async def get_jobs(
+def get_jobs(
     task_queue_service: FromDishka[TaskQueueService],
     status: Annotated[TaskJobStatus | None, Query()] = None,
     task: Annotated[str | None, Query()] = None,
@@ -58,13 +58,13 @@ async def get_jobs(
     list[TaskJob]
         The jobs, newest first.
     """
-    return await task_queue_service.get_jobs(
+    return task_queue_service.get_jobs(
         status=status, task=task, queue=queue, limit=limit
     )
 
 
 @task_router.get("/tasks")
-async def get_task_counts(
+def get_task_counts(
     task_queue_service: FromDishka[TaskQueueService],
 ) -> list[TaskCounts]:
     """Get every task the queue has held, with a count of each status.
@@ -74,11 +74,11 @@ async def get_task_counts(
     list[TaskCounts]
         One count per task.
     """
-    return await task_queue_service.get_task_counts()
+    return task_queue_service.get_task_counts()
 
 
 @task_router.get("/queues")
-async def get_queue_counts(
+def get_queue_counts(
     task_queue_service: FromDishka[TaskQueueService],
 ) -> list[TaskCounts]:
     """Get every queue, with a count of each status.
@@ -88,4 +88,4 @@ async def get_queue_counts(
     list[TaskCounts]
         One count per queue.
     """
-    return await task_queue_service.get_queue_counts()
+    return task_queue_service.get_queue_counts()
