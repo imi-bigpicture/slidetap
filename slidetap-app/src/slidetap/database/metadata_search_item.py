@@ -45,7 +45,7 @@ class DatabaseMetadataSearchItem(Base):
     status: Mapped[MetadataImportStatus] = mapped_column(Enum(MetadataImportStatus))
     message: Mapped[str | None] = mapped_column(String(512))
     item_uid: Mapped[UUID | None] = mapped_column(
-        Uuid, ForeignKey("item.uid", ondelete="CASCADE")
+        Uuid, ForeignKey("item.uid", ondelete="CASCADE"), index=True
     )
     attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retry_count: Mapped[int] = mapped_column(Integer, default=0)

@@ -74,7 +74,7 @@ class Observation(Item):
 
 class Annotation(Item):
     image: tuple[UUID, UUID] | None = None
-    observation: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
+    observations: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.ANNOTATION] = ItemValueType.ANNOTATION
 
 

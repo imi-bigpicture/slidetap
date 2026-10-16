@@ -33,7 +33,6 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
-    Integer,
     String,
     UniqueConstraint,
     Uuid,
@@ -42,6 +41,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from slidetap.database.db import Base
 from slidetap.database.types import (
+    RejectedValuesType,
     attribute_db_type,
     attribute_dict_db_type,
     attribute_list_db_type,
@@ -82,7 +82,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     display_value: Mapped[str | None] = mapped_column(String())
     mappable_value: Mapped[str | None] = mapped_column(String(512))
     rejected: Mapped[RejectedValues] = mapped_column(
-        Integer, default=RejectedValues.NONE
+        RejectedValuesType, default=RejectedValues.NONE, server_default="0"
     )
     """What the item came in with that a curator has refused, if anything."""
 

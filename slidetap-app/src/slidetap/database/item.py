@@ -130,6 +130,7 @@ class DatabaseItem(Base, Generic[ItemType]):
             Uuid,
             ForeignKey("tag.uid"),
             primary_key=True,
+            index=True,
         ),
     )
 
@@ -155,7 +156,10 @@ class DatabaseItem(Base, Generic[ItemType]):
     )
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
     review_status: Mapped[ReviewStatus] = mapped_column(
-        Enum(ReviewStatus), default=ReviewStatus.NOT_REVIEWED, index=True
+        Enum(ReviewStatus),
+        default=ReviewStatus.NOT_REVIEWED,
+        server_default=ReviewStatus.NOT_REVIEWED.name,
+        index=True,
     )
     last_saved: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     """When a user last saved this item. Empty for one nobody has edited: an
@@ -308,9 +312,13 @@ class DatabaseObservation(DatabaseItem[Observation]):
     )
 
     # For relations
-    image_uid: Mapped[UUID | None] = mapped_column(ForeignKey("image.uid"))
-    sample_uid: Mapped[UUID | None] = mapped_column(ForeignKey("sample.uid"))
-    annotation_uid: Mapped[UUID | None] = mapped_column(ForeignKey("annotation.uid"))
+    image_uid: Mapped[UUID | None] = mapped_column(ForeignKey("image.uid"), index=True)
+    sample_uid: Mapped[UUID | None] = mapped_column(
+        ForeignKey("sample.uid"), index=True
+    )
+    annotation_uid: Mapped[UUID | None] = mapped_column(
+        ForeignKey("annotation.uid"), index=True
+    )
 
     # Relationships
     image: Mapped[DatabaseImage | None] = relationship(
@@ -434,7 +442,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     )
 
     # For relations
-    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
+    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"), index=True)
 
     # Relationships
     image: Mapped[DatabaseImage | None] = relationship(
@@ -489,7 +497,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         observations = defaultdict(list)
         for observation in self.observations:
             if observation.selected:
-                observations[observation.dataset_uid].append(observation.uid)
+                observations[observation.schema_uid].append(observation.uid)
         return Annotation(
             uid=self.uid,
             identifier=self.identifier,
@@ -518,7 +526,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
                 if self.image is not None and self.image.selected
                 else None
             ),
-            observation=observations,
+            observations=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
@@ -532,7 +540,7 @@ class DatabaseImageFile(Base):
 
     # For relations
     # TODO should optional be allowed here?
-    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
+    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"), index=True)
 
     # Relations
     image: Mapped[DatabaseImage] = relationship(
@@ -573,6 +581,7 @@ class DatabaseImage(DatabaseItem[Image]):
             Uuid,
             ForeignKey("image.uid"),
             primary_key=True,
+            index=True,
         ),
     )
     uid: Mapped[UUID] = mapped_column(
@@ -980,6 +989,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             Uuid,
             ForeignKey("sample.uid"),
             primary_key=True,
+            index=True,
         ),
     )
 

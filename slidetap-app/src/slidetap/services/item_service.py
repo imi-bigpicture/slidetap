@@ -2329,7 +2329,7 @@ class ItemService:
                 item.samples.setdefault(parent.schema_uid, []).append(parent.uid)
         elif isinstance(item, Annotation):
             item.image = None
-            item.observation = {}
+            item.observations = {}
             if parents:
                 item.image = (parents[0].schema_uid, parents[0].uid)
         elif isinstance(item, Observation):
