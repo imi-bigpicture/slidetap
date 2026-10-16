@@ -61,7 +61,7 @@ batch_router = APIRouter(
 
 
 @batch_router.post("/create")
-async def create_batch(
+def create_batch(
     batch: BatchCreate,
     batch_service: FromDishka[BatchService],
     logger: Logger,
@@ -90,7 +90,7 @@ async def create_batch(
 
 
 @batch_router.get("")
-async def get_batches(
+def get_batches(
     batch_service: FromDishka[BatchService],
     project_uid: UUID | None = Query(None),
     status: BatchStatus | None = Query(None),
@@ -117,7 +117,7 @@ async def get_batches(
 
 
 @batch_router.post("/batch/{batch_uid}")
-async def update_batch(
+def update_batch(
     batch_uid: UUID,
     batch: Batch,
     batch_service: FromDishka[BatchService],
@@ -137,6 +137,11 @@ async def update_batch(
     Batch
         Updated batch data if successful.
     """
+    if batch.uid != batch_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Batch uid {batch.uid} does not match path uid {batch_uid}",
+        )
     try:
         updated_batch = batch_service.update(batch)
         if updated_batch is None:
@@ -272,7 +277,7 @@ async def process(
 
 
 @batch_router.post("/batch/{batch_uid}/complete")
-async def complete(
+def complete(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
     logger: Logger,
@@ -306,7 +311,7 @@ async def complete(
 
 
 @batch_router.post("/batch/{batch_uid}/reopen")
-async def reopen(
+def reopen(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
     logger: Logger,
@@ -325,7 +330,7 @@ async def reopen(
 
 
 @batch_router.get("/batch/{batch_uid}")
-async def get_batch(
+def get_batch(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
 ) -> Batch:
@@ -422,7 +427,7 @@ async def delete_batch(
 
 
 @batch_router.get("/batch/{batch_uid}/validation")
-async def get_validation(
+def get_validation(
     batch_uid: UUID,
     validation_service: FromDishka[ValidationService],
     logger: Logger,

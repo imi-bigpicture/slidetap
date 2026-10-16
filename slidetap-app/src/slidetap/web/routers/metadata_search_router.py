@@ -43,7 +43,7 @@ metadata_search_router = APIRouter(
 
 
 @metadata_search_router.get("/supports-retry")
-async def supports_retry(
+def supports_retry(
     metadata_import_service: FromDishka[MetadataImportService],
 ) -> bool:
     """Whether the active importer supports per-search-item retry."""
@@ -51,7 +51,7 @@ async def supports_retry(
 
 
 @metadata_search_router.get("/items")
-async def list_search_items(
+def list_search_items(
     metadata_import_service: FromDishka[MetadataImportService],
     batch_uid: UUID = Query(..., alias="batchUid"),
 ) -> Iterable[MetadataSearchItem]:
@@ -102,7 +102,7 @@ async def retry_search_item(
 
 
 @metadata_search_router.post("/items/{search_item_uid}/exclude")
-async def exclude_search_item(
+def exclude_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
 ) -> None:

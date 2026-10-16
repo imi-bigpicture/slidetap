@@ -35,7 +35,7 @@ tag_router = APIRouter(
 
 
 @tag_router.get("")
-async def get_tags(tag_service: FromDishka[TagService]) -> Iterable[Tag]:
+def get_tags(tag_service: FromDishka[TagService]) -> Iterable[Tag]:
     """Get all tags.
 
     Returns
@@ -47,7 +47,7 @@ async def get_tags(tag_service: FromDishka[TagService]) -> Iterable[Tag]:
 
 
 @tag_router.post("/tag/{tag_uid}")
-async def update_tag(tag_service: FromDishka[TagService], tag: Tag) -> Tag:
+def update_tag(tag_service: FromDishka[TagService], tag: Tag) -> Tag:
     """Update tags for an item.
 
     Parameters

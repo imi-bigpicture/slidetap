@@ -66,7 +66,7 @@ login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRo
 
 
 @login_router.post("/login")
-async def login(
+def login(
     response: Response,
     credentials: BasicAuthCredentials,
     auth_interface: FromDishka[AuthInterface],

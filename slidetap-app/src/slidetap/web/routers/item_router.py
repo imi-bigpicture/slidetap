@@ -108,7 +108,7 @@ item_router = APIRouter(
 
 
 @item_router.get("/item/{item_uid}")
-async def get_item(
+def get_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -137,7 +137,7 @@ async def get_item(
 
 
 @item_router.get("/item/{item_uid}/preview")
-async def preview_item(
+def preview_item(
     item_uid: UUID,
     metadata_export_service: FromDishka[MetadataExportService],
     logger: Logger,
@@ -159,7 +159,7 @@ async def preview_item(
 
 
 @item_router.post("/item/{item_uid}/review")
-async def set_review_status(
+def set_review_status(
     item_uid: UUID,
     request: ReviewRequest,
     review_service: FromDishka[ReviewService],
@@ -202,7 +202,7 @@ async def set_review_status(
 
 
 @item_router.get("/item/{item_uid}/non-valid-items")
-async def get_non_valid_items(
+def get_non_valid_items(
     item_uid: UUID,
     review_service: FromDishka[ReviewService],
     logger: Logger,
@@ -222,7 +222,7 @@ async def get_non_valid_items(
 
 
 @item_router.get("/item/{item_uid}/issues")
-async def get_review_issues(
+def get_review_issues(
     item_uid: UUID,
     review_service: FromDishka[ReviewService],
     logger: Logger,
@@ -242,7 +242,7 @@ async def get_review_issues(
 
 
 @item_router.post("/item/{item_uid}/issues")
-async def raise_review_issue(
+def raise_review_issue(
     item_uid: UUID,
     request: ReviewIssueRequest,
     review_service: FromDishka[ReviewService],
@@ -272,7 +272,7 @@ async def raise_review_issue(
 
 
 @item_router.post("/issues/{issue_uid}/resolve")
-async def resolve_review_issue(
+def resolve_review_issue(
     issue_uid: UUID,
     review_service: FromDishka[ReviewService],
     logger: Logger,
@@ -300,7 +300,7 @@ async def resolve_review_issue(
 
 
 @item_router.post("/flag-invalid")
-async def flag_invalid_review_units(
+def flag_invalid_review_units(
     review_service: FromDishka[ReviewService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
@@ -318,7 +318,7 @@ async def flag_invalid_review_units(
 
 
 @item_router.post("/selection-trees")
-async def get_selection_trees(
+def get_selection_trees(
     request: SelectionTreeRequest,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -342,7 +342,7 @@ async def get_selection_trees(
 
 
 @item_router.post("/select")
-async def select_items(
+def select_items(
     value: ItemBulkSelect,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -367,7 +367,7 @@ async def select_items(
 
 
 @item_router.post("/item/{item_uid}/select")
-async def select_item(
+def select_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     value: ItemSelect,
@@ -402,7 +402,7 @@ async def select_item(
 
 
 @item_router.post("/item/{item_uid}")
-async def save_item(
+def save_item(
     item_uid: UUID,
     item: AnyItem,
     item_service: FromDishka[ItemService],
@@ -423,6 +423,11 @@ async def save_item(
         Updated item
     """
     logger.debug(f"Save item {item_uid}.")
+    if item.uid != item_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Item uid {item.uid} does not match path uid {item_uid}",
+        )
     updated_item = item_service.update(item)
     if updated_item is None:
         raise HTTPException(
@@ -433,7 +438,7 @@ async def save_item(
 
 
 @item_router.post("/add")
-async def add_item(
+def add_item(
     item: AnyItem,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -452,7 +457,7 @@ async def add_item(
 
 
 @item_router.post("/create")
-async def create_item(
+def create_item(
     item_service: FromDishka[ItemService],
     logger: Logger,
     schema_uid: UUID = Query(..., alias="schemaUid"),
@@ -496,7 +501,7 @@ async def create_item(
 
 
 @item_router.post("/item/{item_uid}/copy")
-async def copy_item(
+def copy_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -538,7 +543,7 @@ async def copy_item(
 
 @item_router.get("")
 @item_router.post("")
-async def get_items_get(
+def get_items_get(
     item_service: FromDishka[ItemService],
     table_request: TableRequest | None = None,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
@@ -596,7 +601,7 @@ async def get_items_get(
 
 
 @item_router.get("/identities")
-async def get_identities(
+def get_identities(
     item_service: FromDishka[ItemService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
@@ -612,7 +617,7 @@ async def get_identities(
 
 
 @item_router.get("/review-queue")
-async def get_review_queue(
+def get_review_queue(
     review_service: FromDishka[ReviewService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
@@ -634,7 +639,7 @@ async def get_review_queue(
 
 
 @item_router.get("/item/{item_uid}/hierarchy/{hierarchy_layout_uid}")
-async def get_hierarchy(
+def get_hierarchy(
     item_uid: UUID,
     hierarchy_layout_uid: UUID,
     item_service: FromDishka[ItemService],
@@ -652,7 +657,7 @@ async def get_hierarchy(
 
 
 @item_router.get("/item/{item_uid}/neighbours")
-async def get_item_neighbours(
+def get_item_neighbours(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -669,7 +674,7 @@ async def get_item_neighbours(
 
 
 @item_router.get("/item/{item_uid}/suggested-child-identifier")
-async def get_suggested_child_identifier(
+def get_suggested_child_identifier(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -681,7 +686,7 @@ async def get_suggested_child_identifier(
 
 
 @item_router.get("/item/{item_uid}/images")
-async def get_images_for_item(
+def get_images_for_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -708,7 +713,7 @@ async def get_images_for_item(
 
 @item_router.get("/item/{item_uid}/overview/{overview_layout_uid}")
 @item_router.post("/item/{item_uid}/overview/{overview_layout_uid}")
-async def get_overview_data(
+def get_overview_data(
     item_uid: UUID,
     overview_layout_uid: UUID,
     overview_service: FromDishka[OverviewService],
@@ -748,7 +753,7 @@ async def get_overview_data(
 
 
 @item_router.post("/item/{item_uid}/move")
-async def move_item(
+def move_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -775,7 +780,7 @@ async def move_item(
 
 
 @item_router.post("/move-attribute")
-async def move_attribute(
+def move_attribute(
     request: MoveAttributeRequest,
     item_service: FromDishka[ItemService],
     logger: Logger,
@@ -826,7 +831,7 @@ async def retry(
 
 
 @item_router.post("/item/{item_uid}/remap")
-async def remap_item_attributes(
+def remap_item_attributes(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     mapper_service: FromDishka[MapperService],
@@ -842,7 +847,7 @@ async def remap_item_attributes(
 
 
 @item_router.post("/item/{item_uid}/remap_hierarchy")
-async def remap_item_hierarchy_attributes(
+def remap_item_hierarchy_attributes(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     mapper_service: FromDishka[MapperService],

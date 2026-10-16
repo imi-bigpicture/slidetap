@@ -117,7 +117,7 @@ async def delete_dataset(dataset_uid: UUID) -> dict:
 
 
 @dataset_router.get("/dataset/{dataset_uid}")
-async def get_dataset(
+def get_dataset(
     dataset_uid: UUID,
     dataset_service: FromDishka[DatasetService],
 ) -> Dataset:
@@ -167,7 +167,7 @@ async def remap_dataset(
 
 
 @dataset_router.post("/dataset/{dataset_uid}")
-async def update_dataset(
+def update_dataset(
     dataset_uid: UUID,
     dataset: Dataset,
     dataset_service: FromDishka[DatasetService],
@@ -186,6 +186,11 @@ async def update_dataset(
     Dataset
         Updated dataset.
     """
+    if dataset.uid != dataset_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Dataset uid {dataset.uid} does not match path uid {dataset_uid}",
+        )
     updated_dataset = dataset_service.update(dataset)
     if updated_dataset is None:
         raise HTTPException(

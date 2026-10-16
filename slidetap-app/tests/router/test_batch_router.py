@@ -130,6 +130,45 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.CONFLICT
 
+    def test_update_batch_with_a_body_for_another_batch_is_refused(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+    ):
+        # Arrange
+        path_uid = uuid4()
+
+        # Act
+        response = test_client.post(
+            f"api/batches/batch/{path_uid}",
+            json=batch.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        decoy.verify(batch_service.update(Anything()), times=0)
+
+    def test_update_batch_with_a_body_for_the_batch_is_saved(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+    ):
+        # Arrange
+        decoy.when(batch_service.update(Anything())).then_return(batch)
+
+        # Act
+        response = test_client.post(
+            f"api/batches/batch/{batch.uid}",
+            json=batch.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+
     def test_delete_batch_not_found(
         self, decoy: Decoy, test_client: TestClient, batch_service: BatchService
     ):

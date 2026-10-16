@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import pytest
 from decoy import Decoy
+from decoy.matchers import Anything
 from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
@@ -133,6 +134,45 @@ def test_client(project_router_app: FastAPI):
 
 @pytest.mark.unittest
 class TestSlideTapProjectRouter:
+    def test_update_project_with_a_body_for_another_project_is_refused(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        path_uid = uuid4()
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{path_uid}",
+            json=project.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        decoy.verify(project_service.update(Anything()), times=0)
+
+    def test_update_project_with_a_body_for_the_project_is_saved(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(project_service.update(Anything())).then_return(project)
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{project.uid}",
+            json=project.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+
     def test_delete_project_not_found(
         self, decoy: Decoy, test_client: TestClient, project_service: ProjectService
     ):

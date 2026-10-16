@@ -35,9 +35,12 @@ image_router = APIRouter(
     dependencies=[Depends(require_valid_token)],
 )
 
+MAX_THUMBNAIL_SIZE = 2048
+"""The largest width or height, in pixels, a thumbnail is made at."""
+
 
 @image_router.get("/thumbnails/{dataset_uid}")
-async def get_thumbnails(
+def get_thumbnails(
     dataset_uid: UUID,
     image_service: FromDishka[ImageService],
     batch_uid: UUID | None = Query(None, alias="batchUid"),
@@ -66,11 +69,11 @@ async def get_thumbnails(
 
 
 @image_router.get("/image/{image_uid}/thumbnail")
-async def get_thumbnail(
+def get_thumbnail(
     image_uid: UUID,
     image_service: FromDishka[ImageService],
-    width: int = Query(512),
-    height: int = Query(512),
+    width: int = Query(512, ge=1, le=MAX_THUMBNAIL_SIZE),
+    height: int = Query(512, ge=1, le=MAX_THUMBNAIL_SIZE),
 ) -> Response:
     """Get thumbnail for specified image.
 
@@ -79,9 +82,9 @@ async def get_thumbnail(
     image_uid: UUID
         Id of image to get thumbnail of.
     width: int
-        Width of thumbnail (default: 512)
+        Width of thumbnail (default: 512, at most ``MAX_THUMBNAIL_SIZE``)
     height: int
-        Height of thumbnail (default: 512)
+        Height of thumbnail (default: 512, at most ``MAX_THUMBNAIL_SIZE``)
 
     Returns
     ----------
@@ -98,7 +101,7 @@ async def get_thumbnail(
 
 
 @image_router.get("/image/{image_uid}/dzi/{dzi_level}/{x}_{y}.{extension}")
-async def get_tile_2d(
+def get_tile_2d(
     image_uid: UUID,
     dzi_level: int,
     x: int,
@@ -136,7 +139,7 @@ async def get_tile_2d(
 
 
 @image_router.get("/image/{image_uid}/dzi/{dzi_level}/{x}_{y}_{z}.{extension}")
-async def get_tile_3d(
+def get_tile_3d(
     image_uid: UUID,
     dzi_level: int,
     x: int,
@@ -177,7 +180,7 @@ async def get_tile_3d(
 
 
 @image_router.get("/image/{image_uid}/dzi")
-async def get_dzi(
+def get_dzi(
     image_uid: UUID,
     image_service: FromDishka[ImageService],
 ) -> Dzi:

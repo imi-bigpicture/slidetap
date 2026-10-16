@@ -54,7 +54,7 @@ mapper_router = APIRouter(
 
 
 @mapper_router.post("/create")
-async def create_mapper(
+def create_mapper(
     mapper: MapperCreate,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
@@ -77,7 +77,7 @@ async def create_mapper(
 
 
 @mapper_router.get("")
-async def get_all_mappers(
+def get_all_mappers(
     mapper_service: FromDishka[MapperService],
 ) -> Iterable[Mapper]:
     """Return all registered mappers.
@@ -92,7 +92,7 @@ async def get_all_mappers(
 
 
 @mapper_router.get("/mapper/{mapper_uid}")
-async def get_mapper(
+def get_mapper(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
 ) -> Mapper:
@@ -118,7 +118,7 @@ async def get_mapper(
 
 
 @mapper_router.delete("/mapper/{mapper_uid}")
-async def delete_mapper(
+def delete_mapper(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
 ) -> StatusResponse:
@@ -143,7 +143,7 @@ async def delete_mapper(
 
 
 @mapper_router.post("/mapper/{mapper_uid}")
-async def update_mapper(
+def update_mapper(
     mapper_uid: UUID,
     mapper: Mapper,
     mapper_service: FromDishka[MapperService],
@@ -162,12 +162,17 @@ async def update_mapper(
     Mapper
         Updated mapper
     """
+    if mapper.uid != mapper_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Mapper uid {mapper.uid} does not match path uid {mapper_uid}",
+        )
     updated_mapper = mapper_service.update_mapper(mapper)
     return updated_mapper
 
 
 @mapper_router.get("/mapper/{mapper_uid}/mapping")
-async def get_mappings(
+def get_mappings(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
 ) -> Iterable[MappingItem]:
@@ -188,7 +193,7 @@ async def get_mappings(
 
 
 @mapper_router.get("/project/{project_uid}/unmapped")
-async def get_unmapped_values(
+def get_unmapped_values(
     project_uid: UUID,
     mapper_service: FromDishka[MapperService],
     batch_uid: UUID | None = None,
@@ -211,7 +216,7 @@ async def get_unmapped_values(
 
 
 @mapper_router.post("/project/{project_uid}/unmapped/remap")
-async def remap_unmapped_value(
+def remap_unmapped_value(
     project_uid: UUID,
     key: UnmappedValueKey,
     mapper_service: FromDishka[MapperService],
@@ -245,7 +250,7 @@ async def remap_unmapped_value(
 
 
 @mapper_router.post("/mappings/create")
-async def create_mapping(
+def create_mapping(
     mapping: MappingItemCreate,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
@@ -268,7 +273,7 @@ async def create_mapping(
 
 
 @mapper_router.post("/groups/create")
-async def create_mapper_group(
+def create_mapper_group(
     mapper_group: MapperGroupCreate,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
@@ -293,7 +298,7 @@ async def create_mapper_group(
 
 
 @mapper_router.post("/mappings/mapping/{mapping_uid}")
-async def update_mapping(
+def update_mapping(
     mapping_uid: UUID,
     mapping: MappingItem,
     mapper_service: FromDishka[MapperService],
@@ -314,12 +319,17 @@ async def update_mapping(
         Updated mapping
     """
     logger.debug(f"Updating mapping {mapping_uid}")
+    if mapping.uid != mapping_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Mapping uid {mapping.uid} does not match path uid {mapping_uid}",
+        )
     updated_mapping = mapper_service.update_mapping(mapping)
     return updated_mapping
 
 
 @mapper_router.delete("/mappings/mapping/{mapping_uid}")
-async def delete_mapping(
+def delete_mapping(
     mapping_uid: UUID,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
@@ -353,7 +363,7 @@ async def delete_mapping(
 
 
 @mapper_router.get("/mappings/mapping/{mapping_uid}")
-async def get_mapping(
+def get_mapping(
     mapping_uid: UUID,
     mapper_service: FromDishka[MapperService],
 ) -> MappingItem:
@@ -379,7 +389,7 @@ async def get_mapping(
 
 
 @mapper_router.get("/groups")
-async def get_mapper_groups(
+def get_mapper_groups(
     mapper_service: FromDishka[MapperService],
 ) -> Iterable[MapperGroup]:
     """Get all mapper groups."""
@@ -387,7 +397,7 @@ async def get_mapper_groups(
 
 
 @mapper_router.post("/groups/{group_uid}/mappers")
-async def set_mappers_in_group(
+def set_mappers_in_group(
     group_uid: UUID,
     mapper_uids: list[UUID],
     mapper_service: FromDishka[MapperService],

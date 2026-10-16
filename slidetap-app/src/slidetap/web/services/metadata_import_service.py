@@ -15,7 +15,10 @@
 """Metaclass for metadata importer."""
 
 import logging
+from typing import Any
 from uuid import UUID
+
+from starlette.concurrency import run_in_threadpool
 
 from slidetap.database import DatabaseMetadataSearchItem, DatabaseProject
 from slidetap.external_interfaces import (
@@ -94,7 +97,37 @@ class MetadataImportService:
             return project
 
     async def search(self, batch_uid: UUID, file: File) -> Batch:
-        """Start metadata search for a batch using uploaded file."""
+        """Start metadata search for a batch using uploaded file.
+
+        The file is parsed and the batch cleared out in a worker thread, so
+        that a large document or a large batch does not hold up other
+        requests.
+        """
+        batch, search_parameters = await run_in_threadpool(
+            self._prepare_search, batch_uid, file
+        )
+        try:
+            await self._scheduler.metadata_batch_import(
+                batch, search_parameters=search_parameters
+            )
+        except Exception as exception:
+            # The batch is already committed as searching, so a failed enqueue
+            # would leave it searching forever with nothing running.
+            self._logger.error(
+                f"Failed to queue metadata search for batch {batch_uid}",
+                exc_info=True,
+            )
+            return self._batch_service.set_as_failed(
+                batch_uid, message=f"Failed to start metadata search: {exception}"
+            )
+        return batch
+
+    def _prepare_search(self, batch_uid: UUID, file: File) -> tuple[Batch, Any]:
+        """Parse the uploaded file and reset the batch to searching.
+
+        Returns the batch, committed as searching, and the search parameters
+        parsed from the file.
+        """
         # Before the document is read, so the answer is about the batch.
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
@@ -135,21 +168,7 @@ class MetadataImportService:
             self._search_item_service.clear_for_batch(batch_uid, session=session)
             batch = self._batch_service.set_as_searching(database_batch, session)
             session.commit()
-        try:
-            await self._scheduler.metadata_batch_import(
-                batch, search_parameters=search_parameters
-            )
-        except Exception as exception:
-            # The batch is already committed as searching, so a failed enqueue
-            # would leave it searching forever with nothing running.
-            self._logger.error(
-                f"Failed to queue metadata search for batch {batch_uid}",
-                exc_info=True,
-            )
-            return self._batch_service.set_as_failed(
-                batch_uid, message=f"Failed to start metadata search: {exception}"
-            )
-        return batch
+        return batch, search_parameters
 
     def list_search_items(self, batch_uid: UUID) -> list[MetadataSearchItem]:
         return self._search_item_service.list_for_batch(batch_uid)

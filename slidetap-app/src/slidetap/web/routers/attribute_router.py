@@ -50,7 +50,7 @@ Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 
 @attribute_router.get("/attribute/{attribute_uid}")
-async def get_attribute(
+def get_attribute(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
@@ -67,7 +67,7 @@ async def get_attribute(
 
 
 @attribute_router.post("/attribute/{attribute_uid}")
-async def update_attribute(
+def update_attribute(
     attribute_uid: UUID,
     attribute: AnyAttribute,
     attribute_service: FromDishka[AttributeService],
@@ -84,7 +84,7 @@ async def update_attribute(
 
 
 @attribute_router.post("/create/{attribute_schema_uid}")
-async def create_attribute(
+def create_attribute(
     attribute_schema_uid: UUID,
     attribute_data: dict,
     attribute_service: FromDishka[AttributeService],
@@ -98,7 +98,7 @@ async def create_attribute(
 
 
 @attribute_router.get("/attribute/{attribute_uid}/mapping")
-async def get_mapping(
+def get_mapping(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
     mapper_service: FromDishka[MapperService],
@@ -123,7 +123,7 @@ async def get_mapping(
 
 
 @attribute_router.get("/schema/{attribute_schema_uid}/codes/search")
-async def search_codes_for_schema(
+def search_codes_for_schema(
     attribute_schema_uid: UUID,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
@@ -145,7 +145,7 @@ async def search_codes_for_schema(
 
 
 @attribute_router.get("/schema/{attribute_schema_uid}")
-async def get_attributes_for_schema(
+def get_attributes_for_schema(
     attribute_schema_uid: UUID,
     attribute_service: FromDishka[AttributeService],
 ) -> Iterable[AnyAttribute]:
