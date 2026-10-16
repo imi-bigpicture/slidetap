@@ -97,11 +97,28 @@ def create_attribute(
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
 ) -> AnyAttribute:
-    """Create attribute."""
+    """Create an attribute of the schema in the path.
+
+    Refused as a bad request if the body says no value type, or one that is
+    not known, or does not hold a valid attribute of the schema in the path.
+    """
     logger.debug("Create attribute.")
-    attribute = attribute_factory(attribute_data)
-    attribute = attribute_service.create(attribute)
-    return attribute
+    try:
+        attribute = attribute_factory(attribute_data)
+    except (KeyError, ValueError) as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Not a valid attribute: {exception}",
+        ) from exception
+    if attribute.schema_uid != attribute_schema_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                f"Attribute schema uid {attribute.schema_uid} does not match path "
+                f"uid {attribute_schema_uid}"
+            ),
+        )
+    return attribute_service.create(attribute)
 
 
 @attribute_router.get("/attribute/{attribute_uid}/mapping")

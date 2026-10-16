@@ -15,12 +15,14 @@
 """FastAPI router for handling tags."""
 
 from collections.abc import Iterable
+from http import HTTPStatus
+from uuid import UUID
 
 from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model.tag import Tag
 from slidetap.services.tag_service import TagService
@@ -47,14 +49,19 @@ def get_tags(tag_service: FromDishka[TagService]) -> Iterable[Tag]:
 
 
 @tag_router.post("/tag/{tag_uid}")
-def update_tag(tag_service: FromDishka[TagService], tag: Tag) -> Tag:
-    """Update tags for an item.
+def update_tag(tag_uid: UUID, tag_service: FromDishka[TagService], tag: Tag) -> Tag:
+    """Update a tag.
 
     Parameters
     ----------
-    item_id : UUID
-        The ID of the item to update tags for.
-    tags : list[Tag]
-        The list of tags to update for the item.
+    tag_uid : UUID
+        The uid of the tag to update, which the tag in the body must have.
+    tag : Tag
+        The tag as it is to be stored.
     """
+    if tag.uid != tag_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=f"Tag uid {tag.uid} does not match path uid {tag_uid}",
+        )
     return tag_service.update(tag)
