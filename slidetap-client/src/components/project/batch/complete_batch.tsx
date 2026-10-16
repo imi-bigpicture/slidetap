@@ -37,6 +37,8 @@ export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactE
   const queryClient = useQueryClient()
   const completeBatchMutation = useMutation({
     mutationFn: async (batchUid: string) => await batchApi.complete(batchUid),
+    // Its error is shown beside the action.
+    meta: { handlesError: true },
     onSuccess: (updatedBatch) => {
       queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
       // The lists of batches say what each one is, and one of them just
