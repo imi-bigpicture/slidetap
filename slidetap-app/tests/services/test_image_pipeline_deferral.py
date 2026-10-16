@@ -318,6 +318,7 @@ class TestImagePipelineDeferral:
         )
 
 
+@pytest.mark.unittest
 class TestMetadataExportDeferral:
     def test_an_export_that_cannot_be_queued_is_reverted(
         self, decoy: Decoy, scheduler: Scheduler, project: Project

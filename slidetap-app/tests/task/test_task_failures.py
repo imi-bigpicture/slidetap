@@ -359,6 +359,7 @@ class FakeTask:
             raise ConnectionError("Queue unreachable")
 
 
+@pytest.mark.unittest
 class TestSchedulerDeferral:
     def test_a_failure_to_defer_does_not_skip_the_other_images(
         self, decoy: Decoy, monkeypatch: pytest.MonkeyPatch

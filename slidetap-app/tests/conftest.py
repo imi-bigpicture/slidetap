@@ -50,6 +50,23 @@ from slidetap.model import (
 from slidetap.services import DatabaseService, SchemaService
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Fail the collection if a test is marked neither unittest nor
+    integration, so that `-m unittest` and `-m integration` together select
+    the whole suite."""
+    unmarked_tests = [
+        item.nodeid
+        for item in items
+        if item.get_closest_marker("unittest") is None
+        and item.get_closest_marker("integration") is None
+    ]
+    if unmarked_tests:
+        unmarked_test_list = "\n".join(unmarked_tests)
+        raise pytest.UsageError(
+            f"Tests marked neither unittest nor integration:\n{unmarked_test_list}"
+        )
+
+
 class ExampleSex(Enum):
     MALE = "M"
     FEMALE = "F"

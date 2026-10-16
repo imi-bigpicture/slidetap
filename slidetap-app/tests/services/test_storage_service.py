@@ -704,6 +704,7 @@ class TestPathSafety:
         decoy.verify(file_operations.remove(Anything()), times=0)
 
 
+@pytest.mark.unittest
 class TestCleanupImageSource:
     def test_a_source_in_the_download_folder_is_removed(
         self,

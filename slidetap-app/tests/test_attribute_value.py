@@ -38,6 +38,7 @@ def attribute() -> StringAttribute:
     )
 
 
+@pytest.mark.unittest
 class TestAttributeValue:
     def test_the_mapped_value_is_used_when_nothing_is_refused(
         self, attribute: StringAttribute
@@ -114,6 +115,7 @@ class TestAttributeValue:
         assert refused.original_value == "from the report"
 
 
+@pytest.mark.unittest
 class TestAttributeEffectiveLayer:
     @pytest.mark.parametrize(
         ["update", "expected_layer", "expected_below"],

@@ -75,6 +75,7 @@ def schema_service(decoy: Decoy, schema: RootSchema) -> SchemaService:
     return schema_service
 
 
+@pytest.mark.unittest
 class TestImageProcessor:
     def test_a_transient_failure_of_a_step_is_raised_as_it_is(
         self,
@@ -147,6 +148,7 @@ class TestImageProcessor:
         assert calls == ["cleanup", "step"]
 
 
+@pytest.mark.unittest
 class TestFinishingStep:
     @pytest.mark.parametrize("remove_source", [True, False])
     def test_the_source_is_removed_through_storage_only_when_asked(

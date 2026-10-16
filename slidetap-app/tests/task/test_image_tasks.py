@@ -891,6 +891,7 @@ class TestStalledJobRecovery:
         assert retried == [failing, other]
 
 
+@pytest.mark.unittest
 class TestRetryCheck:
     @staticmethod
     def _job(attempts: int) -> Job:

@@ -28,6 +28,8 @@ from slidetap.config import DatabaseConfig
 from slidetap.database import Base
 from slidetap.services import DatabaseService
 
+pytestmark = pytest.mark.unittest
+
 
 @pytest.fixture
 def uri(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:

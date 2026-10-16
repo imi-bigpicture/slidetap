@@ -272,6 +272,7 @@ def dumped_block(block: Sample):
 
 
 @pytest.mark.unittest
+@pytest.mark.unittest
 class TestSerialization:
     def test_dump_code(self, code_attribute: CodeAttribute):
         # Arrange

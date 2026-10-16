@@ -672,6 +672,7 @@ class TestMovingAnItemToAnotherParent:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unittest
 class TestHierarchyRowAttributes:
     """A level shows the attributes it names, and nothing else.
 
@@ -1487,6 +1488,7 @@ class TestGivingADatasetNewPseudonyms:
         assert self._identifiers(sqlite_database_service, uids) == ["SLIDE-0"]
 
 
+@pytest.mark.unittest
 class TestRemovingADatasetsPrivateAttributes:
     """What ``remove_private_attributes`` leaves the dataset holding."""
 

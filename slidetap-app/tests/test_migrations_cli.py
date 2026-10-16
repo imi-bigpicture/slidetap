@@ -32,6 +32,8 @@ from slidetap.config import DatabaseConfig
 from slidetap.migrations.cli import app, assert_up_to_date, config, head_revision
 from slidetap.services import DatabaseService
 
+pytestmark = pytest.mark.unittest
+
 
 @pytest.fixture
 def session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

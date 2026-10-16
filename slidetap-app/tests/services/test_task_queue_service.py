@@ -16,6 +16,7 @@ import datetime
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
 from procrastinate.jobs import Job
 
 from slidetap.model import TaskJobStatus
@@ -59,6 +60,7 @@ def execute_query_all(task_app: MagicMock) -> MagicMock:
     return task_app.connector.get_sync_connector.return_value.execute_query_all
 
 
+@pytest.mark.unittest
 class TestJobTimes:
     def test_a_finished_job_has_its_times(self):
         # Arrange

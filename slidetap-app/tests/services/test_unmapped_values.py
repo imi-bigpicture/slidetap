@@ -58,6 +58,7 @@ def waiting(mappable_value: str, rejected: RejectedValues) -> CodeAttribute:
     )
 
 
+@pytest.mark.unittest
 class TestWhatCountsAsUnmapped:
     def test_a_value_with_no_mapping_is_waiting(self, waiting: CodeAttribute):
         # Arrange
@@ -108,6 +109,7 @@ class TestWhatCountsAsUnmapped:
         assert unmapped == []
 
 
+@pytest.mark.unittest
 class TestNestedValues:
     @pytest.mark.parametrize("mappable_value", ["Skrap"])
     def test_a_value_inside_an_object_is_found(self, waiting: CodeAttribute):
