@@ -254,7 +254,7 @@ Create an `.env`-file in the project folder setting the following environment
 variables:
 
 - SLIDETAP_CONFIG_FILE: Path to the config.yaml holding the rest of the settings.
-- SLIDETAP_SECRET_KEY: The secret key to use.
+- SLIDETAP_SECRET_KEY: The secret key to sign access tokens with, at least 32 bytes long. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 - SLIDETAP_STORAGE: Path to location where to store data.
 - SLIDETAP_DBURI: URI for database storage, which also holds the task queue.
 - SLIDETAP_CORS_ORIGINS: Origins the front end is served from, if it is not served from the same origin as the API.
@@ -262,7 +262,7 @@ variables:
 
 ```env
 SLIDETAP_CONFIG_FILE=C:\temp\slidetap\config.yaml
-SLIDETAP_SECRET_KEY=DEVELOP
+SLIDETAP_SECRET_KEY=a-development-key-of-at-least-32-bytes
 SLIDETAP_STORAGE=C:\temp\slidetap
 SLIDETAP_DBURI=sqlite:///C:/temp/slidetap/db.sqlite
 SLIDETAP_CORS_ORIGINS=http://localhost:13000

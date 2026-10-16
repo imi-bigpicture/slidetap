@@ -98,7 +98,7 @@ cat .env
 >> SLIDETAP_SSL_CERTIFICATE_FOLDER=/mnt/c/work/SlideTap/example/ssl
 >> SLIDETAP_SSL_CERTIFICATE=cert.pem
 >> SLIDETAP_SSL_CERTIFICATE_KEY=privkey.pem
->> SLIDETAP_SECRET_KEY=DEVELOP
+>> SLIDETAP_SECRET_KEY=<random key of at least 32 bytes>
 >> SLIDETAP_WEBAPP_URL=localhost:3000
 ```
 

@@ -32,7 +32,7 @@ from slidetap.web.services.login_service import LoginService
 @pytest.fixture()
 def login_config():
 
-    return LoginConfig("test")
+    return LoginConfig("a-test-secret-key-that-is-32-bytes")
 
 
 @pytest.fixture()

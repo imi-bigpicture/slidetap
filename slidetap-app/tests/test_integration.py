@@ -100,7 +100,7 @@ def mapper_config():
 @pytest.fixture
 def login_config():
     return LoginConfig(
-        secret_key="test",
+        secret_key="a-test-secret-key-that-is-32-bytes",
         access_token_expiration_seconds=3600,
         keep_alive_seconds=1440,
     )

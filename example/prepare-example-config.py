@@ -1,4 +1,5 @@
 import argparse
+import secrets
 from pathlib import Path
 
 from yaml import dump
@@ -18,7 +19,12 @@ parser.add_argument("--log_level", type=str, default="DEBUG")
 parser.add_argument("--dicomization-levels", type=str, default="all")
 parser.add_argument("--dicomization-threads", type=int, default=1)
 parser.add_argument("--task-worker-concurrency", type=int, default=4)
-parser.add_argument("--secret_key", type=str, default="DEVELOP")
+parser.add_argument(
+    "--secret_key",
+    type=str,
+    default=None,
+    help="At least 32 bytes. A random key is generated when not given.",
+)
 parser.add_argument("--test-data-path", type=str, default="/storage/images")
 parser.add_argument("--test-data-image-extension", type=str, default=".svs")
 
@@ -42,7 +48,7 @@ with open(storage / "config.yaml", "w") as config_file:
 
 SLIDETAP_WEB_APP = "slidetap_example.web_app:app"
 SLIDETAP_TASK_APP = "slidetap_example"
-SLIDETAP_SECRET_KEY = args.secret_key
+SLIDETAP_SECRET_KEY = args.secret_key or secrets.token_urlsafe(32)
 SLIDETAP_CONFIG_FILE = "/storage/config.yaml"
 
 SLIDETAP_SSL_CERTIFICATE_FOLDER = Path(__file__).parent / "ssl"

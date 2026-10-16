@@ -39,7 +39,7 @@ Configure the application environment by creating an .env-file:
 - SLIDETAP_APIPORT: The port for the back-end server.
 - SLIDETAP_STORAGE: Folder to store data.
 - SLIDETAP_DBURI: URI of the database, which also holds the task queue.
-- SLIDETAP_SECRET_KEY: Secret key used to sign tokens.
+- SLIDETAP_SECRET_KEY: Secret key used to sign tokens, at least 32 bytes long.
 - SLIDETAP_CONFIG_FILE: Path to the config.yaml read by the Python applications.
 - SLIDETAP_WEB_APP: Uvicorn target for the web application, as `package.module:attribute`.
 - SLIDETAP_TASK_APP: Dotted name of the package whose `task_app.py` exposes `task_app` and whose `container.py` exposes `create_container()`.
@@ -53,7 +53,7 @@ SLIDETAP_SSL_CERTIFICATE_KEY=privkey.pem
 SLIDETAP_APIPORT=8000
 SLIDETAP_STORAGE=path_to_storage
 SLIDETAP_DBURI=postgresql://user:password@dbservice:5432/slidetap
-SLIDETAP_SECRET_KEY=change_me
+SLIDETAP_SECRET_KEY=change_me_to_a_random_key_of_32_bytes_or_more
 SLIDETAP_CONFIG_FILE=/storage/config.yaml
 SLIDETAP_WEB_APP=your_package.web_app:app
 SLIDETAP_TASK_APP=your_package
