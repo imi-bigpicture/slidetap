@@ -13,15 +13,17 @@
 #    limitations under the License.
 
 import datetime
-from collections.abc import Callable, Collection, Mapping
+import os
+from collections.abc import Callable, Collection, Iterator, Mapping
 from enum import Enum
 from pathlib import Path
+from typing import ClassVar
 from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
-from sqlalchemy import create_engine
+from sqlalchemy import URL, Engine, create_engine, make_url, text
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import Base
@@ -239,7 +241,7 @@ def schema():
 
 @pytest.fixture
 def schema_service_of(
-    decoy: Decoy, sqlite_database_service: DatabaseService
+    decoy: Decoy, stored_database_service: DatabaseService
 ) -> Callable[..., SchemaService]:
     """Builds a schema service as the plugin's interfaces provide it: of the
     root of new projects, the previous roots, and the migrations."""
@@ -258,7 +260,7 @@ def schema_service_of(
                 decoy.when(schema_interface.migration_from(previous_root)).then_return(
                     migration
                 )
-        return SchemaService(schema_interface, sqlite_database_service)
+        return SchemaService(schema_interface, stored_database_service)
 
     return schema_service_of
 
@@ -295,22 +297,120 @@ def other_schema(schema: ExampleSchema) -> RootSchema:
     )
 
 
+class ThrowawayDatabases:
+    """Makes a database of its own for each test that needs one.
+
+    A SQLite file in the test's temporary folder, unless SLIDETAP_TEST_DBURI
+    names a Postgres server. Each test then gets a database on that server,
+    copied from a template that is given the schema once for the whole run.
+    """
+
+    SERVER_VARIABLE: ClassVar[str] = "SLIDETAP_TEST_DBURI"
+    DATABASE_PREFIX: ClassVar[str] = "slidetap_test_"
+
+    def __init__(self, server_uri: str | None):
+        if server_uri:
+            server_url = make_url(server_uri).set(drivername="postgresql+psycopg")
+            self._server_url: URL | None = server_url
+            self._server: Engine | None = create_engine(
+                server_url, isolation_level="AUTOCOMMIT"
+            )
+        else:
+            self._server_url = None
+            self._server = None
+        # Named for the run, so that runs can share a server.
+        self._template_name = f"{self.DATABASE_PREFIX}template_{uuid4().hex}"
+        self._template_made = False
+
+    def create(self, tmp_path: Path, with_schema: bool) -> str:
+        """Make a database for a test and return its URI."""
+        if self._server_url is None:
+            uri = f"sqlite:///{tmp_path / 'test.db'}"
+            if with_schema:
+                self._create_schema(uri)
+            return uri
+        template = self._template() if with_schema else "template0"
+        name = f"{self.DATABASE_PREFIX}{uuid4().hex}"
+        self._execute(f'CREATE DATABASE "{name}" TEMPLATE "{template}"')
+        return self._server_url.set(database=name).render_as_string(hide_password=False)
+
+    def drop(self, uri: str) -> None:
+        """Drop a database made for a test. A SQLite file is left to pytest."""
+        if self._server is None:
+            return
+        self._execute(
+            f'DROP DATABASE IF EXISTS "{make_url(uri).database}" WITH (FORCE)'
+        )
+
+    def close(self) -> None:
+        if self._server is None:
+            return
+        if self._template_made:
+            self._execute(f'DROP DATABASE IF EXISTS "{self._template_name}"')
+        self._server.dispose()
+
+    def _template(self) -> str:
+        assert self._server_url is not None
+        if not self._template_made:
+            self._execute(f'CREATE DATABASE "{self._template_name}"')
+            self._create_schema(self._server_url.set(database=self._template_name))
+            self._template_made = True
+        return self._template_name
+
+    def _execute(self, statement: str) -> None:
+        assert self._server is not None
+        with self._server.connect() as connection:
+            connection.execute(text(statement))
+
+    @staticmethod
+    def _create_schema(uri: str | URL) -> None:
+        engine = create_engine(uri)
+        Base.metadata.create_all(bind=engine)
+        # A database is copied only when nothing is connected to it.
+        engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def throwaway_databases() -> Iterator[ThrowawayDatabases]:
+    databases = ThrowawayDatabases(os.environ.get(ThrowawayDatabases.SERVER_VARIABLE))
+    yield databases
+    databases.close()
+
+
 @pytest.fixture()
-def sqlite_database_service(tmp_path: Path) -> DatabaseService:
-    """A DatabaseService backed by a throwaway SQLite file.
+def database_uri(
+    throwaway_databases: ThrowawayDatabases, tmp_path: Path
+) -> Iterator[str]:
+    """The URI of a database with the schema, for this test alone."""
+    uri = throwaway_databases.create(tmp_path, with_schema=True)
+    yield uri
+    throwaway_databases.drop(uri)
+
+
+@pytest.fixture()
+def empty_database_uri(
+    throwaway_databases: ThrowawayDatabases, tmp_path: Path
+) -> Iterator[str]:
+    """The URI of a database without any tables, for this test alone."""
+    uri = throwaway_databases.create(tmp_path, with_schema=False)
+    yield uri
+    throwaway_databases.drop(uri)
+
+
+@pytest.fixture()
+def stored_database_service(database_uri: str) -> DatabaseService:
+    """A DatabaseService backed by a throwaway database.
 
     Named apart from the `database_service` fixtures in the service tests,
     which are Decoy mocks: a test that asks for this one gets a real database.
     """
-    uri = f"sqlite:///{tmp_path / 'test.db'}"
-    Base.metadata.create_all(bind=create_engine(uri))
-    return DatabaseService(DatabaseConfig(uri, False))
+    return DatabaseService(DatabaseConfig(database_uri, False))
 
 
 @pytest.fixture()
-def mapper_uid(sqlite_database_service: DatabaseService) -> UUID:
-    with sqlite_database_service.get_session() as session:
-        mapper = sqlite_database_service.add_mapper(
+def mapper_uid(stored_database_service: DatabaseService) -> UUID:
+    with stored_database_service.get_session() as session:
+        mapper = stored_database_service.add_mapper(
             session, "test-mapper", uuid4(), uuid4()
         )
         return mapper.uid

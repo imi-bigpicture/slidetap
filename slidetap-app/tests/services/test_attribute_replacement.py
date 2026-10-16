@@ -22,12 +22,20 @@ over the attribute the owner holds, keeping that row and its uid, rather than
 inserted beside it, which the database refuses.
 """
 
+import datetime
+from typing import NamedTuple
 from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
 
-from slidetap.database import DatabaseSample, DatabaseStringAttribute
+from slidetap.database import (
+    DatabaseBatch,
+    DatabaseDataset,
+    DatabaseProject,
+    DatabaseSample,
+    DatabaseStringAttribute,
+)
 from slidetap.model import RejectedValues, StringAttribute, StringAttributeSchema
 from slidetap.services import (
     AttributeService,
@@ -55,7 +63,7 @@ def attribute_schema() -> StringAttributeSchema:
 @pytest.fixture()
 def attribute_service(
     decoy: Decoy,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     attribute_schema: StringAttributeSchema,
 ) -> AttributeService:
     schema_service = decoy.mock(cls=SchemaService)
@@ -68,9 +76,31 @@ def attribute_service(
     return AttributeService(
         schema_service=schema_service,
         validation_service=decoy.mock(cls=ValidationService),
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         review_service=decoy.mock(cls=ReviewService),
     )
+
+
+class StoredProject(NamedTuple):
+    dataset_uid: UUID
+    project_uid: UUID
+    batch_uid: UUID
+
+
+def _add_project(database_service: DatabaseService) -> StoredProject:
+    """Store a project with its dataset and a batch, for attributes and items
+    to be held under."""
+    with database_service.get_session() as session:
+        dataset = DatabaseDataset("dataset", uuid4())
+        session.add(dataset)
+        project = DatabaseProject(
+            "project", uuid4(), uuid4(), dataset.uid, datetime.datetime(2026, 10, 16)
+        )
+        session.add(project)
+        batch = DatabaseBatch("batch", project.uid, datetime.datetime(2026, 10, 16))
+        session.add(batch)
+        session.commit()
+        return StoredProject(dataset.uid, project.uid, batch.uid)
 
 
 def _held_attribute(
@@ -123,23 +153,23 @@ def _stored(
 class TestAttributeReplacement:
     def test_a_new_attribute_for_a_held_schema_is_written_over_the_held_one(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         attribute_service: AttributeService,
         attribute_schema: StringAttributeSchema,
     ):
         """What saving a project or dataset does: its attributes are stored
         and then set as what it holds."""
         # Arrange
-        project_uid = uuid4()
+        project_uid = _add_project(stored_database_service).project_uid
         held_uid = _held_attribute(
-            sqlite_database_service,
+            stored_database_service,
             attribute_schema,
             "attribute_project_uid",
             project_uid,
         )
 
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             held = session.query(DatabaseStringAttribute).all()
             stored = attribute_service.create_or_update_attributes(
                 [_replacement(attribute_schema)], session=session, held=held
@@ -151,17 +181,17 @@ class TestAttributeReplacement:
         assert stored_uids == [held_uid]
         assert stored_value == "edited"
         assert _stored(
-            sqlite_database_service, "attribute_project_uid", project_uid
+            stored_database_service, "attribute_project_uid", project_uid
         ) == [(held_uid, None, "edited", None, RejectedValues.NONE)]
 
     def test_a_new_attribute_for_a_schema_not_held_is_added(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         attribute_service: AttributeService,
         attribute_schema: StringAttributeSchema,
     ):
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             stored = attribute_service.create_or_update_attributes(
                 [_replacement(attribute_schema)], session=session, held=[]
             )
@@ -172,17 +202,18 @@ class TestAttributeReplacement:
 
     def test_a_new_attribute_saved_on_an_item_is_written_over_the_held_one(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         attribute_service: AttributeService,
         attribute_schema: StringAttributeSchema,
     ):
         """What saving an item, and reading an image's own metadata into it,
         do."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        stored_project = _add_project(stored_database_service)
+        with stored_database_service.get_session() as session:
             sample = DatabaseSample(
-                dataset_uid=uuid4(),
-                batch_uid=uuid4(),
+                dataset_uid=stored_project.dataset_uid,
+                batch_uid=stored_project.batch_uid,
                 schema_uid=uuid4(),
                 identifier="PL1234-20",
             )
@@ -190,7 +221,7 @@ class TestAttributeReplacement:
             session.commit()
             sample_uid = sample.uid
         held_uid = _held_attribute(
-            sqlite_database_service,
+            stored_database_service,
             attribute_schema,
             "attribute_item_uid",
             sample_uid,
@@ -200,6 +231,6 @@ class TestAttributeReplacement:
         attribute_service.update_for_item(sample_uid, [_replacement(attribute_schema)])
 
         # Assert
-        assert _stored(sqlite_database_service, "attribute_item_uid", sample_uid) == [
+        assert _stored(stored_database_service, "attribute_item_uid", sample_uid) == [
             (held_uid, None, "edited", None, RejectedValues.NONE)
         ]

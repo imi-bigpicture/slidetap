@@ -121,7 +121,7 @@ class MetadataSearchItemService:
             if item is None:
                 return
             item.status = MetadataImportStatus.FAILED
-            item.message = message
+            item.message = DatabaseMetadataSearchItem.fitted_message(message)
             item.item_uid = None
             item.attempted_at = datetime.now(UTC)
 

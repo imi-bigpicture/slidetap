@@ -47,16 +47,17 @@ def code_attribute_schema() -> CodeAttributeSchema:
 class TestAddAttribute:
     def test_keeps_mapping_item_uid(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         code_attribute_schema: CodeAttributeSchema,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            mapping_uid = sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            mapping_uid = stored_database_service.add_mapping(
                 session, mapper_uid, "^mappable$", code_attribute
             ).uid
+            session.flush()
             mapped_attribute = CodeAttribute(
                 uid=uuid4(),
                 schema_uid=code_attribute_schema.uid,
@@ -66,14 +67,14 @@ class TestAddAttribute:
             )
 
             # Act
-            added_attribute = sqlite_database_service.add_attribute(
+            added_attribute = stored_database_service.add_attribute(
                 session, mapped_attribute, code_attribute_schema
             )
             added_uid = added_attribute.uid
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            stored_attribute = sqlite_database_service.get_attribute(session, added_uid)
+        with stored_database_service.get_session() as session:
+            stored_attribute = stored_database_service.get_attribute(session, added_uid)
 
             assert stored_attribute.model.mapping_item_uid == mapping_uid
 
@@ -89,7 +90,7 @@ class TestRecordingWhatWaitsForAMapping:
 
     def test_adding_an_unmapped_value_records_it(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         code_attribute_schema: CodeAttributeSchema,
         mappable_value: str,
     ):
@@ -101,14 +102,14 @@ class TestRecordingWhatWaitsForAMapping:
         )
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            added = sqlite_database_service.add_attribute(
+        with stored_database_service.get_session() as session:
+            added = stored_database_service.add_attribute(
                 session, attribute, code_attribute_schema
             )
             added_uid = added.uid
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             recorded = session.scalars(
                 select(DatabaseUnmappedValue).where(
                     DatabaseUnmappedValue.root_attribute_uid == added_uid
@@ -118,7 +119,7 @@ class TestRecordingWhatWaitsForAMapping:
 
     def test_recording_again_replaces_what_was_there(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         code_attribute_schema: CodeAttributeSchema,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
@@ -127,11 +128,11 @@ class TestRecordingWhatWaitsForAMapping:
         """The value is mapped afterwards, so it is no longer waiting. Recording
         replaces rather than adds, or the wording would be counted for ever."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            mapping_uid = sqlite_database_service.add_mapping(
+        with stored_database_service.get_session() as session:
+            mapping_uid = stored_database_service.add_mapping(
                 session, mapper_uid, f"^{mappable_value}$", code_attribute
             ).uid
-            added = sqlite_database_service.add_attribute(
+            added = stored_database_service.add_attribute(
                 session,
                 CodeAttribute(
                     uid=uuid4(),
@@ -143,13 +144,13 @@ class TestRecordingWhatWaitsForAMapping:
             added_uid = added.uid
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            attribute = sqlite_database_service.get_attribute(session, added_uid)
+        with stored_database_service.get_session() as session:
+            attribute = stored_database_service.get_attribute(session, added_uid)
             attribute.set_mapping_item_uid(mapping_uid)
-            sqlite_database_service.record_unmapped_values(attribute, session)
+            stored_database_service.record_unmapped_values(attribute, session)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             recorded = session.scalars(
                 select(DatabaseUnmappedValue).where(
                     DatabaseUnmappedValue.root_attribute_uid == added_uid

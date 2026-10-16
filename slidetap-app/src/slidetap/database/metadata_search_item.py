@@ -23,7 +23,7 @@ linked item is removed via curate, the search item is cascade-deleted.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Uuid
@@ -36,6 +36,9 @@ from slidetap.model import MetadataImportStatus, MetadataSearchItem
 class DatabaseMetadataSearchItem(Base):
     __tablename__ = "metadata_search_item"
 
+    MESSAGE_LENGTH: ClassVar[int] = 512
+    TRUNCATION_MARKER: ClassVar[str] = "… [truncated]"
+
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     batch_uid: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("batch.uid", ondelete="CASCADE"), index=True
@@ -43,7 +46,7 @@ class DatabaseMetadataSearchItem(Base):
     identifier: Mapped[str] = mapped_column(String(128))
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     status: Mapped[MetadataImportStatus] = mapped_column(Enum(MetadataImportStatus))
-    message: Mapped[str | None] = mapped_column(String(512))
+    message: Mapped[str | None] = mapped_column(String(MESSAGE_LENGTH))
     item_uid: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("item.uid", ondelete="CASCADE"), index=True
     )
@@ -71,12 +74,25 @@ class DatabaseMetadataSearchItem(Base):
             identifier=identifier,
             schema_uid=schema_uid,
             status=status,
-            message=message,
+            message=self.fitted_message(message),
             item_uid=item_uid,
             attempted_at=attempted_at,
             retry_count=retry_count,
             search_parameters=search_parameters,
         )
+
+    @classmethod
+    def fitted_message(cls, message: str | None) -> str | None:
+        """The message cut to the width of the column.
+
+        Exception text recorded on a failure can be longer than the column,
+        which Postgres refuses, so recording the failure would fail too. The
+        leading characters, where the cause is, are kept and the cut marked.
+        """
+        if message is None or len(message) <= cls.MESSAGE_LENGTH:
+            return message
+        kept_length = cls.MESSAGE_LENGTH - len(cls.TRUNCATION_MARKER)
+        return message[:kept_length] + cls.TRUNCATION_MARKER
 
     @property
     def model(self) -> MetadataSearchItem:

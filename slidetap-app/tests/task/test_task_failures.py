@@ -25,12 +25,14 @@ from decoy import Decoy
 from decoy.matchers import Anything
 from slidetap_example import ExampleSchema
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
     DatabaseMetadataSearchItem,
     DatabaseProject,
+    DatabaseSample,
 )
 from slidetap.external_interfaces import (
     MetadataExportInterface,
@@ -116,13 +118,13 @@ class TestDeleteTasks:
     def test_a_batch_delete_failing_transiently_on_the_last_attempt_is_failed(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
     ):
         """Failed rather than left deleting, so that marking it as deleting
         again reruns the delete."""
         # Arrange
-        stored = _add_batch(sqlite_database_service, schema, BatchStatus.DELETING)
+        stored = _add_batch(stored_database_service, schema, BatchStatus.DELETING)
         batch_service = decoy.mock(cls=BatchService)
         decoy.when(batch_service.delete(stored.batch_uid)).then_raise(
             TransientTaskError("Database unreachable")
@@ -132,7 +134,7 @@ class TestDeleteTasks:
         delete_batch.func.__wrapped__(  # type: ignore[attr-defined]
             batch_uid=stored.batch_uid,
             batch_service=batch_service,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             storage_service=decoy.mock(cls=StorageService),
             will_retry=_not_retried,
         )
@@ -148,11 +150,11 @@ class TestDeleteTasks:
     def test_a_batch_delete_failing_transiently_before_the_last_attempt_raises(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
     ):
         # Arrange
-        stored = _add_batch(sqlite_database_service, schema, BatchStatus.DELETING)
+        stored = _add_batch(stored_database_service, schema, BatchStatus.DELETING)
         batch_service = decoy.mock(cls=BatchService)
         decoy.when(batch_service.delete(stored.batch_uid)).then_raise(
             TransientTaskError("Database unreachable")
@@ -163,7 +165,7 @@ class TestDeleteTasks:
             delete_batch.func.__wrapped__(  # type: ignore[attr-defined]
                 batch_uid=stored.batch_uid,
                 batch_service=batch_service,
-                database_service=sqlite_database_service,
+                database_service=stored_database_service,
                 storage_service=decoy.mock(cls=StorageService),
                 will_retry=_retried,
             )
@@ -174,12 +176,12 @@ class TestDeleteTasks:
     def test_a_project_delete_failing_transiently_on_the_last_attempt_is_failed(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             BatchStatus.INITIALIZED,
             project_status=ProjectStatus.DELETING,
@@ -193,7 +195,7 @@ class TestDeleteTasks:
         delete_project.func.__wrapped__(  # type: ignore[attr-defined]
             project_uid=stored.project_uid,
             project_service=project_service,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             will_retry=_not_retried,
         )
 
@@ -214,7 +216,7 @@ class TestProcessMetadataExport:
     def test_a_transient_failure_is_reverted_only_on_the_last_attempt(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
         will_retry: Callable[[BaseException], bool],
@@ -224,7 +226,7 @@ class TestProcessMetadataExport:
         again."""
         # Arrange
         stored = _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             BatchStatus.LOCKED,
             project_status=ProjectStatus.EXPORTING,
@@ -241,7 +243,7 @@ class TestProcessMetadataExport:
                 project_id=stored.project_uid,
                 metadata_export_interface=metadata_export_interface,
                 project_service=project_service,
-                database_service=sqlite_database_service,
+                database_service=stored_database_service,
                 schema_service=schema_service,
                 will_retry=will_retry,
             )
@@ -259,7 +261,7 @@ class TestProcessMetadataImportRunAgain:
     def test_a_search_run_again_does_not_duplicate_search_items(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         schema: ExampleSchema,
     ):
@@ -268,7 +270,7 @@ class TestProcessMetadataImportRunAgain:
         time, and imports what it imported again."""
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.METADATA_SEARCHING
+            stored_database_service, schema, BatchStatus.METADATA_SEARCHING
         )
         schema_uid = schema.patient_schema_uid
         imported = MetadataSearchResult.succeeded("patient-1", schema_uid, items=[])
@@ -293,17 +295,23 @@ class TestProcessMetadataImportRunAgain:
         item_service = decoy.mock(cls=ItemService)
         added_identifiers: list[str] = []
 
-        def _add(result: MetadataSearchResult) -> UUID:
+        def _add(result: MetadataSearchResult, session: Session) -> UUID:
+            """Store the patient the result is for, as importing it would."""
             added_identifiers.append(result.identifier)
-            return uuid4()
+            patient = DatabaseSample(
+                stored.dataset_uid, stored.batch_uid, schema_uid, result.identifier
+            )
+            session.add(patient)
+            session.flush()
+            return patient.uid
 
         decoy.when(
             item_service.add_search_result(Anything(), Anything(), session=Anything())
-        ).then_do(lambda result, mappers, session: _add(result))
+        ).then_do(lambda result, mappers, session: _add(result, session))
         batch_service = BatchService(
             schema_service=decoy.mock(cls=SchemaService),
             validation_service=decoy.mock(cls=ValidationService),
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             review_service=decoy.mock(cls=ReviewService),
         )
 
@@ -312,10 +320,10 @@ class TestProcessMetadataImportRunAgain:
                 batch_uid=stored.batch_uid,
                 search_parameters={},
                 metadata_import_interface=metadata_import_interface,
-                database_service=sqlite_database_service,
+                database_service=stored_database_service,
                 batch_service=batch_service,
                 item_service=item_service,
-                search_item_service=MetadataSearchItemService(sqlite_database_service),
+                search_item_service=MetadataSearchItemService(stored_database_service),
                 schema_service=schema_service,
                 will_retry=will_retry,
             )
@@ -326,7 +334,7 @@ class TestProcessMetadataImportRunAgain:
         run(_not_retried)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             search_items = session.scalars(select(DatabaseMetadataSearchItem)).all()
             statuses = {item.identifier: item.status for item in search_items}
         assert len(search_items) == 3
@@ -336,8 +344,8 @@ class TestProcessMetadataImportRunAgain:
             "patient-3": MetadataImportStatus.COMPLETE,
         }
         assert added_identifiers == ["patient-1", "patient-3"]
-        with sqlite_database_service.get_session() as session:
-            batch = sqlite_database_service.get_batch(session, stored.batch_uid)
+        with stored_database_service.get_session() as session:
+            batch = stored_database_service.get_batch(session, stored.batch_uid)
             assert batch.status == BatchStatus.METADATA_SEARCH_COMPLETE
 
 

@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 import datetime
-from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -35,11 +34,134 @@ from slidetap.services import DatabaseService
 pytestmark = pytest.mark.unittest
 
 
+def enum_column(name: str) -> sa.ColumnClause:
+    """A column of an enum type, left untyped so that Postgres reads a value
+    written to it as the enum of the column rather than as a string."""
+    return sa.column(name)
+
+
+def insert_dataset(session: Session) -> UUID:
+    """Store a dataset, with the columns it has had since the baseline, for a
+    row that refers to one."""
+    dataset = sa.table(
+        "dataset",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("schema_uid", sa.Uuid()),
+    )
+    dataset_uid = uuid4()
+    session.execute(
+        sa.insert(dataset).values(uid=dataset_uid, name="dataset", schema_uid=uuid4())
+    )
+    return dataset_uid
+
+
+def insert_batch(session: Session, dataset_uid: UUID) -> UUID:
+    """Store a batch in a project of its own, with the columns they have had
+    since the baseline, for an item that refers to one."""
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        enum_column("status"),
+        sa.column("locked", sa.Boolean()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("dataset_uid", sa.Uuid()),
+    )
+    batch = sa.table(
+        "batch",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        enum_column("status"),
+        sa.column("created", sa.DateTime()),
+        sa.column("project_uid", sa.Uuid()),
+    )
+    project_uid, batch_uid = uuid4(), uuid4()
+    created = datetime.datetime(2026, 1, 1)
+    session.execute(
+        sa.insert(project).values(
+            uid=project_uid,
+            name="project",
+            status="IN_PROGRESS",
+            locked=False,
+            root_schema_uid=uuid4(),
+            schema_uid=uuid4(),
+            created=created,
+            dataset_uid=dataset_uid,
+        )
+    )
+    session.execute(
+        sa.insert(batch).values(
+            uid=batch_uid,
+            name="batch",
+            status="INITIALIZED",
+            created=created,
+            project_uid=project_uid,
+        )
+    )
+    return batch_uid
+
+
+ITEM = sa.table(
+    "item",
+    sa.column("uid", sa.Uuid()),
+    sa.column("identifier", sa.String()),
+    sa.column("selected", sa.Boolean()),
+    sa.column("valid_attributes", sa.Boolean()),
+    sa.column("valid_relations", sa.Boolean()),
+    sa.column("valid_pseudonym", sa.Boolean()),
+    sa.column("locked", sa.Boolean()),
+    enum_column("item_value_type"),
+    enum_column("review_status"),
+    sa.column("schema_uid", sa.Uuid()),
+    sa.column("dataset_uid", sa.Uuid()),
+    sa.column("batch_uid", sa.Uuid()),
+)
+
+
+def item_row(
+    uid: UUID,
+    identifier: str,
+    dataset_uid: UUID,
+    batch_uid: UUID,
+    selected: bool = True,
+    item_value_type: str = "SAMPLE",
+) -> dict:
+    return {
+        "uid": uid,
+        "identifier": identifier,
+        "selected": selected,
+        "valid_attributes": True,
+        "valid_relations": True,
+        "valid_pseudonym": True,
+        "locked": False,
+        "item_value_type": item_value_type,
+        "review_status": "NOT_REVIEWED",
+        "schema_uid": uuid4(),
+        "dataset_uid": dataset_uid,
+        "batch_uid": batch_uid,
+    }
+
+
+def insert_item(session: Session) -> UUID:
+    """Store a sample in a dataset and batch of its own, for a row that refers
+    to an item."""
+    dataset_uid = insert_dataset(session)
+    batch_uid = insert_batch(session, dataset_uid)
+    item_uid = uuid4()
+    session.execute(
+        sa.insert(ITEM), [item_row(item_uid, "item", dataset_uid, batch_uid)]
+    )
+    return item_uid
+
+
 @pytest.fixture
-def session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    uri = f"sqlite:///{tmp_path.joinpath('test.db')}"
-    monkeypatch.setenv("SLIDETAP_DBURI", uri)
-    with DatabaseService(DatabaseConfig(uri, False)).get_session() as session:
+def session(empty_database_uri: str, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SLIDETAP_DBURI", empty_database_uri)
+    database_service = DatabaseService(DatabaseConfig(empty_database_uri, False))
+    with database_service.get_session() as session:
         yield session
 
 
@@ -150,21 +272,6 @@ def test_curator_excluded_is_read_off_what_is_left_out(session: Session):
     by a curator, and one under something out to have gone with it, since the
     difference decides whether a later cascade brings it back."""
     command.upgrade(config(), "d8a4c5f19e6b")
-    item = sa.table(
-        "item",
-        sa.column("uid", sa.Uuid()),
-        sa.column("identifier", sa.String()),
-        sa.column("selected", sa.Boolean()),
-        sa.column("valid_attributes", sa.Boolean()),
-        sa.column("valid_relations", sa.Boolean()),
-        sa.column("valid_pseudonym", sa.Boolean()),
-        sa.column("locked", sa.Boolean()),
-        sa.column("item_value_type", sa.String()),
-        sa.column("review_status", sa.String()),
-        sa.column("schema_uid", sa.Uuid()),
-        sa.column("dataset_uid", sa.Uuid()),
-        sa.column("batch_uid", sa.Uuid()),
-    )
     observation = sa.table(
         "observation", sa.column("uid", sa.Uuid()), sa.column("sample_uid", sa.Uuid())
     )
@@ -192,24 +299,44 @@ def test_curator_excluded_is_read_off_what_is_left_out(session: Session):
     }
     value_types = {"image_under_out": "IMAGE", "observation_on_in": "OBSERVATION"}
     selected = {"holder_in", "in"}
+    dataset_uid = insert_dataset(session)
+    batch_uid = insert_batch(session, dataset_uid)
 
-    def row(name: str) -> dict:
-        return {
-            "uid": uids[name],
-            "identifier": name,
-            "selected": name in selected,
-            "valid_attributes": True,
-            "valid_relations": True,
-            "valid_pseudonym": True,
-            "locked": False,
-            "item_value_type": value_types.get(name, "SAMPLE"),
-            "review_status": "NOT_REVIEWED",
-            "schema_uid": uuid4(),
-            "dataset_uid": uuid4(),
-            "batch_uid": uuid4(),
-        }
-
-    session.execute(sa.insert(item), [row(name) for name in uids])
+    session.execute(
+        sa.insert(ITEM),
+        [
+            item_row(
+                uids[name],
+                name,
+                dataset_uid,
+                batch_uid,
+                selected=name in selected,
+                item_value_type=value_types.get(name, "SAMPLE"),
+            )
+            for name in uids
+        ],
+    )
+    sample = sa.table("sample", sa.column("uid", sa.Uuid()))
+    image = sa.table(
+        "image",
+        sa.column("uid", sa.Uuid()),
+        enum_column("status"),
+        enum_column("format"),
+    )
+    session.execute(
+        sa.insert(sample),
+        [{"uid": uids[name]} for name in uids if name not in value_types],
+    )
+    session.execute(
+        sa.insert(image),
+        [
+            {
+                "uid": uids["image_under_out"],
+                "status": "NOT_STARTED",
+                "format": "DICOM_WSI",
+            }
+        ],
+    )
     session.execute(
         sa.insert(sample_to_sample),
         [
@@ -288,7 +415,7 @@ def test_a_project_can_be_migrating_after_upgrade(session: Session):
         "project",
         sa.column("uid", sa.Uuid()),
         sa.column("name", sa.String()),
-        sa.column("status", sa.String()),
+        enum_column("status"),
         sa.column("root_schema_uid", sa.Uuid()),
         sa.column("schema_uid", sa.Uuid()),
         sa.column("dataset_uid", sa.Uuid()),
@@ -297,6 +424,7 @@ def test_a_project_can_be_migrating_after_upgrade(session: Session):
         sa.column("locked", sa.Boolean()),
     )
     uid = uuid4()
+    dataset_uid = insert_dataset(session)
     session.execute(
         sa.insert(project),
         [
@@ -306,7 +434,7 @@ def test_a_project_can_be_migrating_after_upgrade(session: Session):
                 "status": "COMPLETED",
                 "root_schema_uid": uuid4(),
                 "schema_uid": uuid4(),
-                "dataset_uid": uuid4(),
+                "dataset_uid": dataset_uid,
                 "created": datetime.datetime(2026, 1, 1),
                 "valid_attributes": True,
                 "locked": False,
@@ -338,7 +466,7 @@ def test_projects_whose_export_is_complete_are_exported_after_upgrade(
         "project",
         sa.column("uid", sa.Uuid()),
         sa.column("name", sa.String()),
-        sa.column("status", sa.String()),
+        enum_column("status"),
         sa.column("root_schema_uid", sa.Uuid()),
         sa.column("schema_uid", sa.Uuid()),
         sa.column("dataset_uid", sa.Uuid()),
@@ -347,6 +475,7 @@ def test_projects_whose_export_is_complete_are_exported_after_upgrade(
         sa.column("locked", sa.Boolean()),
     )
     uids = {status: uuid4() for status in ("EXPORT_COMPLETE", "IN_PROGRESS")}
+    dataset_uid = insert_dataset(session)
     session.execute(
         sa.insert(project),
         [
@@ -356,7 +485,7 @@ def test_projects_whose_export_is_complete_are_exported_after_upgrade(
                 "status": status,
                 "root_schema_uid": uuid4(),
                 "schema_uid": uuid4(),
-                "dataset_uid": uuid4(),
+                "dataset_uid": dataset_uid,
                 "created": datetime.datetime(2026, 1, 1),
                 "valid_attributes": True,
                 "locked": False,
@@ -390,7 +519,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         "project",
         sa.column("uid", sa.Uuid()),
         sa.column("name", sa.String()),
-        sa.column("status", sa.String()),
+        enum_column("status"),
         sa.column("root_schema_uid", sa.Uuid()),
         sa.column("schema_uid", sa.Uuid()),
         sa.column("dataset_uid", sa.Uuid()),
@@ -405,7 +534,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         sa.column("source_root_schema_uid", sa.Uuid()),
         sa.column("target_root_schema_uid", sa.Uuid()),
         sa.column("previous_project_status", sa.String()),
-        sa.column("status", sa.String()),
+        enum_column("status"),
         sa.column("created", sa.DateTime()),
         sa.column("updated", sa.DateTime()),
     )
@@ -429,6 +558,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
     )
     uids = {status: uuid4() for status in ("MIGRATING", "IN_PROGRESS")}
     created = datetime.datetime(2026, 1, 1)
+    dataset_uid = insert_dataset(session)
     session.execute(
         sa.insert(project),
         [
@@ -438,7 +568,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
                 "status": status,
                 "root_schema_uid": uuid4(),
                 "schema_uid": uuid4(),
-                "dataset_uid": uuid4(),
+                "dataset_uid": dataset_uid,
                 "created": created,
                 "valid_attributes": True,
                 "locked": False,
@@ -534,7 +664,7 @@ def migration_uid(session: Session) -> UUID:
         "project",
         sa.column("uid", sa.Uuid()),
         sa.column("name", sa.String()),
-        sa.column("status", sa.String()),
+        enum_column("status"),
         sa.column("root_schema_uid", sa.Uuid()),
         sa.column("schema_uid", sa.Uuid()),
         sa.column("dataset_uid", sa.Uuid()),
@@ -549,12 +679,13 @@ def migration_uid(session: Session) -> UUID:
         sa.column("source_root_schema_uid", sa.Uuid()),
         sa.column("target_root_schema_uid", sa.Uuid()),
         sa.column("previous_project_status", sa.String()),
-        sa.column("status", sa.String()),
+        enum_column("status"),
         sa.column("created", sa.DateTime()),
         sa.column("updated", sa.DateTime()),
     )
     project_uid = uuid4()
     created = datetime.datetime(2026, 1, 1)
+    dataset_uid = insert_dataset(session)
     session.execute(
         sa.insert(project),
         [
@@ -564,7 +695,7 @@ def migration_uid(session: Session) -> UUID:
                 "status": "MIGRATING",
                 "root_schema_uid": uuid4(),
                 "schema_uid": uuid4(),
-                "dataset_uid": uuid4(),
+                "dataset_uid": dataset_uid,
                 "created": created,
                 "valid_attributes": True,
                 "locked": False,
@@ -680,7 +811,7 @@ attribute_table = sa.table(
     sa.column("schema_uid", sa.Uuid()),
     sa.column("valid", sa.Boolean()),
     sa.column("tag", sa.String()),
-    sa.column("attribute_value_type", sa.String()),
+    enum_column("attribute_value_type"),
     sa.column("read_only", sa.Boolean()),
     sa.column("locked", sa.Boolean()),
     sa.column("attribute_item_uid", sa.Uuid()),
@@ -710,7 +841,7 @@ def test_an_item_holds_one_attribute_of_a_schema_after_upgrade(session: Session)
     """The constraint before the upgrade let an item hold two attributes of a
     schema, as the other owner columns of the rows are null."""
     upgrade_to_before(UNIQUE_ATTRIBUTE_REVISION)
-    schema_uid, item_uid = uuid4(), uuid4()
+    schema_uid, item_uid = uuid4(), insert_item(session)
     session.execute(
         sa.insert(attribute_table),
         [attribute_row(schema_uid, item_uid), attribute_row(uuid4(), item_uid)],
@@ -730,15 +861,18 @@ def test_an_upgrade_stops_on_an_item_holding_two_attributes_of_a_schema(
     session: Session,
 ):
     upgrade_to_before(UNIQUE_ATTRIBUTE_REVISION)
-    schema_uid, item_uid = uuid4(), uuid4()
+    schema_uid, item_uid = uuid4(), insert_item(session)
     session.execute(
         sa.insert(attribute_table),
         [attribute_row(schema_uid, item_uid), attribute_row(schema_uid, item_uid)],
     )
     session.commit()
 
-    # SQLite holds a uid as its hex, which is what the report reads back.
-    with pytest.raises(RuntimeError, match=f"attribute_item_uid {item_uid.hex}"):
+    # SQLite holds a uid as its hex and Postgres as a uuid, and the report
+    # reads back what the database holds.
+    with pytest.raises(
+        RuntimeError, match=f"attribute_item_uid ({item_uid.hex}|{item_uid})"
+    ):
         command.upgrade(config(), "head")
 
 

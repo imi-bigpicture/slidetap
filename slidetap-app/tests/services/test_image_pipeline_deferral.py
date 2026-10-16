@@ -128,16 +128,16 @@ def image_pipeline_service(
     decoy: Decoy,
     scheduler: Scheduler,
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> ImagePipelineService:
     batch_service = BatchService(
         schema_service=decoy.mock(cls=SchemaService),
         validation_service=decoy.mock(cls=ValidationService),
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         review_service=decoy.mock(cls=ReviewService),
     )
     return ImagePipelineService(
-        scheduler, batch_service, schema_service, sqlite_database_service
+        scheduler, batch_service, schema_service, stored_database_service
     )
 
 
@@ -145,7 +145,7 @@ def image_pipeline_service(
 class TestImagePipelineDeferral:
     def test_a_batch_without_images_finishes_pre_processing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         image_pipeline_service: ImagePipelineService,
         schema: ExampleSchema,
     ):
@@ -153,7 +153,7 @@ class TestImagePipelineDeferral:
         batch, as there is none, and the batch is pre-processing for good."""
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.METADATA_SEARCH_COMPLETE
+            stored_database_service, schema, BatchStatus.METADATA_SEARCH_COMPLETE
         )
 
         # Act
@@ -165,13 +165,13 @@ class TestImagePipelineDeferral:
 
     def test_a_batch_without_images_finishes_post_processing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         image_pipeline_service: ImagePipelineService,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
         )
@@ -186,7 +186,7 @@ class TestImagePipelineDeferral:
     def test_an_image_that_cannot_be_queued_is_failed(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         image_pipeline_service: ImagePipelineService,
         scheduler: Scheduler,
         schema: ExampleSchema,
@@ -195,17 +195,17 @@ class TestImagePipelineDeferral:
         other image is still on its way, so the batch is not finished."""
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.METADATA_SEARCH_COMPLETE
+            stored_database_service, schema, BatchStatus.METADATA_SEARCH_COMPLETE
         )
         queued = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.NOT_STARTED,
             "PL1234-20-1",
         )
         not_queued = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.NOT_STARTED,
@@ -219,29 +219,29 @@ class TestImagePipelineDeferral:
         batch = image_pipeline_service.pre_process_batch(stored.batch_uid)
 
         # Assert
-        status, message = _image(sqlite_database_service, not_queued)
+        status, message = _image(stored_database_service, not_queued)
         assert status == ImageStatus.DOWNLOADING_FAILED
         assert message is not None and "Queue unreachable" in message
-        assert _image(sqlite_database_service, queued)[0] == ImageStatus.NOT_STARTED
+        assert _image(stored_database_service, queued)[0] == ImageStatus.NOT_STARTED
         assert batch is not None
         assert batch.status == BatchStatus.IMAGE_PRE_PROCESSING
 
     def test_a_batch_whose_images_cannot_be_queued_settles(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         image_pipeline_service: ImagePipelineService,
         scheduler: Scheduler,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
         )
         image_uid = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.PRE_PROCESSED,
@@ -256,7 +256,7 @@ class TestImagePipelineDeferral:
 
         # Assert
         assert (
-            _image(sqlite_database_service, image_uid)[0]
+            _image(stored_database_service, image_uid)[0]
             == ImageStatus.POST_PROCESSING_FAILED
         )
         assert batch is not None
@@ -265,19 +265,19 @@ class TestImagePipelineDeferral:
     def test_a_retry_that_cannot_be_queued_leaves_the_image_failed(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         image_pipeline_service: ImagePipelineService,
         scheduler: Scheduler,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
         )
         image_uid = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.DOWNLOADING_FAILED,
@@ -291,20 +291,20 @@ class TestImagePipelineDeferral:
         image_pipeline_service.retry(image_uid)
 
         # Assert
-        status, message = _image(sqlite_database_service, image_uid)
+        status, message = _image(stored_database_service, image_uid)
         assert status == ImageStatus.DOWNLOADING_FAILED
         assert message is not None and "Queue unreachable" in message
 
     def test_a_store_that_cannot_be_queued_raises_after_the_others(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         image_pipeline_service: ImagePipelineService,
         scheduler: Scheduler,
         schema: ExampleSchema,
     ):
         # Arrange
-        stored = _add_batch(sqlite_database_service, schema, BatchStatus.LOCKED)
+        stored = _add_batch(stored_database_service, schema, BatchStatus.LOCKED)
         decoy.when(scheduler.store_images_in_batch(Anything())).then_raise(
             ConnectionError("Queue unreachable")
         )
@@ -313,7 +313,7 @@ class TestImagePipelineDeferral:
         with pytest.raises(RuntimeError, match="Queue unreachable"):
             image_pipeline_service.store_project(stored.project_uid)
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_STORING
         )
 

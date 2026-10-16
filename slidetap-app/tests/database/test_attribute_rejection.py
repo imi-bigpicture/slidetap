@@ -104,18 +104,18 @@ class TestDatabaseAttributeRejection:
 class TestRejectedRoundTrip:
     def test_refused_value_reads_back_as_flags(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         attribute: DatabaseStringAttribute,
     ):
         # Arrange
         attribute.set_rejected(RejectedValues.MAPPABLE)
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.add(attribute)
             session.commit()
             uid = attribute.uid
 
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             loaded = session.get(DatabaseStringAttribute, uid)
             assert loaded is not None
             rejected = loaded.rejected

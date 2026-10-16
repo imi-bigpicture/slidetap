@@ -16,6 +16,22 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The tests run on Postgres, which the deployments use. Without
+    # SLIDETAP_TEST_DBURI they run on SQLite, so they also run without it.
+    services:
+      postgres:
+        image: postgres:17.11-trixie
+        env:
+          POSTGRES_USER: slidetap
+          POSTGRES_PASSWORD: slidetap
+          POSTGRES_DB: slidetap
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slidetap"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -59,14 +75,16 @@ jobs:
       - name: Pyright
         run: uv run pyright
 
-      # The whole suite, integration included: the integration tests run
-      # in-process (SQLite in a tmpdir, Procrastinate's InMemoryConnector,
-      # FastAPI's TestClient) and need no external services.
+      # The whole suite, integration included. Each test that needs a database
+      # gets one of its own on the Postgres service; the tasks run on
+      # Procrastinate's InMemoryConnector and the app on FastAPI's TestClient.
       - name: Tests
         run: uv run pytest
+        env:
+          SLIDETAP_TEST_DBURI: postgresql://slidetap:slidetap@localhost:5432/slidetap
 
-  # The tests run on SQLite. This runs the migrations on Postgres, which the
-  # deployments use, and checks that they and the models agree.
+  # The tests make their databases from the models. This runs the migrations
+  # on Postgres and checks that they and the models agree.
   migrations:
     runs-on: ubuntu-latest
     timeout-minutes: 10

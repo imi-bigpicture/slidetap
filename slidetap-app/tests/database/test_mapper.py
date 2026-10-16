@@ -117,7 +117,7 @@ def _hits(database_service: DatabaseService, mapping_item_uid: UUID) -> int:
 class TestDatabaseMappingItemHits:
     def test_hits_counted_in_parallel_sessions_are_all_kept(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
@@ -126,10 +126,10 @@ class TestDatabaseMappingItemHits:
         that is missing the first one's hit."""
         # Arrange
         mapping_item_uid = _add_mapping_item(
-            sqlite_database_service, mapper_uid, code_attribute
+            stored_database_service, mapper_uid, code_attribute
         )
-        first_session = sqlite_database_service.create_session()()
-        second_session = sqlite_database_service.create_session()()
+        first_session = stored_database_service.create_session()()
+        second_session = stored_database_service.create_session()()
         first_item = first_session.get_one(DatabaseMappingItem, mapping_item_uid)
         second_item = second_session.get_one(DatabaseMappingItem, mapping_item_uid)
         assert (first_item.hits, second_item.hits) == (0, 0)
@@ -143,21 +143,21 @@ class TestDatabaseMappingItemHits:
         second_session.close()
 
         # Assert
-        assert _hits(sqlite_database_service, mapping_item_uid) == 2
+        assert _hits(stored_database_service, mapping_item_uid) == 2
 
     def test_a_hit_is_seen_in_the_session_and_not_written_back_on_flush(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
         # Arrange
         mapping_item_uid = _add_mapping_item(
-            sqlite_database_service, mapper_uid, code_attribute
+            stored_database_service, mapper_uid, code_attribute
         )
 
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapping_item = session.get_one(DatabaseMappingItem, mapping_item_uid)
             mapping_item.increment_hits()
             mapping_item.increment_hits()
@@ -166,52 +166,52 @@ class TestDatabaseMappingItemHits:
 
         # Assert
         assert hits_in_session == 2
-        assert _hits(sqlite_database_service, mapping_item_uid) == 2
+        assert _hits(stored_database_service, mapping_item_uid) == 2
 
     def test_a_hit_on_an_item_not_yet_stored_is_inserted_with_it(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_uid: UUID,
         code_attribute: CodeAttribute,
     ):
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapping_item = DatabaseMappingItem(mapper_uid, "^code$", code_attribute)
             session.add(mapping_item)
             mapping_item.increment_hits()
             mapping_item_uid = mapping_item.uid
 
         # Assert
-        assert _hits(sqlite_database_service, mapping_item_uid) == 1
+        assert _hits(stored_database_service, mapping_item_uid) == 1
 
 
 @pytest.mark.integration
 class TestDatabaseMapperName:
     def test_mappers_without_a_family_do_not_share_a_name(
-        self, sqlite_database_service: DatabaseService
+        self, stored_database_service: DatabaseService
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.add(DatabaseMapper("Diagnose", uuid4(), uuid4()))
 
         # Act & Assert
         with (
             pytest.raises(IntegrityError),
-            sqlite_database_service.get_session() as session,
+            stored_database_service.get_session() as session,
         ):
             session.add(DatabaseMapper("Diagnose", uuid4(), uuid4()))
 
     def test_mappers_of_different_families_share_a_name(
-        self, sqlite_database_service: DatabaseService
+        self, stored_database_service: DatabaseService
     ):
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.add(DatabaseMapper("Diagnose", uuid4(), uuid4(), uuid4()))
             session.add(DatabaseMapper("Diagnose", uuid4(), uuid4(), uuid4()))
             session.add(DatabaseMapper("Diagnose", uuid4(), uuid4()))
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert session.query(DatabaseMapper).count() == 3
 
 

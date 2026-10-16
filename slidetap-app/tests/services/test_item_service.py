@@ -101,32 +101,32 @@ class TestAddSearchResultForAnExistingPatient:
     @pytest.fixture()
     def item_service(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         """The real thing on a real database, unlike the mocked one above."""
         schema_service = schema_service_of(schema)
-        validation_service = ValidationService(schema_service, sqlite_database_service)
+        validation_service = ValidationService(schema_service, stored_database_service)
         review_service = ReviewService(
-            schema_service, validation_service, sqlite_database_service
+            schema_service, validation_service, stored_database_service
         )
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         return ItemService(
             attribute_service,
-            TagService(sqlite_database_service),
+            TagService(stored_database_service),
             MapperService(
                 attribute_service,
                 validation_service,
                 schema_service,
-                sqlite_database_service,
+                stored_database_service,
                 review_service,
             ),
             schema_service,
             validation_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         )
 
@@ -145,15 +145,15 @@ class TestAddSearchResultForAnExistingPatient:
     @pytest.fixture()
     def batches(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         project: Project,
     ) -> list[UUID]:
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
-            sqlite_database_service.add_project(session, project)
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
+            stored_database_service.add_project(session, project)
             return [
-                sqlite_database_service.add_batch(
+                stored_database_service.add_batch(
                     session, BatchCreate(name=name, project_uid=project.uid)
                 ).uid
                 for name in ("first", "second")
@@ -224,7 +224,7 @@ class TestAddSearchResultForAnExistingPatient:
     def _import(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
@@ -239,14 +239,14 @@ class TestAddSearchResultForAnExistingPatient:
             ),
             item_uid=_uid(case_identifier),
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             item_service.add_search_result(result, [], session=session)
             session.commit()
 
     def test_deleting_an_item_takes_what_was_raised_on_it_with_it(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batches: list[UUID],
@@ -257,7 +257,7 @@ class TestAddSearchResultForAnExistingPatient:
         # Arrange
         self._import(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas,
             dataset,
             batches[0],
@@ -266,25 +266,25 @@ class TestAddSearchResultForAnExistingPatient:
         )
         case_uid = _uid("PL1234-20")
         slide_uid = _uid("PL1234-20-1-A-1")
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_review_issue(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_review_issue(
                 session,
-                sqlite_database_service.get_item(session, slide_uid),
-                sqlite_database_service.get_item(session, case_uid),
+                stored_database_service.get_item(session, slide_uid),
+                stored_database_service.get_item(session, case_uid),
                 "Not valid: relations",
                 ReviewIssueSource.VALIDATION,
             )
             session.commit()
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            session.delete(sqlite_database_service.get_item(session, slide_uid))
+        with stored_database_service.get_session() as session:
+            session.delete(stored_database_service.get_item(session, slide_uid))
             session.commit()
 
         # Assert
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             assert (
-                list(sqlite_database_service.get_review_issues(session, case_uid)) == []
+                list(stored_database_service.get_review_issues(session, case_uid)) == []
             )
 
     @pytest.mark.parametrize(
@@ -295,7 +295,7 @@ class TestAddSearchResultForAnExistingPatient:
     def test_second_case_of_a_patient_is_linked_and_valid(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batches: list[UUID],
@@ -305,7 +305,7 @@ class TestAddSearchResultForAnExistingPatient:
         # Arrange: the patient is in the dataset, brought in by their first case.
         self._import(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas,
             dataset,
             batches[0],
@@ -322,7 +322,7 @@ class TestAddSearchResultForAnExistingPatient:
         # rather than inserted.
         self._import(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas,
             dataset,
             batches[1] if second_batch else batches[0],
@@ -344,7 +344,7 @@ class TestAddSearchResultForAnExistingPatient:
     def test_the_patient_holds_both_cases(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batches: list[UUID],
@@ -356,7 +356,7 @@ class TestAddSearchResultForAnExistingPatient:
         ):
             self._import(
                 item_service,
-                sqlite_database_service,
+                stored_database_service,
                 schemas,
                 dataset,
                 batch_uid,
@@ -967,52 +967,52 @@ class TestGivingADatasetNewPseudonyms:
     @pytest.fixture()
     def batch_uid(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         project: Project,
     ) -> UUID:
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
-            sqlite_database_service.add_project(session, project)
-            return sqlite_database_service.add_batch(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
+            stored_database_service.add_project(session, project)
+            return stored_database_service.add_batch(
                 session, BatchCreate(name="batch", project_uid=project.uid)
             ).uid
 
     @staticmethod
     def _item_service(
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         pseudonym_factory: PseudonymFactoryInterface | None,
         schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         schema_service = schema_service_of(schema)
-        validation_service = ValidationService(schema_service, sqlite_database_service)
+        validation_service = ValidationService(schema_service, stored_database_service)
         review_service = ReviewService(
-            schema_service, validation_service, sqlite_database_service
+            schema_service, validation_service, stored_database_service
         )
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         return ItemService(
             attribute_service,
-            TagService(sqlite_database_service),
+            TagService(stored_database_service),
             MapperService(
                 attribute_service,
                 validation_service,
                 schema_service,
-                sqlite_database_service,
+                stored_database_service,
                 review_service,
             ),
             schema_service,
             validation_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
             pseudonym_factory=pseudonym_factory,
         )
 
     @staticmethod
     def _add_slides(
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         slide_schema_uid: UUID,
@@ -1020,7 +1020,7 @@ class TestGivingADatasetNewPseudonyms:
     ) -> list[UUID]:
         """A slide per pseudonym, any of which may have none."""
         uids = []
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for index, pseudonym in enumerate(pseudonyms):
                 item = Sample(
                     uid=uuid4(),
@@ -1030,33 +1030,33 @@ class TestGivingADatasetNewPseudonyms:
                     schema_uid=slide_schema_uid,
                     pseudonym=pseudonym,
                 )
-                sqlite_database_service.add_item(session, item, [], [])
+                stored_database_service.add_item(session, item, [], [])
                 uids.append(item.uid)
             session.commit()
         return uids
 
     @staticmethod
     def _pseudonyms(
-        sqlite_database_service: DatabaseService, uids: Sequence[UUID]
+        stored_database_service: DatabaseService, uids: Sequence[UUID]
     ) -> list[str | None]:
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             return [
-                sqlite_database_service.get_item(session, uid).pseudonym for uid in uids
+                stored_database_service.get_item(session, uid).pseudonym for uid in uids
             ]
 
     @staticmethod
     def _identifiers(
-        sqlite_database_service: DatabaseService, uids: Sequence[UUID]
+        stored_database_service: DatabaseService, uids: Sequence[UUID]
     ) -> list[str]:
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             return [
-                sqlite_database_service.get_item(session, uid).identifier
+                stored_database_service.get_item(session, uid).identifier
                 for uid in uids
             ]
 
     def test_every_pseudonym_is_replaced_with_one_nothing_else_has(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1065,13 +1065,13 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1082,14 +1082,14 @@ class TestGivingADatasetNewPseudonyms:
         changed = item_service.repseudonymize(dataset.uid)
 
         # Assert
-        pseudonyms = self._pseudonyms(sqlite_database_service, uids)
+        pseudonyms = self._pseudonyms(stored_database_service, uids)
         assert changed == 3
         assert not {"SLIDE_aaa", "SLIDE_bbb", "SLIDE_ccc"}.intersection(pseudonyms)
         assert len(set(pseudonyms)) == 3
 
     def test_an_item_without_a_pseudonym_is_left_without_one(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1100,13 +1100,13 @@ class TestGivingADatasetNewPseudonyms:
         such; minting one here would settle that with nothing decided."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1118,11 +1118,11 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert changed == 1
-        assert self._pseudonyms(sqlite_database_service, uids)[1] is None
+        assert self._pseudonyms(stored_database_service, uids)[1] is None
 
     def test_a_factory_that_mints_none_leaves_the_pseudonyms_alone(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1131,13 +1131,13 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _SilentPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
+            stored_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
         )
 
         # Act
@@ -1145,11 +1145,11 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert changed == 0
-        assert self._pseudonyms(sqlite_database_service, uids) == ["SLIDE_aaa"]
+        assert self._pseudonyms(stored_database_service, uids) == ["SLIDE_aaa"]
 
     def test_a_factory_that_repeats_itself_changes_nothing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1161,13 +1161,13 @@ class TestGivingADatasetNewPseudonyms:
         rolled back rather than left half done."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _ConstantPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1179,21 +1179,21 @@ class TestGivingADatasetNewPseudonyms:
             item_service.repseudonymize(dataset.uid)
 
         # Assert
-        assert self._pseudonyms(sqlite_database_service, uids) == [
+        assert self._pseudonyms(stored_database_service, uids) == [
             "SLIDE_aaa",
             "SLIDE_bbb",
         ]
 
     def test_an_application_that_mints_no_pseudonyms_says_so(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service, schema, None, schema_service_of
+            stored_database_service, schema, None, schema_service_of
         )
 
         # Act & Assert
@@ -1202,7 +1202,7 @@ class TestGivingADatasetNewPseudonyms:
 
     def test_clearing_takes_the_pseudonyms_off_and_says_the_items_are_not_valid(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1213,13 +1213,13 @@ class TestGivingADatasetNewPseudonyms:
         needs a pseudonym, and is not valid without one."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1231,16 +1231,16 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert cleared == 2
-        assert self._pseudonyms(sqlite_database_service, uids) == [None, None]
-        with sqlite_database_service.get_session() as session:
+        assert self._pseudonyms(stored_database_service, uids) == [None, None]
+        with stored_database_service.get_session() as session:
             assert all(
-                not sqlite_database_service.get_item(session, uid).valid_pseudonym
+                not stored_database_service.get_item(session, uid).valid_pseudonym
                 for uid in uids
             )
 
     def test_clearing_a_dataset_that_has_none_changes_nothing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1249,13 +1249,13 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
+            stored_database_service, dataset, batch_uid, slide_schema_uid, [None]
         )
 
         # Act
@@ -1266,7 +1266,7 @@ class TestGivingADatasetNewPseudonyms:
 
     def test_what_is_cleared_cannot_be_minted_back(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1276,13 +1276,13 @@ class TestGivingADatasetNewPseudonyms:
         """There is no way back, which is what the export has to refuse on."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
+            stored_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
         )
         item_service.clear_pseudonyms(dataset.uid)
 
@@ -1291,11 +1291,11 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert changed == 0
-        assert self._pseudonyms(sqlite_database_service, uids) == [None]
+        assert self._pseudonyms(stored_database_service, uids) == [None]
 
     def test_items_that_cannot_be_named_are_counted_for_the_export(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1304,13 +1304,13 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1326,7 +1326,7 @@ class TestGivingADatasetNewPseudonyms:
 
     def test_an_item_taken_out_of_the_project_is_not_counted(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1336,18 +1336,18 @@ class TestGivingADatasetNewPseudonyms:
         """It is not written into the bundle, so it cannot go in unnamed."""
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
+            stored_database_service, dataset, batch_uid, slide_schema_uid, [None]
         )
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_item(session, uids[0]).selected = False
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_item(session, uids[0]).selected = False
             session.commit()
 
         # Assert
@@ -1355,7 +1355,7 @@ class TestGivingADatasetNewPseudonyms:
 
     def test_pseudonymizing_identifiers_gives_every_pseudonymed_item_its_pseudonym(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1364,13 +1364,13 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1382,14 +1382,14 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert replaced == 2
-        assert self._identifiers(sqlite_database_service, uids) == [
+        assert self._identifiers(stored_database_service, uids) == [
             "PSEUDO_aaa",
             "PSEUDO_bbb",
         ]
 
     def test_an_item_without_a_pseudonym_keeps_its_identifier(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1398,26 +1398,26 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
+            stored_database_service, dataset, batch_uid, slide_schema_uid, [None]
         )
-        original = self._identifiers(sqlite_database_service, uids)
+        original = self._identifiers(stored_database_service, uids)
 
         # Act
         replaced = item_service.pseudonymize_identifiers(dataset.uid)
 
         # Assert
         assert replaced == 0
-        assert self._identifiers(sqlite_database_service, uids) == original
+        assert self._identifiers(stored_database_service, uids) == original
 
     def test_an_item_already_known_by_its_pseudonym_is_not_counted_again(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1426,13 +1426,13 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
@@ -1445,11 +1445,11 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert replaced == 0
-        assert self._identifiers(sqlite_database_service, uids) == ["PSEUDO_aaa"]
+        assert self._identifiers(stored_database_service, uids) == ["PSEUDO_aaa"]
 
     def test_a_pseudonym_already_held_as_an_identifier_is_refused(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1458,19 +1458,19 @@ class TestGivingADatasetNewPseudonyms:
     ):
         # Arrange
         item_service = self._item_service(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             _CountingPseudonymFactory(),
             schema_service_of,
         )
         uids = self._add_slides(
-            sqlite_database_service,
+            stored_database_service,
             dataset,
             batch_uid,
             slide_schema_uid,
             ["PSEUDO_aaa"],
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             untouched = Sample(
                 uid=uuid4(),
                 identifier="PSEUDO_aaa",
@@ -1479,13 +1479,13 @@ class TestGivingADatasetNewPseudonyms:
                 schema_uid=slide_schema_uid,
                 pseudonym=None,
             )
-            sqlite_database_service.add_item(session, untouched, [], [])
+            stored_database_service.add_item(session, untouched, [], [])
             session.commit()
 
         # Act & Assert
         with pytest.raises(NotAllowedActionError):
             item_service.pseudonymize_identifiers(dataset.uid)
-        assert self._identifiers(sqlite_database_service, uids) == ["SLIDE-0"]
+        assert self._identifiers(stored_database_service, uids) == ["SLIDE-0"]
 
 
 @pytest.mark.unittest
@@ -1495,20 +1495,20 @@ class TestRemovingADatasetsPrivateAttributes:
     @pytest.fixture()
     def batch_uid(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         project: Project,
     ) -> UUID:
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
-            sqlite_database_service.add_project(session, project)
-            return sqlite_database_service.add_batch(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
+            stored_database_service.add_project(session, project)
+            return stored_database_service.add_batch(
                 session, BatchCreate(name="batch", project_uid=project.uid)
             ).uid
 
     @staticmethod
     def _add_slide(
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         schema: RootSchema,
@@ -1532,8 +1532,8 @@ class TestRemovingADatasetsPrivateAttributes:
             batch_uid=batch_uid,
             schema_uid=slide_schema_uid,
         )
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_item(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_item(
                 session,
                 item,
                 [DatabaseStringAttribute("public", uuid4(), original_value="kept")],
@@ -1548,7 +1548,7 @@ class TestRemovingADatasetsPrivateAttributes:
 
     def test_every_private_attribute_is_removed_and_the_others_kept(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1556,10 +1556,10 @@ class TestRemovingADatasetsPrivateAttributes:
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None, schema_service_of
+            stored_database_service, schema, None, schema_service_of
         )
         uids = [
-            self._add_slide(sqlite_database_service, dataset, batch_uid, schema, index)
+            self._add_slide(stored_database_service, dataset, batch_uid, schema, index)
             for index in range(2)
         ]
 
@@ -1570,15 +1570,15 @@ class TestRemovingADatasetsPrivateAttributes:
         assert removed == PrivateAttributeSummary(
             attributes=[PrivateAttributeKind(owner="Slide", attribute="Report")]
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for uid in uids:
-                slide = sqlite_database_service.get_item(session, uid)
+                slide = stored_database_service.get_item(session, uid)
                 assert slide.private_attributes == set()
                 assert [attribute.tag for attribute in slide.attributes] == ["public"]
 
     def test_the_summary_lists_without_removing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1586,9 +1586,9 @@ class TestRemovingADatasetsPrivateAttributes:
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None, schema_service_of
+            stored_database_service, schema, None, schema_service_of
         )
-        uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
+        uid = self._add_slide(stored_database_service, dataset, batch_uid, schema, 0)
 
         # Act
         summary = item_service.private_attribute_summary(dataset.uid)
@@ -1597,13 +1597,13 @@ class TestRemovingADatasetsPrivateAttributes:
         assert summary == PrivateAttributeSummary(
             attributes=[PrivateAttributeKind(owner="Slide", attribute="Report")]
         )
-        with sqlite_database_service.get_session() as session:
-            slide = sqlite_database_service.get_item(session, uid)
+        with stored_database_service.get_session() as session:
+            slide = stored_database_service.get_item(session, uid)
             assert len(slide.private_attributes) == 1
 
     def test_a_dataset_without_private_attributes_removes_nothing(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         dataset: Dataset,
         batch_uid: UUID,
@@ -1611,9 +1611,9 @@ class TestRemovingADatasetsPrivateAttributes:
     ):
         # Arrange
         item_service = TestGivingADatasetNewPseudonyms._item_service(
-            sqlite_database_service, schema, None, schema_service_of
+            stored_database_service, schema, None, schema_service_of
         )
-        uid = self._add_slide(sqlite_database_service, dataset, batch_uid, schema, 0)
+        uid = self._add_slide(stored_database_service, dataset, batch_uid, schema, 0)
         item_service.remove_private_attributes(dataset.uid)
 
         # Act
@@ -1621,6 +1621,6 @@ class TestRemovingADatasetsPrivateAttributes:
 
         # Assert
         assert removed == PrivateAttributeSummary()
-        with sqlite_database_service.get_session() as session:
-            slide = sqlite_database_service.get_item(session, uid)
+        with stored_database_service.get_session() as session:
+            slide = stored_database_service.get_item(session, uid)
             assert len(slide.attributes) == 1

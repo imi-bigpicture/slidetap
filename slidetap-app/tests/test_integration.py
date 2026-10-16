@@ -107,22 +107,17 @@ def login_config():
 
 
 @pytest.fixture
-def database_config(tmpdir: str, monkeypatch: pytest.MonkeyPatch):
-    uri = f"sqlite:///{Path(tmpdir).joinpath('test.db')}"
-    # Tests run against a throwaway SQLite file; bootstrap the schema directly
-    # instead of going through Alembic, which is reserved for the real
-    # PostgreSQL deployment. The schema is then stamped as migrated so the app
-    # startup check accepts it.
+def database_config(database_uri: str, monkeypatch: pytest.MonkeyPatch):
+    # The throwaway database is given the schema directly rather than through
+    # the migrations, so it is stamped as migrated for the startup check of
+    # the app to accept it.
     from alembic import command
-    from sqlalchemy import create_engine
 
-    from slidetap.database import Base
     from slidetap.migrations.cli import config
 
-    Base.metadata.create_all(bind=create_engine(uri))
-    monkeypatch.setenv("SLIDETAP_DBURI", uri)
+    monkeypatch.setenv("SLIDETAP_DBURI", database_uri)
     command.stamp(config(), "head")
-    return DatabaseConfig(uri, True)
+    return DatabaseConfig(database_uri, True)
 
 
 @pytest.fixture

@@ -20,7 +20,7 @@ an object, list or union attribute is JSON inside that one, so what a mapping
 makes of it is the holding attribute's mapped value — and the imported value
 stays what the import said, as it does everywhere else.
 
-Runs against a real SQLite database, since the defect these cover is one of
+Runs against a real database, since the defect these cover is one of
 what SQLAlchemy emits, which a mocked database cannot show.
 """
 
@@ -132,11 +132,11 @@ def schema_service(
 
 @pytest.fixture()
 def validation_service(
-    schema_service: SchemaService, sqlite_database_service: DatabaseService
+    schema_service: SchemaService, stored_database_service: DatabaseService
 ) -> ValidationService:
     """Real, not a mock: what a remap leaves in `valid` is part of what these
     tests are about."""
-    return ValidationService(schema_service, sqlite_database_service)
+    return ValidationService(schema_service, stored_database_service)
 
 
 @pytest.fixture()
@@ -148,11 +148,11 @@ def review_service(decoy: Decoy) -> ReviewService:
 def attribute_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     review_service: ReviewService,
 ) -> AttributeService:
     return AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
 
 
@@ -161,14 +161,14 @@ def mapper_service(
     attribute_service: AttributeService,
     validation_service: ValidationService,
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     review_service: ReviewService,
 ) -> MapperService:
     return MapperService(
         attribute_service=attribute_service,
         validation_service=validation_service,
         schema_service=schema_service,
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         review_service=review_service,
     )
 
@@ -219,7 +219,7 @@ def _remap(
 class TestNestedRemapIsPersisted:
     def test_value_mapped_inside_an_object_survives_the_session(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         validation_service: ValidationService,
         child_schema: CodeAttributeSchema,
@@ -228,9 +228,9 @@ class TestNestedRemapIsPersisted:
         """The defect in #64: the mapped value was written to an in-memory copy
         only, so a later read — an export, say — found nothing there."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapper_uid, mapping_uid = _add_mapper(
-                sqlite_database_service, session, child_schema, object_schema.uid
+                stored_database_service, session, child_schema, object_schema.uid
             )
             attribute = ObjectAttribute(
                 uid=uuid4(),
@@ -243,17 +243,17 @@ class TestNestedRemapIsPersisted:
                     )
                 },
             )
-            attribute_uid = sqlite_database_service.add_attribute(
+            attribute_uid = stored_database_service.add_attribute(
                 session, attribute, object_schema
             ).uid
             session.commit()
 
         # Act
-        _remap(mapper_service, sqlite_database_service, attribute_uid, mapper_uid)
+        _remap(mapper_service, stored_database_service, attribute_uid, mapper_uid)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            reloaded = sqlite_database_service.get_attribute(session, attribute_uid)
+        with stored_database_service.get_session() as session:
+            reloaded = stored_database_service.get_attribute(session, attribute_uid)
             child = reloaded.model.value["diagnose"]
             assert child.mapped_value == MAPPED_CODE
             assert child.mapping_item_uid == mapping_uid
@@ -266,15 +266,15 @@ class TestNestedRemapIsPersisted:
 
     def test_value_mapped_inside_a_list_survives_the_session(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         child_schema: CodeAttributeSchema,
         list_schema: ListAttributeSchema,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapper_uid, mapping_uid = _add_mapper(
-                sqlite_database_service, session, child_schema, list_schema.uid
+                stored_database_service, session, child_schema, list_schema.uid
             )
             attribute = ListAttribute(
                 uid=uuid4(),
@@ -287,32 +287,32 @@ class TestNestedRemapIsPersisted:
                     )
                 ],
             )
-            attribute_uid = sqlite_database_service.add_attribute(
+            attribute_uid = stored_database_service.add_attribute(
                 session, attribute, list_schema
             ).uid
             session.commit()
 
         # Act
-        _remap(mapper_service, sqlite_database_service, attribute_uid, mapper_uid)
+        _remap(mapper_service, stored_database_service, attribute_uid, mapper_uid)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            reloaded = sqlite_database_service.get_attribute(session, attribute_uid)
+        with stored_database_service.get_session() as session:
+            reloaded = stored_database_service.get_attribute(session, attribute_uid)
             child = reloaded.model.value[0]
             assert child.mapped_value == MAPPED_CODE
             assert child.mapping_item_uid == mapping_uid
 
     def test_value_mapped_inside_a_union_survives_the_session(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         child_schema: CodeAttributeSchema,
         union_schema: UnionAttributeSchema,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapper_uid, mapping_uid = _add_mapper(
-                sqlite_database_service, session, child_schema, union_schema.uid
+                stored_database_service, session, child_schema, union_schema.uid
             )
             attribute = UnionAttribute(
                 uid=uuid4(),
@@ -323,24 +323,24 @@ class TestNestedRemapIsPersisted:
                     mappable_value="Hudstans",
                 ),
             )
-            attribute_uid = sqlite_database_service.add_attribute(
+            attribute_uid = stored_database_service.add_attribute(
                 session, attribute, union_schema
             ).uid
             session.commit()
 
         # Act
-        _remap(mapper_service, sqlite_database_service, attribute_uid, mapper_uid)
+        _remap(mapper_service, stored_database_service, attribute_uid, mapper_uid)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            reloaded = sqlite_database_service.get_attribute(session, attribute_uid)
+        with stored_database_service.get_session() as session:
+            reloaded = stored_database_service.get_attribute(session, attribute_uid)
             child = reloaded.model.value
             assert child.mapped_value == MAPPED_CODE
             assert child.mapping_item_uid == mapping_uid
 
     def test_an_attribute_with_a_mappable_value_is_not_descended_into(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         child_schema: CodeAttributeSchema,
         object_schema: ObjectAttributeSchema,
@@ -351,15 +351,15 @@ class TestNestedRemapIsPersisted:
         Only that way can one column mean one thing.
         """
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             nested_mapper_uid, nested_mapping_uid = _add_mapper(
-                sqlite_database_service, session, child_schema, object_schema.uid
+                stored_database_service, session, child_schema, object_schema.uid
             )
-            whole_mapper = sqlite_database_service.add_mapper(
+            whole_mapper = stored_database_service.add_mapper(
                 session, "statement", object_schema.uid, object_schema.uid
             )
             session.flush()
-            whole_mapping = sqlite_database_service.add_mapping(
+            whole_mapping = stored_database_service.add_mapping(
                 session,
                 whole_mapper.uid,
                 "^Hudstans$",
@@ -388,40 +388,40 @@ class TestNestedRemapIsPersisted:
                     )
                 },
             )
-            attribute_uid = sqlite_database_service.add_attribute(
+            attribute_uid = stored_database_service.add_attribute(
                 session, attribute, object_schema
             ).uid
             whole_mapper_uid, whole_mapping_uid = whole_mapper.uid, whole_mapping.uid
             session.commit()
 
         # Act
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapper_service._remap_one_attribute(
                 session,
-                sqlite_database_service.get_attribute(session, attribute_uid),
+                stored_database_service.get_attribute(session, attribute_uid),
                 [
-                    sqlite_database_service.get_mapper(session, mapper_uid)
+                    stored_database_service.get_mapper(session, mapper_uid)
                     for mapper_uid in (whole_mapper_uid, nested_mapper_uid)
                 ],
             )
             session.commit()
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            reloaded = sqlite_database_service.get_attribute(session, attribute_uid)
+        with stored_database_service.get_session() as session:
+            reloaded = stored_database_service.get_attribute(session, attribute_uid)
             assert reloaded.mapping_item_uid == whole_mapping_uid
             assert reloaded.model.value["diagnose"].value == WHOLE_MAPPED_CODE
             # The attribute it was imported holding is left as it came, still
             # waiting for a mapping that mapping never looked for.
             assert reloaded.model.original_value["diagnose"].mapped_value is None
             assert (
-                sqlite_database_service.get_mapping(session, nested_mapping_uid).hits
+                stored_database_service.get_mapping(session, nested_mapping_uid).hits
                 == 0
             )
 
     def test_a_remap_that_maps_nothing_leaves_the_attribute_not_valid(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         validation_service: ValidationService,
         child_schema: CodeAttributeSchema,
@@ -431,9 +431,9 @@ class TestNestedRemapIsPersisted:
         nested value no mapping matched is still waiting for one, and the
         attribute holding it is not valid."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapper_uid, _ = _add_mapper(
-                sqlite_database_service,
+                stored_database_service,
                 session,
                 child_schema,
                 object_schema.uid,
@@ -450,17 +450,17 @@ class TestNestedRemapIsPersisted:
                     )
                 },
             )
-            attribute_uid = sqlite_database_service.add_attribute(
+            attribute_uid = stored_database_service.add_attribute(
                 session, attribute, object_schema
             ).uid
             session.commit()
 
         # Act
-        _remap(mapper_service, sqlite_database_service, attribute_uid, mapper_uid)
+        _remap(mapper_service, stored_database_service, attribute_uid, mapper_uid)
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            reloaded = sqlite_database_service.get_attribute(session, attribute_uid)
+        with stored_database_service.get_session() as session:
+            reloaded = stored_database_service.get_attribute(session, attribute_uid)
             assert reloaded.model.mapped_value is None
             assert reloaded.model.value["diagnose"].mapped_value is None
             assert not validation_service.validate_attribute(reloaded, session)

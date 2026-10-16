@@ -218,12 +218,12 @@ def schema(
 
 @pytest.fixture()
 def batch_uid(
-    sqlite_database_service: DatabaseService, dataset: Dataset, project: Project
+    stored_database_service: DatabaseService, dataset: Dataset, project: Project
 ) -> UUID:
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        sqlite_database_service.add_project(session, project)
-        return sqlite_database_service.add_batch(
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored_database_service.add_project(session, project)
+        return stored_database_service.add_batch(
             session, BatchCreate(name="batch", project_uid=project.uid)
         ).uid
 
@@ -231,10 +231,10 @@ def batch_uid(
 @pytest.fixture()
 def validator(
     schema: RootSchema,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     schema_service_of: Callable[..., SchemaService],
 ) -> RelationValidator:
-    return RelationValidator(schema_service_of(schema), sqlite_database_service)
+    return RelationValidator(schema_service_of(schema), stored_database_service)
 
 
 def _case(
@@ -277,7 +277,7 @@ class TestDiagnosesOfACase:
     def test_a_case_is_held_to_how_many_diagnoses_it_may_have(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         case_schema_uid: UUID,
@@ -286,7 +286,7 @@ class TestDiagnosesOfACase:
         valid: bool,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             case = _case(
                 dataset,
                 batch_uid,
@@ -308,7 +308,7 @@ class TestDiagnosesOfACase:
     def test_a_diagnosis_taken_out_of_the_project_counts_for_nothing(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         case_schema_uid: UUID,
@@ -316,7 +316,7 @@ class TestDiagnosesOfACase:
     ):
         """What is going out with the case is what the case is judged on."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             case = _case(
                 dataset, batch_uid, case_schema_uid, diagnosis_schema_uid, [False]
             )
@@ -333,7 +333,7 @@ class TestDiagnosesOfACase:
     def test_a_diagnosis_the_import_has_not_delivered_is_not_held_against_the_case(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         case_schema_uid: UUID,
@@ -341,7 +341,7 @@ class TestDiagnosesOfACase:
         case_to_diagnosis: ObservationToSampleRelation,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             case = _case(dataset, batch_uid, case_schema_uid, diagnosis_schema_uid, [])
             session.add(case)
             session.flush()
@@ -358,14 +358,14 @@ class TestDiagnosesOfACase:
     def test_the_missing_diagnosis_is_named(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         case_schema_uid: UUID,
         diagnosis_schema_uid: UUID,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             case = _case(dataset, batch_uid, case_schema_uid, diagnosis_schema_uid, [])
             session.add(case)
             session.flush()
@@ -379,7 +379,7 @@ class TestDiagnosesOfACase:
     def test_taking_the_case_out_revalidates_its_diagnoses(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         case_schema_uid: UUID,
@@ -389,7 +389,7 @@ class TestDiagnosesOfACase:
         case validates the diagnosis as the other side of the relation, so the
         diagnosis is not left saying it is fine after the case has gone."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             case = _case(
                 dataset, batch_uid, case_schema_uid, diagnosis_schema_uid, [True]
             )
@@ -442,7 +442,7 @@ class TestAnnotationsOfAnImage:
     def test_an_image_is_held_to_how_many_annotations_it_may_have(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         image_schema_uid: UUID,
@@ -451,7 +451,7 @@ class TestAnnotationsOfAnImage:
         valid: bool,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             image = self._image(
                 dataset,
                 batch_uid,
@@ -471,7 +471,7 @@ class TestAnnotationsOfAnImage:
     def test_an_annotation_on_an_image_out_of_the_project_is_not_valid(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         image_schema_uid: UUID,
@@ -479,7 +479,7 @@ class TestAnnotationsOfAnImage:
     ):
         """The annotation's own side is structural, and still holds."""
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             image = self._image(
                 dataset, batch_uid, image_schema_uid, annotation_schema_uid, 1
             )
@@ -508,7 +508,7 @@ class TestAnnotationsOfAnImage:
     def test_an_annotation_is_held_to_how_many_findings_it_may_have(
         self,
         validator: RelationValidator,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         batch_uid: UUID,
         image_schema_uid: UUID,
@@ -518,7 +518,7 @@ class TestAnnotationsOfAnImage:
         valid: bool,
     ):
         # Arrange
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             image = self._image(
                 dataset, batch_uid, image_schema_uid, annotation_schema_uid, 1
             )

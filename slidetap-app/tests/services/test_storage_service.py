@@ -456,31 +456,31 @@ class TestStorageFolder:
     def storage_service(
         self,
         config: StorageConfig,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         file_operations: FileOperations,
     ) -> StorageService:
-        return StorageService(config, sqlite_database_service, file_operations)
+        return StorageService(config, stored_database_service, file_operations)
 
     @pytest.fixture()
     def stored_project(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         project: Project,
         dataset: Dataset,
     ) -> Project:
         """A project, with its dataset, in the database and yet to claim."""
         project.storage_folder = None
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
-            sqlite_database_service.add_project(session, project)
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
+            stored_database_service.add_project(session, project)
         return project
 
     @pytest.fixture()
     def stored_dataset(
-        self, sqlite_database_service: DatabaseService, dataset: Dataset
+        self, stored_database_service: DatabaseService, dataset: Dataset
     ) -> Dataset:
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
         return dataset
 
     def rename(
@@ -501,7 +501,7 @@ class TestStorageFolder:
     def test_project_folder_is_claimed_from_the_name(
         self,
         storage_service: StorageService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored_project: Project,
     ) -> None:
         """The first claim gives the folder the project name gives it.
@@ -515,8 +515,8 @@ class TestStorageFolder:
 
         # Assert
         assert folder == f"{stored_project.name}.{stored_project.uid}"
-        with sqlite_database_service.get_session() as session:
-            database_project = sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            database_project = stored_database_service.get_project(
                 session, stored_project
             )
             assert database_project.storage_folder == folder
@@ -524,7 +524,7 @@ class TestStorageFolder:
     def test_project_folder_survives_a_rename(
         self,
         storage_service: StorageService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored_project: Project,
     ) -> None:
         """Renaming the project must not move where its content is stored."""
@@ -532,7 +532,7 @@ class TestStorageFolder:
         claimed = storage_service.project_outbox(stored_project)
 
         # Act
-        self.rename(sqlite_database_service, stored_project, "renamed project")
+        self.rename(stored_database_service, stored_project, "renamed project")
 
         # Assert
         assert storage_service.project_outbox(stored_project) == claimed
@@ -542,7 +542,7 @@ class TestStorageFolder:
     def test_project_folder_claimed_by_another_worker_is_kept(
         self,
         storage_service: StorageService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         stored_project: Project,
     ) -> None:
         """A claim finds the folder another worker wrote down, and keeps it.
@@ -551,8 +551,8 @@ class TestStorageFolder:
         read of what is written down and only writes when nothing is.
         """
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.get_project(
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_project(
                 session, stored_project
             ).storage_folder = "claimed elsewhere"
 
@@ -592,7 +592,7 @@ class TestStorageFolder:
     def test_dataset_folder_survives_a_rename(
         self,
         config: StorageConfig,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         file_operations: FileOperations,
         stored_dataset: Dataset,
         project: Project,
@@ -601,14 +601,14 @@ class TestStorageFolder:
         # Arrange
         storage_service = StorageService(
             dataclasses.replace(config, bundle_prefix="BP-"),
-            sqlite_database_service,
+            stored_database_service,
             file_operations,
         )
         claimed = storage_service.project_bundle(project, stored_dataset)
         assert claimed.name == "BP-dataset_name"
 
         # Act
-        self.rename(sqlite_database_service, stored_dataset, "renamed dataset")
+        self.rename(stored_database_service, stored_dataset, "renamed dataset")
 
         # Assert
         assert storage_service.project_bundle(project, stored_dataset) == claimed

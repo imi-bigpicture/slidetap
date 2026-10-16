@@ -52,31 +52,31 @@ class TestPseudonymsAreNotShared:
     @pytest.fixture()
     def item_service(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: RootSchema,
         schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         schema_service = schema_service_of(schema)
-        validation_service = ValidationService(schema_service, sqlite_database_service)
+        validation_service = ValidationService(schema_service, stored_database_service)
         review_service = ReviewService(
-            schema_service, validation_service, sqlite_database_service
+            schema_service, validation_service, stored_database_service
         )
         attribute_service = AttributeService(
-            schema_service, validation_service, sqlite_database_service, review_service
+            schema_service, validation_service, stored_database_service, review_service
         )
         return ItemService(
             attribute_service,
-            TagService(sqlite_database_service),
+            TagService(stored_database_service),
             MapperService(
                 attribute_service,
                 validation_service,
                 schema_service,
-                sqlite_database_service,
+                stored_database_service,
                 review_service,
             ),
             schema_service,
             validation_service,
-            sqlite_database_service,
+            stored_database_service,
             review_service,
         )
 
@@ -88,14 +88,14 @@ class TestPseudonymsAreNotShared:
     @pytest.fixture()
     def batch_uid(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         dataset: Dataset,
         project: Project,
     ) -> UUID:
-        with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_dataset(session, dataset)
-            sqlite_database_service.add_project(session, project)
-            return sqlite_database_service.add_batch(
+        with stored_database_service.get_session() as session:
+            stored_database_service.add_dataset(session, dataset)
+            stored_database_service.add_project(session, project)
+            return stored_database_service.add_batch(
                 session, BatchCreate(name="batch", project_uid=project.uid)
             ).uid
 
@@ -119,7 +119,7 @@ class TestPseudonymsAreNotShared:
     def _add(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_uid: UUID,
         *items: Sample,
     ) -> None:
@@ -129,14 +129,14 @@ class TestPseudonymsAreNotShared:
             items=list(items),  # type: ignore[arg-type]
             item_uid=items[0].uid,
         )
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             item_service.add_search_result(result, [], session=session)
             session.commit()
 
     def test_a_pseudonym_another_item_of_the_schema_holds_is_refused(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
@@ -145,7 +145,7 @@ class TestPseudonymsAreNotShared:
         # Arrange
         self._add(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas["case"],
             self._sample(schemas["case"], "CASE-A", "PSEUDO-1", dataset, batch_uid),
         )
@@ -157,7 +157,7 @@ class TestPseudonymsAreNotShared:
         ):
             self._add(
                 item_service,
-                sqlite_database_service,
+                stored_database_service,
                 schemas["case"],
                 self._sample(schemas["case"], "CASE-B", "PSEUDO-1", dataset, batch_uid),
             )
@@ -176,7 +176,7 @@ class TestPseudonymsAreNotShared:
     def test_the_same_pseudonym_under_another_schema_is_stored(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
@@ -185,7 +185,7 @@ class TestPseudonymsAreNotShared:
         # Arrange
         self._add(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas["case"],
             self._sample(schemas["case"], "CASE-A", "PSEUDO-1", dataset, batch_uid),
         )
@@ -193,7 +193,7 @@ class TestPseudonymsAreNotShared:
         # Act
         self._add(
             item_service,
-            sqlite_database_service,
+            stored_database_service,
             schemas["patient"],
             self._sample(
                 schemas["patient"], "PATIENT-1", "PSEUDO-1", dataset, batch_uid
@@ -207,7 +207,7 @@ class TestPseudonymsAreNotShared:
     def test_two_items_of_one_result_cannot_share_a_pseudonym(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
@@ -220,7 +220,7 @@ class TestPseudonymsAreNotShared:
         # Act
         with pytest.raises(NotAllowedActionError) as raised:
             self._add(
-                item_service, sqlite_database_service, schemas["case"], first, second
+                item_service, stored_database_service, schemas["case"], first, second
             )
 
         # Assert
@@ -232,7 +232,7 @@ class TestPseudonymsAreNotShared:
     def test_an_item_without_a_pseudonym_collides_with_nothing(
         self,
         item_service: ItemService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schemas: dict[str, UUID],
         dataset: Dataset,
         batch_uid: UUID,
@@ -243,8 +243,8 @@ class TestPseudonymsAreNotShared:
         second = self._sample(schemas["case"], "CASE-B", None, dataset, batch_uid)
 
         # Act
-        self._add(item_service, sqlite_database_service, schemas["case"], first)
-        self._add(item_service, sqlite_database_service, schemas["case"], second)
+        self._add(item_service, stored_database_service, schemas["case"], first)
+        self._add(item_service, stored_database_service, schemas["case"], second)
 
         # Assert
         assert item_service.get_optional_sample(_uid("CASE-B")) is not None

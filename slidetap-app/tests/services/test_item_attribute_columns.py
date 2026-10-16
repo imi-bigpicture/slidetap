@@ -98,7 +98,7 @@ class TestAttributeValueField:
     )
     def test_filters_on_selected_field(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         dataset: Dataset,
         project: Project,
@@ -107,13 +107,13 @@ class TestAttributeValueField:
     ):
         # Arrange
         sample_uids = add_samples(
-            sqlite_database_service, sample_schema, dataset, project
+            stored_database_service, sample_schema, dataset, project
         )
         attribute_filter = AttributeFilter(tag=TAG, value="beta", field=field)
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            samples = sqlite_database_service.get_samples(
+        with stored_database_service.get_session() as session:
+            samples = stored_database_service.get_samples(
                 session,
                 sample_schema,
                 attributes_filters=[attribute_filter],
@@ -132,7 +132,7 @@ class TestAttributeValueField:
     )
     def test_sorts_on_selected_field(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         dataset: Dataset,
         project: Project,
@@ -141,13 +141,13 @@ class TestAttributeValueField:
     ):
         # Arrange
         sample_uids = add_samples(
-            sqlite_database_service, sample_schema, dataset, project
+            stored_database_service, sample_schema, dataset, project
         )
         sort = AttributeSort(column=TAG, field=field, descending=False)
 
         # Act
-        with sqlite_database_service.get_session() as session:
-            samples = sqlite_database_service.get_samples(
+        with stored_database_service.get_session() as session:
+            samples = stored_database_service.get_samples(
                 session,
                 sample_schema,
                 sorting=[sort],
@@ -225,13 +225,13 @@ class TestFilteringAColumnBySeveralTerms:
     @pytest.fixture()
     def sample_uids(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         dataset: Dataset,
         project: Project,
     ) -> dict[str, UUID]:
         return add_diagnosed_samples(
-            sqlite_database_service, sample_schema, dataset, project
+            stored_database_service, sample_schema, dataset, project
         )
 
     @staticmethod
@@ -250,7 +250,7 @@ class TestFilteringAColumnBySeveralTerms:
 
     def test_two_wanted_terms_keep_what_matches_either(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         sample_uids: dict[str, UUID],
     ):
@@ -261,14 +261,14 @@ class TestFilteringAColumnBySeveralTerms:
         ]
 
         # Act
-        filtered = self._filtered(sqlite_database_service, sample_schema, *wanted)
+        filtered = self._filtered(stored_database_service, sample_schema, *wanted)
 
         # Assert
         assert filtered == {sample_uids["first"], sample_uids["second"]}
 
     def test_an_excluded_term_drops_what_matches_it(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         sample_uids: dict[str, UUID],
     ):
@@ -278,7 +278,7 @@ class TestFilteringAColumnBySeveralTerms:
         excluded = AttributeFilter(tag=TAG, value=DIAGNOSES["first"], negated=True)
 
         # Act
-        filtered = self._filtered(sqlite_database_service, sample_schema, excluded)
+        filtered = self._filtered(stored_database_service, sample_schema, excluded)
 
         # Assert
         assert filtered == {
@@ -289,7 +289,7 @@ class TestFilteringAColumnBySeveralTerms:
 
     def test_wanted_and_excluded_in_the_same_column(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         sample_uids: dict[str, UUID],
     ):
@@ -303,14 +303,14 @@ class TestFilteringAColumnBySeveralTerms:
         ]
 
         # Act
-        filtered = self._filtered(sqlite_database_service, sample_schema, *terms)
+        filtered = self._filtered(stored_database_service, sample_schema, *terms)
 
         # Assert
         assert filtered == {sample_uids["second"]}
 
     def test_terms_of_different_columns_are_read_together(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         sample_schema: SampleSchema,
         sample_uids: dict[str, UUID],
     ):
@@ -323,7 +323,7 @@ class TestFilteringAColumnBySeveralTerms:
         ]
 
         # Act
-        filtered = self._filtered(sqlite_database_service, sample_schema, *terms)
+        filtered = self._filtered(stored_database_service, sample_schema, *terms)
 
         # Assert
         assert filtered == set()

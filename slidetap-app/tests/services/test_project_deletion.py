@@ -14,7 +14,7 @@
 
 """What deleting a project leaves behind.
 
-Against a real SQLite database rather than mocks: what is being pinned is which
+Against a real database rather than mocks: what is being pinned is which
 rows the delete matches and what the ORM cascades do to them, neither of which
 a mocked session says anything about.
 """
@@ -74,17 +74,17 @@ def storage_service(decoy: Decoy) -> StorageService:
 def project_service(
     decoy: Decoy,
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     storage_service: StorageService,
 ) -> ProjectService:
-    validation_service = ValidationService(schema_service, sqlite_database_service)
+    validation_service = ValidationService(schema_service, stored_database_service)
     return ProjectService(
         attribute_service=decoy.mock(cls=AttributeService),
         batch_service=decoy.mock(cls=BatchService),
         schema_service=schema_service,
         validation_service=validation_service,
         mapper_service=decoy.mock(cls=MapperService),
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         storage_service=storage_service,
         migration_service=decoy.mock(cls=MigrationService),
     )
@@ -92,17 +92,17 @@ def project_service(
 
 @pytest.fixture()
 def batch_uid(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     dataset: Dataset,
     project: Project,
 ) -> UUID:
     """A project of one batch, marked for deletion, with nothing in the batch
     yet."""
-    with sqlite_database_service.get_session() as session:
-        sqlite_database_service.add_dataset(session, dataset)
-        stored = sqlite_database_service.add_project(session, project)
+    with stored_database_service.get_session() as session:
+        stored_database_service.add_dataset(session, dataset)
+        stored = stored_database_service.add_project(session, project)
         stored.status = ProjectStatus.DELETING
-        batch = sqlite_database_service.add_batch(
+        batch = stored_database_service.add_batch(
             session, BatchCreate(name="batch", project_uid=project.uid)
         )
         session.commit()
@@ -119,7 +119,7 @@ class TestProjectDeletion:
     def test_item_of_a_schema_no_longer_loaded_is_deleted(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         dataset: Dataset,
         project: Project,
@@ -133,7 +133,7 @@ class TestProjectDeletion:
         """
         # Arrange
         assert UNKNOWN_SCHEMA_UID not in schema_service.default_root.items
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             session.add(
                 DatabaseSample(
                     dataset.uid,
@@ -146,19 +146,19 @@ class TestProjectDeletion:
                 DatabaseSample(dataset.uid, batch_uid, UNKNOWN_SCHEMA_UID, "OLD-1")
             )
             session.commit()
-        assert items_left(sqlite_database_service) == 2
+        assert items_left(stored_database_service) == 2
 
         # Act
         deleted = project_service.delete(project.uid)
 
         # Assert
         assert deleted
-        assert items_left(sqlite_database_service) == 0
+        assert items_left(stored_database_service) == 0
 
     def test_an_annotation_goes_with_the_image_it_is_on(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         dataset: Dataset,
         project: Project,
@@ -174,7 +174,7 @@ class TestProjectDeletion:
         # Arrange
         image_schema_uid = next(iter(schema_service.default_root.images))
         sample_schema_uid = next(iter(schema_service.default_root.samples))
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             sample = DatabaseSample(
                 dataset.uid, batch_uid, sample_schema_uid, "SLIDE-1"
             )
@@ -198,19 +198,19 @@ class TestProjectDeletion:
                 )
             )
             session.commit()
-        assert items_left(sqlite_database_service) == 3
+        assert items_left(stored_database_service) == 3
 
         # Act
         deleted = project_service.delete(project.uid)
 
         # Assert
         assert deleted
-        assert items_left(sqlite_database_service) == 0
+        assert items_left(stored_database_service) == 0
 
     def test_an_observation_in_one_batch_on_a_sample_in_another_goes_too(
         self,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema_service: SchemaService,
         dataset: Dataset,
         project: Project,
@@ -227,8 +227,8 @@ class TestProjectDeletion:
         # Arrange
         sample_schema_uid = next(iter(schema_service.default_root.samples))
         observation_schema_uid = next(iter(schema_service.default_root.observations))
-        with sqlite_database_service.get_session() as session:
-            later = sqlite_database_service.add_batch(
+        with stored_database_service.get_session() as session:
+            later = stored_database_service.add_batch(
                 session, BatchCreate(name="later", project_uid=project.uid)
             )
             session.flush()
@@ -244,15 +244,15 @@ class TestProjectDeletion:
                 )
             )
             session.commit()
-        assert items_left(sqlite_database_service) == 2
+        assert items_left(stored_database_service) == 2
 
         # Act
         deleted = project_service.delete(project.uid)
 
         # Assert
         assert deleted
-        assert items_left(sqlite_database_service) == 0
-        with sqlite_database_service.get_session() as session:
+        assert items_left(stored_database_service) == 0
+        with stored_database_service.get_session() as session:
             assert (
                 session.scalar(
                     select(func.count()).select_from(DatabaseObservation.__table__)
@@ -264,7 +264,7 @@ class TestProjectDeletion:
         self,
         decoy: Decoy,
         project_service: ProjectService,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         storage_service: StorageService,
         project: Project,
         batch_uid: UUID,
@@ -276,8 +276,8 @@ class TestProjectDeletion:
         nothing left to read from.
         """
         # Arrange
-        with sqlite_database_service.get_session() as session:
-            stored = sqlite_database_service.get_project(session, project.uid)
+        with stored_database_service.get_session() as session:
+            stored = stored_database_service.get_project(session, project.uid)
             stored.attributes = {
                 DatabaseStringAttribute(
                     "submitter",

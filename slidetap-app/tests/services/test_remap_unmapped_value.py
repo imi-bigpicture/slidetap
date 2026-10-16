@@ -14,7 +14,7 @@
 
 """Remapping the items that carry one unmapped value.
 
-Against a real SQLite database, since what is being pinned is which rows the
+Against a real database, since what is being pinned is which rows the
 query finds and what the remap leaves in `unmapped_value`.
 """
 
@@ -63,40 +63,40 @@ def embedding_schema(schema: ExampleSchema) -> CodeAttributeSchema:
 @pytest.fixture()
 def mapper_service(
     schema_service: SchemaService,
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
 ) -> MapperService:
-    validation_service = ValidationService(schema_service, sqlite_database_service)
+    validation_service = ValidationService(schema_service, stored_database_service)
     review_service = ReviewService(
-        schema_service, validation_service, sqlite_database_service
+        schema_service, validation_service, stored_database_service
     )
     attribute_service = AttributeService(
-        schema_service, validation_service, sqlite_database_service, review_service
+        schema_service, validation_service, stored_database_service, review_service
     )
     return MapperService(
         attribute_service=attribute_service,
         validation_service=validation_service,
         schema_service=schema_service,
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         review_service=review_service,
     )
 
 
 @pytest.fixture()
 def stored_project(
-    sqlite_database_service: DatabaseService,
+    stored_database_service: DatabaseService,
     embedding_schema: CodeAttributeSchema,
     dataset: Dataset,
     project: Project,
 ) -> Project:
     """The project, with a mapper for embedding that knows "Paraffin"."""
-    with sqlite_database_service.get_session() as session:
-        group = sqlite_database_service.add_mapper_group(session, "default", True)
-        mapper = sqlite_database_service.add_mapper(
+    with stored_database_service.get_session() as session:
+        group = stored_database_service.add_mapper_group(session, "default", True)
+        mapper = stored_database_service.add_mapper(
             session, "embedding", embedding_schema.uid, embedding_schema.uid
         )
         session.flush()
         group.mappers.add(mapper)
-        sqlite_database_service.add_mapping(
+        stored_database_service.add_mapping(
             session,
             mapper.uid,
             "^Paraffin$",
@@ -104,10 +104,10 @@ def stored_project(
                 uid=uuid4(), schema_uid=embedding_schema.uid, original_value=PARAFFIN
             ),
         )
-        sqlite_database_service.add_dataset(session, dataset)
+        stored_database_service.add_dataset(session, dataset)
         session.flush()
         stored = project.model_copy(update={"mapper_groups": [group.uid]})
-        sqlite_database_service.add_project(session, stored)
+        stored_database_service.add_project(session, stored)
         session.commit()
     return stored
 
@@ -167,7 +167,7 @@ def unmapped(database_service: DatabaseService, project: Project) -> set[str]:
 class TestRemapUnmappedValue:
     def test_the_items_carrying_the_value_are_mapped(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         schema: ExampleSchema,
         embedding_schema: CodeAttributeSchema,
@@ -175,13 +175,13 @@ class TestRemapUnmappedValue:
     ):
         # Arrange
         batch_uid = add_batch(
-            sqlite_database_service,
+            stored_database_service,
             stored_project,
             BatchStatus.METADATA_SEARCH_COMPLETE,
         )
         attribute_uids = [
             add_block(
-                sqlite_database_service,
+                stored_database_service,
                 schema,
                 embedding_schema,
                 stored_project,
@@ -199,17 +199,17 @@ class TestRemapUnmappedValue:
         # Assert
         assert result.remapped_items == 2
         assert result.skipped_items == 0
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             for attribute_uid in attribute_uids:
-                attribute = sqlite_database_service.get_attribute(
+                attribute = stored_database_service.get_attribute(
                     session, attribute_uid
                 )
                 assert attribute.model.mapped_value == PARAFFIN
-        assert unmapped(sqlite_database_service, stored_project) == set()
+        assert unmapped(stored_database_service, stored_project) == set()
 
     def test_items_carrying_another_value_are_left(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         schema: ExampleSchema,
         embedding_schema: CodeAttributeSchema,
@@ -217,13 +217,13 @@ class TestRemapUnmappedValue:
     ):
         # Arrange
         batch_uid = add_batch(
-            sqlite_database_service,
+            stored_database_service,
             stored_project,
             BatchStatus.METADATA_SEARCH_COMPLETE,
         )
         for embedding in ("Paraffin", "Frozen"):
             add_block(
-                sqlite_database_service,
+                stored_database_service,
                 schema,
                 embedding_schema,
                 stored_project,
@@ -238,11 +238,11 @@ class TestRemapUnmappedValue:
 
         # Assert
         assert result.remapped_items == 1
-        assert unmapped(sqlite_database_service, stored_project) == {"Frozen"}
+        assert unmapped(stored_database_service, stored_project) == {"Frozen"}
 
     def test_items_in_a_batch_being_processed_are_skipped(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         schema: ExampleSchema,
         embedding_schema: CodeAttributeSchema,
@@ -250,10 +250,10 @@ class TestRemapUnmappedValue:
     ):
         # Arrange
         searching_uid = add_batch(
-            sqlite_database_service, stored_project, BatchStatus.METADATA_SEARCHING
+            stored_database_service, stored_project, BatchStatus.METADATA_SEARCHING
         )
         add_block(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             embedding_schema,
             stored_project,
@@ -269,11 +269,11 @@ class TestRemapUnmappedValue:
         # Assert
         assert result.remapped_items == 0
         assert result.skipped_items == 1
-        assert unmapped(sqlite_database_service, stored_project) == {"Paraffin"}
+        assert unmapped(stored_database_service, stored_project) == {"Paraffin"}
 
     def test_only_the_given_batch_is_remapped(
         self,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         mapper_service: MapperService,
         schema: ExampleSchema,
         embedding_schema: CodeAttributeSchema,
@@ -282,7 +282,7 @@ class TestRemapUnmappedValue:
         # Arrange
         batch_uids = [
             add_batch(
-                sqlite_database_service,
+                stored_database_service,
                 stored_project,
                 BatchStatus.METADATA_SEARCH_COMPLETE,
             )
@@ -290,7 +290,7 @@ class TestRemapUnmappedValue:
         ]
         attribute_uids = [
             add_block(
-                sqlite_database_service,
+                stored_database_service,
                 schema,
                 embedding_schema,
                 stored_project,
@@ -307,9 +307,9 @@ class TestRemapUnmappedValue:
 
         # Assert
         assert result.remapped_items == 1
-        with sqlite_database_service.get_session() as session:
+        with stored_database_service.get_session() as session:
             mapped, untouched = (
-                sqlite_database_service.get_attribute(session, uid).model
+                stored_database_service.get_attribute(session, uid).model
                 for uid in attribute_uids
             )
             assert mapped.mapped_value == PARAFFIN

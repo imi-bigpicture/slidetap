@@ -72,17 +72,17 @@ class TestThumbnail:
         self,
         decoy: Decoy,
         monkeypatch: pytest.MonkeyPatch,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         schema: ExampleSchema,
         tmp_path: Path,
     ):
         """The failure this guards against: a thumbnail named after the image
         written into the outbox of a pseudonymised project on every request."""
         # Arrange
-        image_uid = _add_pre_processed_image(sqlite_database_service, schema, tmp_path)
+        image_uid = _add_pre_processed_image(stored_database_service, schema, tmp_path)
         storage_service = decoy.mock(cls=StorageService)
         image_service = ImageService(
-            storage_service, sqlite_database_service, decoy.mock(cls=ImageCache)
+            storage_service, stored_database_service, decoy.mock(cls=ImageCache)
         )
         monkeypatch.setattr(
             image_service,

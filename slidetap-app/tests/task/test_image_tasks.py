@@ -145,11 +145,11 @@ def _batch_status(database_service: DatabaseService, batch_uid: UUID) -> BatchSt
 
 @pytest.fixture()
 def open_sessions(
-    monkeypatch: pytest.MonkeyPatch, sqlite_database_service: DatabaseService
+    monkeypatch: pytest.MonkeyPatch, stored_database_service: DatabaseService
 ) -> list[Session]:
     """The sessions the database service has open, as the tasks run."""
     opened: list[Session] = []
-    get_session = sqlite_database_service.get_session
+    get_session = stored_database_service.get_session
 
     @contextmanager
     def tracking_get_session(
@@ -162,7 +162,7 @@ def open_sessions(
             finally:
                 opened.remove(tracked)
 
-    monkeypatch.setattr(sqlite_database_service, "get_session", tracking_get_session)
+    monkeypatch.setattr(stored_database_service, "get_session", tracking_get_session)
     return opened
 
 
@@ -176,12 +176,12 @@ def schema_service(decoy: Decoy, schema: ExampleSchema) -> SchemaService:
 
 @pytest.fixture()
 def batch_service(
-    decoy: Decoy, sqlite_database_service: DatabaseService
+    decoy: Decoy, stored_database_service: DatabaseService
 ) -> BatchService:
     return BatchService(
         schema_service=decoy.mock(cls=SchemaService),
         validation_service=decoy.mock(cls=ValidationService),
-        database_service=sqlite_database_service,
+        database_service=stored_database_service,
         review_service=decoy.mock(cls=ReviewService),
     )
 
@@ -241,7 +241,7 @@ class TestDownloadAndPreProcessImage:
     def test_a_transient_failure_on_the_last_attempt_settles_the_batch(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         schema: ExampleSchema,
@@ -250,10 +250,10 @@ class TestDownloadAndPreProcessImage:
         for a retry that never comes, holding the batch at pre-processing."""
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.NOT_STARTED
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
         )
         image_import_interface = decoy.mock(cls=ImageImportInterface)
         decoy.when(image_import_interface.download(Anything(), Anything())).then_raise(
@@ -264,7 +264,7 @@ class TestDownloadAndPreProcessImage:
         # Act
         _download_and_pre_process(
             image_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             image_import_interface,
@@ -275,11 +275,11 @@ class TestDownloadAndPreProcessImage:
 
         # Assert
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.DOWNLOADING_FAILED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         )
         decoy.verify(
@@ -290,17 +290,17 @@ class TestDownloadAndPreProcessImage:
     def test_a_transient_failure_that_is_retried_sets_the_image_back(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.NOT_STARTED
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
         )
         image_import_interface = decoy.mock(cls=ImageImportInterface)
         decoy.when(image_import_interface.download(Anything(), Anything())).then_raise(
@@ -311,7 +311,7 @@ class TestDownloadAndPreProcessImage:
         with pytest.raises(TransientTaskError):
             _download_and_pre_process(
                 image_uid,
-                sqlite_database_service,
+                stored_database_service,
                 batch_service,
                 schema_service,
                 image_import_interface,
@@ -320,17 +320,17 @@ class TestDownloadAndPreProcessImage:
                 decoy.mock(cls=ReviewService),
             )
         assert (
-            _image_status(sqlite_database_service, image_uid) == ImageStatus.NOT_STARTED
+            _image_status(stored_database_service, image_uid) == ImageStatus.NOT_STARTED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING
         )
 
     def test_no_session_is_open_while_downloading_or_reading(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         open_sessions: list[Session],
         batch_service: BatchService,
         schema_service: SchemaService,
@@ -339,10 +339,10 @@ class TestDownloadAndPreProcessImage:
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.NOT_STARTED
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
         )
         sessions_while_working: list[int] = []
 
@@ -370,7 +370,7 @@ class TestDownloadAndPreProcessImage:
         # Act
         _download_and_pre_process(
             image_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             image_import_interface,
@@ -382,28 +382,28 @@ class TestDownloadAndPreProcessImage:
         # Assert
         assert sessions_while_working == [0, 0]
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.PRE_PROCESSING_FAILED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         )
 
     def test_a_transient_failure_reading_on_the_last_attempt_fails_the_image(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.DOWNLOADED
+            stored_database_service, schema, stored, ImageStatus.DOWNLOADED
         )
         metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
         decoy.when(
@@ -415,7 +415,7 @@ class TestDownloadAndPreProcessImage:
         # Act
         _download_and_pre_process(
             image_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             decoy.mock(cls=ImageImportInterface),
@@ -426,18 +426,18 @@ class TestDownloadAndPreProcessImage:
 
         # Assert
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.PRE_PROCESSING_FAILED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         )
 
     def test_an_image_that_no_longer_exists_is_not_processed(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
     ):
@@ -447,7 +447,7 @@ class TestDownloadAndPreProcessImage:
         # Act
         _download_and_pre_process(
             uuid4(),
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             image_import_interface,
@@ -465,7 +465,7 @@ class TestPostProcessImage:
     def test_a_transient_failure_on_the_last_attempt_settles_the_batch(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         open_sessions: list[Session],
         batch_service: BatchService,
         schema_service: SchemaService,
@@ -474,10 +474,10 @@ class TestPostProcessImage:
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.PRE_PROCESSED
+            stored_database_service, schema, stored, ImageStatus.PRE_PROCESSED
         )
         sessions_while_working: list[int] = []
 
@@ -495,7 +495,7 @@ class TestPostProcessImage:
         # Act
         _post_process(
             image_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             storage_service,
@@ -506,11 +506,11 @@ class TestPostProcessImage:
         # Assert
         assert sessions_while_working == [0]
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.POST_PROCESSING_FAILED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
         )
         decoy.verify(storage_service.cleanup_processing_task(Anything(), "1"), times=1)
@@ -518,7 +518,7 @@ class TestPostProcessImage:
     def test_a_transient_failure_that_is_retried_sets_the_image_back(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         storage_service: StorageService,
@@ -526,10 +526,10 @@ class TestPostProcessImage:
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.PRE_PROCESSED
+            stored_database_service, schema, stored, ImageStatus.PRE_PROCESSED
         )
         image_export_interface = decoy.mock(cls=ImageExportInterface)
         decoy.when(
@@ -542,7 +542,7 @@ class TestPostProcessImage:
         with pytest.raises(TransientTaskError):
             _post_process(
                 image_uid,
-                sqlite_database_service,
+                stored_database_service,
                 batch_service,
                 schema_service,
                 storage_service,
@@ -550,18 +550,18 @@ class TestPostProcessImage:
                 _retried,
             )
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.PRE_PROCESSED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_POST_PROCESSING
         )
 
     def test_an_image_deleted_while_converted_fails_without_raising(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         storage_service: StorageService,
@@ -572,15 +572,15 @@ class TestPostProcessImage:
         other failure of the conversion: what was written is removed."""
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.PRE_PROCESSED
+            stored_database_service, schema, stored, ImageStatus.PRE_PROCESSED
         )
 
         def export(image: Image, batch: Any, project: Any, task_id: str) -> Image:
-            with sqlite_database_service.get_session() as session:
-                session.delete(sqlite_database_service.get_image(session, image_uid))
+            with stored_database_service.get_session() as session:
+                session.delete(stored_database_service.get_image(session, image_uid))
             image.folder_path = str(tmp_path)
             return image
 
@@ -594,7 +594,7 @@ class TestPostProcessImage:
         # Act
         _post_process(
             image_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             storage_service,
@@ -605,7 +605,7 @@ class TestPostProcessImage:
         # Assert
         decoy.verify(storage_service.cleanup_processing_task(Anything(), "1"), times=1)
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
         )
 
@@ -639,7 +639,7 @@ class TestStoreBatchImagesToOutbox:
     def test_a_transient_failure_on_the_last_attempt_fails_the_image(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         storage_service: StorageService,
@@ -649,9 +649,9 @@ class TestStoreBatchImagesToOutbox:
         """Failed rather than left storing, so that the image can be retried
         through the route a failed image is retried through."""
         # Arrange
-        stored = _add_batch(sqlite_database_service, schema, BatchStatus.IMAGE_STORING)
+        stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
         image_uid = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.POST_PROCESSED,
@@ -664,7 +664,7 @@ class TestStoreBatchImagesToOutbox:
         # Act
         self._store(
             stored.batch_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             storage_service,
@@ -673,18 +673,18 @@ class TestStoreBatchImagesToOutbox:
 
         # Assert
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.STORING_FAILED
         )
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_STORING
         )
 
     def test_a_transient_failure_that_is_retried_leaves_the_image_storing(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         storage_service: StorageService,
@@ -692,9 +692,9 @@ class TestStoreBatchImagesToOutbox:
         tmp_path: Path,
     ):
         # Arrange
-        stored = _add_batch(sqlite_database_service, schema, BatchStatus.IMAGE_STORING)
+        stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
         image_uid = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.POST_PROCESSED,
@@ -708,18 +708,18 @@ class TestStoreBatchImagesToOutbox:
         with pytest.raises(TransientTaskError):
             self._store(
                 stored.batch_uid,
-                sqlite_database_service,
+                stored_database_service,
                 batch_service,
                 schema_service,
                 storage_service,
                 _retried,
             )
-        assert _image_status(sqlite_database_service, image_uid) == ImageStatus.STORING
+        assert _image_status(stored_database_service, image_uid) == ImageStatus.STORING
 
     def test_an_image_stored_by_an_attempt_that_did_not_record_it_is_recorded(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         storage_service: StorageService,
@@ -729,11 +729,11 @@ class TestStoreBatchImagesToOutbox:
         """The files were written again into the outbox under new names, and
         the processing folder discarded, before the attempt could record it."""
         # Arrange
-        stored = _add_batch(sqlite_database_service, schema, BatchStatus.IMAGE_STORING)
+        stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
         processing = tmp_path.joinpath("processing", "PL1234-20-1")
         outbox = tmp_path.joinpath("outbox", "PL1234-20-1")
         image_uid = _add_image(
-            sqlite_database_service,
+            stored_database_service,
             schema,
             stored,
             ImageStatus.STORING,
@@ -756,7 +756,7 @@ class TestStoreBatchImagesToOutbox:
         # Act
         self._store(
             stored.batch_uid,
-            sqlite_database_service,
+            stored_database_service,
             batch_service,
             schema_service,
             storage_service,
@@ -764,8 +764,8 @@ class TestStoreBatchImagesToOutbox:
         )
 
         # Assert
-        with sqlite_database_service.get_session() as session:
-            image = sqlite_database_service.get_image(session, image_uid)
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
             assert image.status == ImageStatus.STORED
             assert image.folder_path == str(outbox)
             assert sorted(file.filename for file in image.files) == [
@@ -774,7 +774,7 @@ class TestStoreBatchImagesToOutbox:
             ]
             assert image.metadata_digest is None
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.COMPLETED
         )
 
@@ -784,14 +784,14 @@ class TestProcessMetadataImport:
     def test_a_transient_failure_on_the_last_attempt_fails_the_batch(
         self,
         decoy: Decoy,
-        sqlite_database_service: DatabaseService,
+        stored_database_service: DatabaseService,
         batch_service: BatchService,
         schema_service: SchemaService,
         schema: ExampleSchema,
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.METADATA_SEARCHING
+            stored_database_service, schema, BatchStatus.METADATA_SEARCHING
         )
         metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
         decoy.when(
@@ -803,17 +803,17 @@ class TestProcessMetadataImport:
             batch_uid=stored.batch_uid,
             search_parameters={},
             metadata_import_interface=metadata_import_interface,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             batch_service=batch_service,
             item_service=decoy.mock(cls=ItemService),
-            search_item_service=MetadataSearchItemService(sqlite_database_service),
+            search_item_service=MetadataSearchItemService(stored_database_service),
             schema_service=schema_service,
             will_retry=_not_retried,
         )
 
         # Assert
         assert (
-            _batch_status(sqlite_database_service, stored.batch_uid)
+            _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.FAILED
         )
 
@@ -832,38 +832,38 @@ class TestStalledJobRecovery:
         )
 
     def test_an_image_that_no_longer_exists_has_nothing_to_reset(
-        self, sqlite_database_service: DatabaseService
+        self, stored_database_service: DatabaseService
     ):
         # Arrange
         job = self._job("post_process_image", image_uid=str(uuid4()))
 
         # Act & Assert
-        _reset_state_for_stalled_job(sqlite_database_service, job)
+        _reset_state_for_stalled_job(stored_database_service, job)
 
     def test_an_image_left_post_processing_is_set_back(
-        self, sqlite_database_service: DatabaseService, schema: ExampleSchema
+        self, stored_database_service: DatabaseService, schema: ExampleSchema
     ):
         # Arrange
         stored = _add_batch(
-            sqlite_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
         )
         image_uid = _add_image(
-            sqlite_database_service, schema, stored, ImageStatus.POST_PROCESSING
+            stored_database_service, schema, stored, ImageStatus.POST_PROCESSING
         )
         job = self._job("post_process_image", image_uid=str(image_uid))
 
         # Act
-        _reset_state_for_stalled_job(sqlite_database_service, job)
+        _reset_state_for_stalled_job(stored_database_service, job)
 
         # Assert
         assert (
-            _image_status(sqlite_database_service, image_uid)
+            _image_status(stored_database_service, image_uid)
             == ImageStatus.PRE_PROCESSED
         )
 
     @pytest.mark.asyncio
     async def test_a_job_that_fails_to_reset_does_not_stop_the_others(
-        self, sqlite_database_service: DatabaseService
+        self, stored_database_service: DatabaseService
     ):
         # Arrange
         failing = self._job("post_process_image", image_uid="not-a-uid")
@@ -882,7 +882,7 @@ class TestStalledJobRecovery:
         # Act
         await retry_stalled_jobs.func.__wrapped__(  # type: ignore[attr-defined]
             timestamp=0,
-            database_service=sqlite_database_service,
+            database_service=stored_database_service,
             config=SimpleNamespace(stalled_worker_timeout=1),
             app=app,
         )
