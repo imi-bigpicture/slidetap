@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress, alpha, useTheme } from '@mui/material'
+import { Alert, LinearProgress, alpha, useTheme } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import OpenSeadragon, { DziTileSource } from 'openseadragon'
 import React, { useEffect } from 'react'
@@ -21,6 +21,20 @@ import type { Dzi } from 'src/models/dzi'
 import imageApi from 'src/services/api/image_api'
 import auth from 'src/services/auth'
 import { queryKeys } from 'src/services/query_keys'
+
+/** What the user does to move the view, by the canvas or by the navigator. A
+ * click on the canvas zooms in, as click to zoom is on by default. */
+const USER_VIEWPORT_EVENTS = [
+  'canvas-click',
+  'canvas-drag',
+  'canvas-scroll',
+  'canvas-pinch',
+  'canvas-double-click',
+  'canvas-key',
+  'navigator-click',
+  'navigator-drag',
+  'navigator-scroll',
+] as const
 
 interface OpenSeaDragonViewerProps {
   imageUid: string
@@ -49,8 +63,20 @@ function OpenSeaDragonViewer({
     // The viewer fits the image to the panel it was built in, and the panel it
     // is built in is rarely the size it ends up: it shares the height with a
     // strip of thumbnails and sits in whatever the window leaves. Fitting again
-    // whenever it is resized is what keeps the image in the panel.
-    const observer = new ResizeObserver(() => viewer.viewport?.goHome(true))
+    // whenever it is resized is what keeps the image in the panel, until the
+    // user has zoomed or panned: from then on the view they chose is kept.
+    let userMoved = false
+    const markUserMoved = (): void => {
+      userMoved = true
+    }
+    for (const eventName of USER_VIEWPORT_EVENTS) {
+      viewer.addHandler(eventName, markUserMoved)
+    }
+    const observer = new ResizeObserver(() => {
+      if (!userMoved) {
+        viewer.viewport?.goHome(true)
+      }
+    })
     observer.observe(element)
     return () => {
       observer.disconnect()
@@ -59,6 +85,9 @@ function OpenSeaDragonViewer({
     // Rebuilt on a change of theme: the navigator takes its colours when it is
     // made and does not repaint them.
   }, [dziQuery.data, theme])
+  if (dziQuery.isError) {
+    return <Alert severity="error">The image could not be opened.</Alert>
+  }
   if (dziQuery.data === undefined) {
     return <LinearProgress />
   }
