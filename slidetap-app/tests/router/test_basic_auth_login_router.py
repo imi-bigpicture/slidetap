@@ -85,9 +85,6 @@ class TestSlideTapBasicAuthLoginRouter:
         session = UserSession(username="valid_user", token="token")
         decoy.when(auth_interface.login(username, password)).then_return(session)
         decoy.when(auth_interface.check_permissions(session)).then_return(True)
-        decoy.when(
-            login_service.set_login_cookies(Anything(), session.username)
-        ).then_return(None)
 
         # Act
         response = test_client.post(
@@ -96,6 +93,7 @@ class TestSlideTapBasicAuthLoginRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+        decoy.verify(login_service.set_login_cookies(Anything(), session), times=1)
 
     def test_login_forbidden(
         self,
@@ -154,23 +152,48 @@ class TestSlideTapBasicAuthLoginRouter:
         # Assert
         assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_logout_logged_in(
+    def test_logout_ends_the_session_with_the_auth_interface(
         self,
         decoy: Decoy,
+        auth_interface: AuthInterface,
         login_service: LoginService,
         test_client: TestClient,
     ):
         # Arrange
         decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
-            {}
+            {"sub": "user", LoginService.SESSION_CLAIM: "token"}
         )
-        decoy.when(login_service.unset_login_cookies(Anything())).then_return(None)
 
         # Act
         response = test_client.post("/api/auth/logout")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+        decoy.verify(
+            auth_interface.logout(UserSession(username="user", token="token")),
+            times=1,
+        )
+        decoy.verify(login_service.unset_login_cookies(Anything()), times=1)
+
+    def test_logout_of_a_token_without_a_session_unsets_the_cookies(
+        self,
+        decoy: Decoy,
+        auth_interface: AuthInterface,
+        login_service: LoginService,
+        test_client: TestClient,
+    ):
+        # Arrange
+        decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
+            {"sub": "user"}
+        )
+
+        # Act
+        response = test_client.post("/api/auth/logout")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        decoy.verify(auth_interface.logout(Anything()), times=0)
+        decoy.verify(login_service.unset_login_cookies(Anything()), times=1)
 
     @pytest.mark.parametrize(
         "status_code", [HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED]
@@ -196,23 +219,69 @@ class TestSlideTapBasicAuthLoginRouter:
     def test_keep_alive_logged_in(
         self,
         decoy: Decoy,
+        auth_interface: AuthInterface,
         login_service: LoginService,
         test_client: TestClient,
     ):
         # Arrange
-        used_payload = {"sub": "user"}
+        session = UserSession(username="user", token="token")
         decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
-            used_payload
+            {"sub": "user", LoginService.SESSION_CLAIM: "token"}
         )
-        decoy.when(
-            login_service.set_login_cookies(Anything(), used_payload["sub"])
-        ).then_return(None)
+        decoy.when(auth_interface.valid(session)).then_return(True)
+        decoy.when(auth_interface.keep_alive(session)).then_return(True)
 
         # Act
         response = test_client.post("/api/auth/keepAlive")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+        decoy.verify(login_service.set_login_cookies(Anything(), session), times=1)
+
+    @pytest.mark.parametrize(("valid", "kept_alive"), [(False, True), (True, False)])
+    def test_keep_alive_of_a_session_the_auth_interface_ended_is_refused(
+        self,
+        decoy: Decoy,
+        auth_interface: AuthInterface,
+        login_service: LoginService,
+        test_client: TestClient,
+        valid: bool,
+        kept_alive: bool,
+    ):
+        """A logged out session, or one of a user the auth interface no longer
+        accepts, does not get a new access token."""
+        # Arrange
+        session = UserSession(username="user", token="token")
+        decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
+            {"sub": "user", LoginService.SESSION_CLAIM: "token"}
+        )
+        decoy.when(auth_interface.valid(session)).then_return(valid)
+        decoy.when(auth_interface.keep_alive(session)).then_return(kept_alive)
+
+        # Act
+        response = test_client.post("/api/auth/keepAlive")
+
+        # Assert
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        decoy.verify(login_service.set_login_cookies(Anything(), Anything()), times=0)
+
+    def test_keep_alive_of_a_token_without_a_session_is_refused(
+        self,
+        decoy: Decoy,
+        login_service: LoginService,
+        test_client: TestClient,
+    ):
+        # Arrange
+        decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
+            {"sub": "user"}
+        )
+
+        # Act
+        response = test_client.post("/api/auth/keepAlive")
+
+        # Assert
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        decoy.verify(login_service.set_login_cookies(Anything(), Anything()), times=0)
 
     @pytest.mark.parametrize(
         "status_code", [HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED]

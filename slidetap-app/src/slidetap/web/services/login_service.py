@@ -22,10 +22,13 @@ from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import HTTPException, Request, Response
 
 from slidetap.config import LoginConfig
+from slidetap.model import UserSession
 
 
 class LoginService:
     ALGORITHM = "HS256"
+    SESSION_CLAIM = "sid"
+    """Claim of the access token holding the auth interface session token."""
 
     def __init__(self, config: LoginConfig):
         self._secret_key = config.secret_key
@@ -74,9 +77,16 @@ class LoginService:
             )
         return self._verify_jwt_token(access_token_cookie)
 
-    def set_login_cookies(self, response: Response, user: str):
-        """Set login cookies in the response."""
-        jwt_token = self._create_jwt_token({"sub": user})
+    def set_login_cookies(self, response: Response, session: UserSession):
+        """Set login cookies in the response.
+
+        The access token names the user and carries the token of the session
+        the auth interface gave, so that the session can be checked and ended
+        with the auth interface while the access token is valid.
+        """
+        jwt_token = self._create_jwt_token(
+            {"sub": session.username, self.SESSION_CLAIM: session.token}
+        )
         crsf_token = secrets.token_urlsafe(32)
         response.set_cookie(
             key="access_token",
@@ -98,6 +108,18 @@ class LoginService:
         response.delete_cookie("access_token")
         response.delete_cookie("csrf_token")
 
+    @classmethod
+    def session_from_payload(cls, payload: dict[str, Any]) -> UserSession | None:
+        """The auth interface session an access token was issued for.
+
+        None for a token that carries no session.
+        """
+        username = payload.get("sub")
+        token = payload.get(cls.SESSION_CLAIM)
+        if not isinstance(username, str) or not isinstance(token, str):
+            return None
+        return UserSession(username=username, token=token)
+
 
 @inject
 def require_valid_token(
@@ -109,26 +131,7 @@ def require_valid_token(
     If the tokens are valid, it will return the user payload.
     If not, it will raise an HTTPException with status code 401 or 403.
 
-    Note: This does NOT refresh the session. Use this for read-only operations
-    like checking session status, where you don't want to extend the session.
+    The session is not extended: a new access token is only issued by the
+    keep alive endpoint.
     """
     return login_service.verify_access_and_csrf_tokens(request)
-
-
-@inject
-def require_valid_token_and_refresh(
-    request: Request, response: Response, login_service: FromDishka[LoginService]
-) -> dict[str, Any]:
-    """Dependency to require login and refresh the session.
-
-    This will verify the access and CSRF tokens from the request cookies.
-    If the tokens are valid, it will refresh the session and return the user payload.
-    If not, it will raise an HTTPException with status code 401 or 403.
-
-    Note: This refreshes the session on every authenticated request, so active
-    users will never be logged out due to inactivity. Use this for normal API
-    operations (CRUD, etc.).
-    """
-    user_payload = login_service.verify_access_and_csrf_tokens(request)
-    login_service.set_login_cookies(response, user_payload["sub"])
-    return user_payload
