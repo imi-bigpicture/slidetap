@@ -31,9 +31,19 @@ from slidetap_example import ExampleSchema
 
 from slidetap.model import Batch, CodeAttribute, Dataset, Mapper, MappingItem
 from slidetap.model.item import Sample
-from slidetap.services import DatasetService, ItemService, MapperService
+from slidetap.services import (
+    AttributeService,
+    DatasetService,
+    ItemService,
+    MapperService,
+)
 from slidetap.task import Scheduler
-from slidetap.web.routers import dataset_router, item_router, mapper_router
+from slidetap.web.routers import (
+    attribute_router,
+    dataset_router,
+    item_router,
+    mapper_router,
+)
 from slidetap.web.services import (
     ImagePipelineService,
     LoginService,
@@ -62,12 +72,18 @@ def dataset_service(decoy: Decoy):
 
 
 @pytest.fixture()
+def attribute_service(decoy: Decoy):
+    return decoy.mock(cls=AttributeService)
+
+
+@pytest.fixture()
 def test_client(
     decoy: Decoy,
     simple_app: FastAPI,
     item_service: ItemService,
     mapper_service: MapperService,
     dataset_service: DatasetService,
+    attribute_service: AttributeService,
 ):
     service_provider = Provider(scope=Scope.APP)
     mocked_services = {
@@ -75,6 +91,7 @@ def test_client(
         ItemService: item_service,
         MapperService: mapper_service,
         DatasetService: dataset_service,
+        AttributeService: attribute_service,
         Scheduler: decoy.mock(cls=Scheduler),
         ImagePipelineService: decoy.mock(cls=ImagePipelineService),
         MetadataExportService: decoy.mock(cls=MetadataExportService),
@@ -85,6 +102,7 @@ def test_client(
     simple_app.include_router(item_router)
     simple_app.include_router(mapper_router)
     simple_app.include_router(dataset_router)
+    simple_app.include_router(attribute_router)
     setup_dishka(container, simple_app)
     with TestClient(simple_app) as client:
         yield client
@@ -230,6 +248,46 @@ class TestUidMismatch:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+
+    def test_update_attribute_with_a_body_for_another_attribute_is_refused(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        attribute_service: AttributeService,
+        code_attribute: CodeAttribute,
+    ):
+        # Act
+        response = test_client.post(
+            f"api/attributes/attribute/{uuid4()}",
+            json=code_attribute.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        decoy.verify(attribute_service.update(Anything()), times=0)
+
+    def test_update_attribute_answers_with_the_attribute_as_stored(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        attribute_service: AttributeService,
+        code_attribute: CodeAttribute,
+    ):
+        """What is stored can differ from what was sent, such as a display value
+        the service works out."""
+        # Arrange
+        stored = code_attribute.model_copy(update={"display_value": "as stored"})
+        decoy.when(attribute_service.update(Anything())).then_return(stored)
+
+        # Act
+        response = test_client.post(
+            f"api/attributes/attribute/{code_attribute.uid}",
+            json=code_attribute.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["displayValue"] == "as stored"
 
     def test_update_dataset_with_a_body_for_another_dataset_is_refused(
         self,

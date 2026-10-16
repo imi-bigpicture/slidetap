@@ -73,14 +73,21 @@ def update_attribute(
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
 ) -> AnyAttribute:
-    """Update attribute."""
+    """Update attribute, answering with the attribute as stored."""
     logger.debug(f"Update attribute {attribute_uid}.")
+    if attribute.uid != attribute_uid:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                f"Attribute uid {attribute.uid} does not match path uid {attribute_uid}"
+            ),
+        )
     updated_attribute = attribute_service.update(attribute)
     if updated_attribute is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Attribute not found"
         )
-    return attribute
+    return updated_attribute
 
 
 @attribute_router.post("/create/{attribute_schema_uid}")
