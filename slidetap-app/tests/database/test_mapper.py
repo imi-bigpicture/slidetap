@@ -26,8 +26,9 @@ import importlib
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
-from slidetap.database import DatabaseMappingItem
+from slidetap.database import DatabaseMapper, DatabaseMappingItem
 from slidetap.model import CodeAttribute
 from slidetap.services import DatabaseService
 
@@ -182,6 +183,36 @@ class TestDatabaseMappingItemHits:
 
         # Assert
         assert _hits(sqlite_database_service, mapping_item_uid) == 1
+
+
+@pytest.mark.integration
+class TestDatabaseMapperName:
+    def test_mappers_without_a_family_do_not_share_a_name(
+        self, sqlite_database_service: DatabaseService
+    ):
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            session.add(DatabaseMapper("Diagnose", uuid4(), uuid4()))
+
+        # Act & Assert
+        with (
+            pytest.raises(IntegrityError),
+            sqlite_database_service.get_session() as session,
+        ):
+            session.add(DatabaseMapper("Diagnose", uuid4(), uuid4()))
+
+    def test_mappers_of_different_families_share_a_name(
+        self, sqlite_database_service: DatabaseService
+    ):
+        # Act
+        with sqlite_database_service.get_session() as session:
+            session.add(DatabaseMapper("Diagnose", uuid4(), uuid4(), uuid4()))
+            session.add(DatabaseMapper("Diagnose", uuid4(), uuid4(), uuid4()))
+            session.add(DatabaseMapper("Diagnose", uuid4(), uuid4()))
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            assert session.query(DatabaseMapper).count() == 3
 
 
 @pytest.mark.unittest

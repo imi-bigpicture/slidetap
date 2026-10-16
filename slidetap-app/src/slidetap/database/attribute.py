@@ -22,6 +22,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import (
     Any,
+    ClassVar,
     Generic,
     TypeVar,
 )
@@ -33,9 +34,10 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     String,
-    UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -76,6 +78,17 @@ DatabaseAttributeType = TypeVar("DatabaseAttributeType", bound="DatabaseAttribut
 class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     """An attribute defined by a tag and a value"""
 
+    OWNER_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "attribute_item_uid",
+        "private_attribute_item_uid",
+        "attribute_project_uid",
+        "private_attribute_project_uid",
+        "attribute_dataset_uid",
+        "private_attribute_dataset_uid",
+    )
+    """The columns an attribute row is held by an item, project or dataset
+    through."""
+
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     schema_uid: Mapped[UUID] = mapped_column(Uuid)
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -115,17 +128,19 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     mapping_item_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("mapping_item.uid"), index=True
     )
-    __table_args__ = (
-        UniqueConstraint(
+    # An owner holds one attribute of each attribute schema. An attribute row
+    # is held through one of the owner columns and has the others null, so the
+    # invariant is kept by an index per owner column over the rows it holds.
+    __table_args__ = tuple(
+        Index(
+            f"uq_attribute_{owner_column}_schema_uid",
+            owner_column,
             "schema_uid",
-            "attribute_item_uid",
-            "private_attribute_item_uid",
-            "attribute_project_uid",
-            "private_attribute_project_uid",
-            "attribute_dataset_uid",
-            "private_attribute_dataset_uid",
-            "mapping_item_uid",
-        ),
+            unique=True,
+            sqlite_where=text(f"{owner_column} IS NOT NULL"),
+            postgresql_where=text(f"{owner_column} IS NOT NULL"),
+        )
+        for owner_column in OWNER_COLUMNS
     )
 
     def __init__(
@@ -239,6 +254,33 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             )
         self.updated_value = self._mint_nested_uids(value)
         self.display_value = display_value
+
+    def replace_values(self, attribute: Attribute) -> None:
+        """Take every value of an attribute that replaces this one.
+
+        An owner holds one attribute of each attribute schema, so an attribute
+        given for a schema the owner already holds one of, under a uid that is
+        not stored, replaces the stored one. It does so in this row, which
+        keeps its uid, rather than in a new row inserted beside it. What the
+        replaced attribute held is not kept, as it would not be in a new row.
+
+        Parameters
+        ----------
+        attribute: Attribute
+            The attribute that replaces this one, of the same attribute schema.
+        """
+        if attribute.schema_uid != self.schema_uid:
+            raise ValueError(
+                f"Attribute of schema {attribute.schema_uid} cannot replace "
+                f"attribute {self.uid} of schema {self.schema_uid}."
+            )
+        self.original_value = self._mint_nested_uids(attribute.original_value)
+        self.updated_value = self._mint_nested_uids(attribute.updated_value)
+        self.mapped_value = self._mint_nested_uids(attribute.mapped_value)
+        self.mappable_value = attribute.mappable_value
+        self.display_value = attribute.display_value
+        self.mapping_item_uid = attribute.mapping_item_uid
+        self.rejected = attribute.rejected
 
     @classmethod
     def _mint_nested_uids(cls, value: Any) -> Any:

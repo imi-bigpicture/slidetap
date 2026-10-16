@@ -670,6 +670,105 @@ def test_an_attribute_issue_of_an_entity_is_unique(
         session.rollback()
 
 
+UNIQUE_ATTRIBUTE_REVISION = "3c8e51f7a2d4"
+
+attribute_table = sa.table(
+    "attribute",
+    sa.column("uid", sa.Uuid()),
+    sa.column("schema_uid", sa.Uuid()),
+    sa.column("valid", sa.Boolean()),
+    sa.column("tag", sa.String()),
+    sa.column("attribute_value_type", sa.String()),
+    sa.column("read_only", sa.Boolean()),
+    sa.column("locked", sa.Boolean()),
+    sa.column("attribute_item_uid", sa.Uuid()),
+)
+
+
+def attribute_row(schema_uid: UUID, item_uid: UUID) -> dict:
+    return {
+        "uid": uuid4(),
+        "schema_uid": schema_uid,
+        "valid": True,
+        "tag": "tag",
+        "attribute_value_type": "STRING",
+        "read_only": False,
+        "locked": False,
+        "attribute_item_uid": item_uid,
+    }
+
+
+def upgrade_to_before(revision: str) -> None:
+    before = ScriptDirectory.from_config(config()).get_revision(revision)
+    assert before is not None and isinstance(before.down_revision, str)
+    command.upgrade(config(), before.down_revision)
+
+
+def test_an_item_holds_one_attribute_of_a_schema_after_upgrade(session: Session):
+    """The constraint before the upgrade let an item hold two attributes of a
+    schema, as the other owner columns of the rows are null."""
+    upgrade_to_before(UNIQUE_ATTRIBUTE_REVISION)
+    schema_uid, item_uid = uuid4(), uuid4()
+    session.execute(
+        sa.insert(attribute_table),
+        [attribute_row(schema_uid, item_uid), attribute_row(uuid4(), item_uid)],
+    )
+    session.commit()
+
+    command.upgrade(config(), "head")
+
+    with pytest.raises(sa.exc.IntegrityError):
+        session.execute(
+            sa.insert(attribute_table), [attribute_row(schema_uid, item_uid)]
+        )
+        session.commit()
+
+
+def test_an_upgrade_stops_on_an_item_holding_two_attributes_of_a_schema(
+    session: Session,
+):
+    upgrade_to_before(UNIQUE_ATTRIBUTE_REVISION)
+    schema_uid, item_uid = uuid4(), uuid4()
+    session.execute(
+        sa.insert(attribute_table),
+        [attribute_row(schema_uid, item_uid), attribute_row(schema_uid, item_uid)],
+    )
+    session.commit()
+
+    # SQLite holds a uid as its hex, which is what the report reads back.
+    with pytest.raises(RuntimeError, match=f"attribute_item_uid {item_uid.hex}"):
+        command.upgrade(config(), "head")
+
+
+def test_an_upgrade_stops_on_mappers_without_a_family_sharing_a_name(
+    session: Session,
+):
+    upgrade_to_before(UNIQUE_ATTRIBUTE_REVISION)
+    mapper = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("root_attribute_schema_uid", sa.Uuid()),
+    )
+    session.execute(
+        sa.insert(mapper),
+        [
+            {
+                "uid": uuid4(),
+                "name": "Sex",
+                "attribute_schema_uid": uuid4(),
+                "root_attribute_schema_uid": uuid4(),
+            }
+            for _ in range(2)
+        ],
+    )
+    session.commit()
+
+    with pytest.raises(RuntimeError, match="mapper name 'Sex' without family"):
+        command.upgrade(config(), "head")
+
+
 def test_a_mapper_keeps_its_lowest_group_on_downgrade_to_one_group(
     session: Session,
 ):

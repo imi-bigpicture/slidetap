@@ -30,6 +30,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     inspect,
+    text,
     update,
 )
 from sqlalchemy.orm import Mapped, mapped_column, object_session, relationship
@@ -76,6 +77,15 @@ class DatabaseMapper(Base, Generic[AttributeType]):
     __table_args__ = (
         UniqueConstraint("attribute_schema_uid", "root_attribute_schema_uid"),
         UniqueConstraint("name", "family_uid", name="uq_mapper_name_family_uid"),
+        # The constraint above holds nothing for mappers without a family, as
+        # nulls are distinct to it. Their names are unique among themselves.
+        Index(
+            "uq_mapper_name_without_family",
+            "name",
+            unique=True,
+            sqlite_where=text("family_uid IS NULL"),
+            postgresql_where=text("family_uid IS NULL"),
+        ),
     )
     __tablename__ = "mapper"
 
