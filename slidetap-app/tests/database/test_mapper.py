@@ -23,12 +23,13 @@ invariant.
 """
 
 import importlib
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from slidetap.database import DatabaseMappingItem
 from slidetap.model import CodeAttribute
+from slidetap.services import DatabaseService
 
 LITERAL_EXPRESSIONS = [
     ("^71854001$", "71854001"),  # canonical Diagnose key
@@ -94,6 +95,93 @@ class TestDatabaseMappingItemLiteralKey:
     @pytest.mark.parametrize("expression", REGEX_EXPRESSIONS)
     def test_regex_shaped_keys_are_rejected(self, expression: str):
         assert DatabaseMappingItem.literal_key(expression) is None
+
+
+def _add_mapping_item(
+    database_service: DatabaseService, mapper_uid: UUID, attribute: CodeAttribute
+) -> UUID:
+    with database_service.get_session() as session:
+        mapping_item = DatabaseMappingItem(mapper_uid, "^code$", attribute)
+        session.add(mapping_item)
+        session.commit()
+        return mapping_item.uid
+
+
+def _hits(database_service: DatabaseService, mapping_item_uid: UUID) -> int:
+    with database_service.get_session() as session:
+        return session.get_one(DatabaseMappingItem, mapping_item_uid).hits
+
+
+@pytest.mark.integration
+class TestDatabaseMappingItemHits:
+    def test_hits_counted_in_parallel_sessions_are_all_kept(
+        self,
+        sqlite_database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
+    ):
+        """The failure this guards against: two imports read the same count,
+        each adds its hit to it, and the second to commit writes back a count
+        that is missing the first one's hit."""
+        # Arrange
+        mapping_item_uid = _add_mapping_item(
+            sqlite_database_service, mapper_uid, code_attribute
+        )
+        first_session = sqlite_database_service.create_session()()
+        second_session = sqlite_database_service.create_session()()
+        first_item = first_session.get_one(DatabaseMappingItem, mapping_item_uid)
+        second_item = second_session.get_one(DatabaseMappingItem, mapping_item_uid)
+        assert (first_item.hits, second_item.hits) == (0, 0)
+
+        # Act
+        first_item.increment_hits()
+        first_session.commit()
+        second_item.increment_hits()
+        second_session.commit()
+        first_session.close()
+        second_session.close()
+
+        # Assert
+        assert _hits(sqlite_database_service, mapping_item_uid) == 2
+
+    def test_a_hit_is_seen_in_the_session_and_not_written_back_on_flush(
+        self,
+        sqlite_database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
+    ):
+        # Arrange
+        mapping_item_uid = _add_mapping_item(
+            sqlite_database_service, mapper_uid, code_attribute
+        )
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            mapping_item = session.get_one(DatabaseMappingItem, mapping_item_uid)
+            mapping_item.increment_hits()
+            mapping_item.increment_hits()
+            hits_in_session = mapping_item.hits
+            session.flush()
+
+        # Assert
+        assert hits_in_session == 2
+        assert _hits(sqlite_database_service, mapping_item_uid) == 2
+
+    def test_a_hit_on_an_item_not_yet_stored_is_inserted_with_it(
+        self,
+        sqlite_database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
+    ):
+        # Act
+        with sqlite_database_service.get_session() as session:
+            mapping_item = DatabaseMappingItem(mapper_uid, "^code$", code_attribute)
+            session.add(mapping_item)
+            mapping_item.increment_hits()
+            mapping_item_uid = mapping_item.uid
+
+        # Assert
+        assert _hits(sqlite_database_service, mapping_item_uid) == 1
 
 
 @pytest.mark.unittest
