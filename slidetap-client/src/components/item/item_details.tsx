@@ -187,7 +187,8 @@ export default function DisplayItemDetails({
     isDirtyRef.current = isDirty
   }, [item, isDirty])
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
-  const [pendingNavigationUid, setPendingNavigationUid] = useState<string | null>(null)
+  /** Where to go once the unsaved changes are saved or discarded. */
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null)
   const [overflowAnchor, setOverflowAnchor] = useState<null | HTMLElement>(null)
   const [selectAnchor, setSelectAnchor] = useState<null | HTMLElement>(null)
   const [actionsNode, setActionsNode] = useState<null | HTMLElement>(null)
@@ -227,16 +228,22 @@ export default function DisplayItemDetails({
     [setItemUid],
   )
 
+  /** Leaves the item shown, asking first what to do with unsaved changes. */
+  const requestLeaving = useCallback((leave: () => void) => {
+    if (isDirtyRef.current) {
+      // Wrapped, as a function given to a state setter is called as an updater.
+      setPendingNavigation(() => leave)
+      setUnsavedDialogOpen(true)
+    } else {
+      leave()
+    }
+  }, [])
+
   const requestNavigation = useCallback(
     (uid: string) => {
-      if (isDirtyRef.current) {
-        setPendingNavigationUid(uid)
-        setUnsavedDialogOpen(true)
-      } else {
-        navigateTo(uid)
-      }
+      requestLeaving(() => navigateTo(uid))
     },
-    [navigateTo],
+    [navigateTo, requestLeaving],
   )
 
   const navigatePrevious = useCallback(() => {
@@ -481,6 +488,11 @@ export default function DisplayItemDetails({
     setIsDirty(true)
   }
 
+  const handleLinkageUpdate = (updatedItem: Item): void => {
+    setItem(updatedItem)
+    setIsDirty(true)
+  }
+
   const handleTagsUpdate = (tags: string[]): void => {
     const updatedItem = { ...item, tags }
     setItem(updatedItem)
@@ -492,16 +504,15 @@ export default function DisplayItemDetails({
     uid: string,
     pseudonym?: string | null,
   ): void => {
-    setItemUid(uid)
-    const existingIndex = openedItems.findIndex((i) => i.uid === uid)
-    if (existingIndex >= 0) {
-      setOpenedItems(openedItems.slice(0, existingIndex + 1))
-    } else {
-      setOpenedItems([
-        ...openedItems,
-        { identifier: name, uid: uid, pseudonym: pseudonym ?? null },
-      ])
-    }
+    requestLeaving(() => {
+      setItemUid(uid)
+      setOpenedItems((opened) => {
+        const existingIndex = opened.findIndex((entry) => entry.uid === uid)
+        return existingIndex >= 0
+          ? opened.slice(0, existingIndex + 1)
+          : [...opened, { identifier: name, uid: uid, pseudonym: pseudonym ?? null }]
+      })
+    })
   }
 
   function handleOpenImageChange(image: Image): void {
@@ -536,8 +547,10 @@ export default function DisplayItemDetails({
           identifier:
             getDisplayIdentifier(previousItem, pseudonymMode) || 'the previous item',
           go: () => {
-            setOpenedItems(openedItems.slice(0, -1))
-            setItemUid(previousItem.uid)
+            requestLeaving(() => {
+              setOpenedItems((opened) => opened.slice(0, -1))
+              setItemUid(previousItem.uid)
+            })
           },
         }
 
@@ -640,7 +653,7 @@ export default function DisplayItemDetails({
                       item={item}
                       action={action}
                       handleItemOpen={handleChangeItem}
-                      setItem={setItem}
+                      setItem={handleLinkageUpdate}
                     />
 
                     {isImageItem(item) && (
@@ -1058,9 +1071,9 @@ export default function DisplayItemDetails({
               setItem(itemQuery.data)
               setNewTagsToSave([])
               setIsDirty(false)
-              if (pendingNavigationUid) {
-                navigateTo(pendingNavigationUid)
-                setPendingNavigationUid(null)
+              if (pendingNavigation !== null) {
+                pendingNavigation()
+                setPendingNavigation(null)
               }
             }}
           >
@@ -1074,9 +1087,9 @@ export default function DisplayItemDetails({
                   { item },
                   {
                     onSuccess: () => {
-                      if (pendingNavigationUid) {
-                        navigateTo(pendingNavigationUid)
-                        setPendingNavigationUid(null)
+                      if (pendingNavigation !== null) {
+                        pendingNavigation()
+                        setPendingNavigation(null)
                       }
                     },
                   },
