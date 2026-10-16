@@ -702,3 +702,42 @@ class TestPathSafety:
 
         # Assert
         decoy.verify(file_operations.remove(Anything()), times=0)
+
+
+class TestCleanupImageSource:
+    def test_a_source_in_the_download_folder_is_removed(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        config: StorageConfig,
+        project: Project,
+        image: Image,
+    ):
+        # Arrange
+        source = config.download.joinpath(project.storage_folder or "", "image")
+
+        # Act
+        storage_service.cleanup_image_source(project, image, source)
+
+        # Assert
+        decoy.verify(file_operations.remove(source), times=1)
+
+    def test_a_source_outside_the_project_folders_is_left(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        image: Image,
+        tmp_path: Path,
+    ):
+        """A folder the import reads the image from in place is not SlideTap's."""
+        # Arrange
+        source = tmp_path.joinpath("scanner", "image")
+
+        # Act
+        storage_service.cleanup_image_source(project, image, source)
+
+        # Assert
+        decoy.verify(file_operations.remove(Anything()), times=0)

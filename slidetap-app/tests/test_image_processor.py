@@ -24,7 +24,7 @@ from decoy.matchers import Anything
 from slidetap_example import ExampleSchema
 
 from slidetap.external_interfaces import TransientTaskError
-from slidetap.image_processor import ImageProcessingStep, ImageProcessor
+from slidetap.image_processor import FinishingStep, ImageProcessingStep, ImageProcessor
 from slidetap.model import Batch, Dataset, Image, ImageFormat, Project, RootSchema
 from slidetap.services import SchemaService, StorageService
 
@@ -145,3 +145,73 @@ class TestImageProcessor:
 
         # Assert
         assert calls == ["cleanup", "step"]
+
+
+class TestFinishingStep:
+    @pytest.mark.parametrize("remove_source", [True, False])
+    def test_the_source_is_removed_through_storage_only_when_asked(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        schema: RootSchema,
+        processed_image: Image,
+        project: Project,
+        tmp_path: Path,
+        remove_source: bool,
+    ):
+        """Through storage, which removes a folder as well as a file, and only
+        under the project's own folders."""
+        # Arrange
+        source = Path(processed_image.folder_path or "")
+        processed = tmp_path.joinpath("processed")
+        step = FinishingStep(remove_source=remove_source)
+
+        # Act
+        path, image = step.run(
+            schema,
+            storage_service,
+            project,
+            processed_image,
+            processed,
+            tmp_path.joinpath("working"),
+            "1",
+        )
+
+        # Assert
+        assert path == processed
+        assert image.folder_path is None
+        decoy.verify(
+            storage_service.cleanup_image_source(project, image, source),
+            times=1 if remove_source else 0,
+        )
+
+    def test_the_processed_image_is_not_removed_as_the_source(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        schema: RootSchema,
+        processed_image: Image,
+        project: Project,
+        tmp_path: Path,
+    ):
+        """Where no step moved the image, the source is what is handed on."""
+        # Arrange
+        source = Path(processed_image.folder_path or "")
+        step = FinishingStep(remove_source=True)
+
+        # Act
+        step.run(
+            schema,
+            storage_service,
+            project,
+            processed_image,
+            source,
+            tmp_path.joinpath("working"),
+            "1",
+        )
+
+        # Assert
+        decoy.verify(
+            storage_service.cleanup_image_source(Anything(), Anything(), Anything()),
+            times=0,
+        )

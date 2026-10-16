@@ -183,20 +183,45 @@ class StorageService:
             identifier names the image's download folder.
         """
         download = self._project_download(project)
-        own_folders = (download, self._project_processing(project))
         for image in images:
             self._remove_path(download.joinpath(self._path_name(image.identifier)))
             for recorded in (image.folder_path, image.thumbnail_path):
                 if recorded is None:
                     continue
-                path = Path(recorded)
-                if not any(path.is_relative_to(folder) for folder in own_folders):
-                    self._logger.info(
-                        f"Leaving {path} of image {image.identifier} alone: not "
-                        "under the project's download or processing folder."
-                    )
-                    continue
-                self._remove_path(path)
+                self._remove_own_path(project, Path(recorded), image.identifier)
+
+    def cleanup_image_source(self, project: Project, image: Image, path: Path) -> None:
+        """Remove the files an image was processed from.
+
+        Only under the project's download and processing folders, as
+        :meth:`cleanup_image_files` removes. A source anywhere else, such as a
+        folder the import reads the image from in place, is left as it is.
+
+        Parameters
+        ----------
+        project: Project
+            Project the image belongs to.
+        image: Image
+            Image the files are of.
+        path: Path
+            File or folder the image was processed from.
+        """
+        self._remove_own_path(project, path, image.identifier)
+
+    def _remove_own_path(self, project: Project, path: Path, identifier: str) -> None:
+        """Remove the path if it is under the project's download or processing
+        folder, and leave it as it is otherwise."""
+        own_folders = (
+            self._project_download(project),
+            self._project_processing(project),
+        )
+        if not any(path.is_relative_to(folder) for folder in own_folders):
+            self._logger.info(
+                f"Leaving {path} of image {identifier} alone: not "
+                "under the project's download or processing folder."
+            )
+            return
+        self._remove_path(path)
 
     def store_pseudonyms(self, project: Project, pseudonyms: dict[str, dict[str, Any]]):
         """Store pseudonyms for project."""
