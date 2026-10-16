@@ -224,8 +224,7 @@ class TestSlideTapBatchRouter:
         assert response.status_code == HTTPStatus.CONFLICT
         assert "searching" in response.json()["detail"]
 
-    @pytest.mark.asyncio
-    async def test_delete_batch_is_scheduled(
+    def test_delete_batch_is_scheduled(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -245,11 +244,10 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert response.json() == {"status": "scheduled"}
-        decoy.verify(await scheduler.delete_batch(deleting), times=1)
+        decoy.verify(scheduler.delete_batch(deleting), times=1)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("editable", [True, False])
-    async def test_a_remap_is_only_scheduled_where_the_project_can_be_edited(
+    def test_a_remap_is_only_scheduled_where_the_project_can_be_edited(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -278,12 +276,57 @@ class TestSlideTapBatchRouter:
 
         # Assert
         decoy.verify(
-            await scheduler.remap_batch_attributes(batch.uid),
+            scheduler.remap_batch_attributes(batch.uid),
             times=1 if editable else 0,
         )
 
-    @pytest.mark.asyncio
-    async def test_upload_valid(
+    def test_a_remap_that_cannot_be_scheduled_says_so(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+        scheduler: Scheduler,
+    ):
+        # Arrange
+        batch.status = BatchStatus.METADATA_SEARCH_COMPLETE
+        decoy.when(batch_service.get_optional(batch.uid)).then_return(batch)
+        decoy.when(scheduler.remap_batch_attributes(batch.uid)).then_raise(
+            RuntimeError("queue unavailable")
+        )
+
+        # Act
+        response = test_client.post(f"api/batches/batch/{batch.uid}/remap")
+
+        # Assert
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert "Failed to schedule the remap" in response.json()["detail"]
+
+    def test_a_deletion_that_cannot_be_scheduled_says_so(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+        scheduler: Scheduler,
+    ):
+        # Arrange
+        batch = batch.model_copy(update={"is_default": False})
+        deleting = batch.model_copy(update={"status": BatchStatus.DELETING})
+        decoy.when(batch_service.get_optional(batch.uid)).then_return(batch)
+        decoy.when(batch_service.set_as_deleting(batch.uid)).then_return(deleting)
+        decoy.when(scheduler.delete_batch(deleting)).then_raise(
+            RuntimeError("queue unavailable")
+        )
+
+        # Act
+        response = test_client.delete(f"api/batches/batch/{batch.uid}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert "Failed to schedule the deletion" in response.json()["detail"]
+
+    def test_upload_valid(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -291,9 +334,9 @@ class TestSlideTapBatchRouter:
         metadata_import_service: MetadataImportService,
     ):
         # Arrange
-        decoy.when(
-            await metadata_import_service.search(batch.uid, Anything())
-        ).then_return(batch)
+        decoy.when(metadata_import_service.search(batch.uid, Anything())).then_return(
+            batch
+        )
 
         # Act
         response = test_client.post(
@@ -310,8 +353,7 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
 
-    @pytest.mark.asyncio
-    async def test_upload_to_a_batch_that_cannot_be_searched(
+    def test_upload_to_a_batch_that_cannot_be_searched(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -319,9 +361,9 @@ class TestSlideTapBatchRouter:
         metadata_import_service: MetadataImportService,
     ):
         # Arrange
-        decoy.when(
-            await metadata_import_service.search(batch.uid, Anything())
-        ).then_raise(NotAllowedActionError("Can only search non-started batches"))
+        decoy.when(metadata_import_service.search(batch.uid, Anything())).then_raise(
+            NotAllowedActionError("Can only search non-started batches")
+        )
 
         # Act
         response = test_client.post(
@@ -333,8 +375,7 @@ class TestSlideTapBatchRouter:
         assert response.status_code == HTTPStatus.CONFLICT
         assert "non-started" in response.json()["detail"]
 
-    @pytest.mark.asyncio
-    async def test_upload_of_a_document_that_cannot_be_read(
+    def test_upload_of_a_document_that_cannot_be_read(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -342,9 +383,9 @@ class TestSlideTapBatchRouter:
         metadata_import_service: MetadataImportService,
     ):
         # Arrange
-        decoy.when(
-            await metadata_import_service.search(batch.uid, Anything())
-        ).then_raise(FileParseError("Row 3 gives no Case ID."))
+        decoy.when(metadata_import_service.search(batch.uid, Anything())).then_raise(
+            FileParseError("Row 3 gives no Case ID.")
+        )
 
         # Act
         response = test_client.post(
@@ -356,8 +397,7 @@ class TestSlideTapBatchRouter:
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert "Row 3" in response.json()["detail"]
 
-    @pytest.mark.asyncio
-    async def test_upload_that_fails_for_another_reason_says_nothing_of_it(
+    def test_upload_that_fails_for_another_reason_says_nothing_of_it(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -365,9 +405,9 @@ class TestSlideTapBatchRouter:
         metadata_import_service: MetadataImportService,
     ):
         # Arrange
-        decoy.when(
-            await metadata_import_service.search(batch.uid, Anything())
-        ).then_raise(ValueError("patient 19801231-1234 is not in the cohort"))
+        decoy.when(metadata_import_service.search(batch.uid, Anything())).then_raise(
+            ValueError("patient 19801231-1234 is not in the cohort")
+        )
 
         # Act
         response = test_client.post(
@@ -396,8 +436,7 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    @pytest.mark.asyncio
-    async def test_pre_process_valid(
+    def test_pre_process_valid(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -405,9 +444,9 @@ class TestSlideTapBatchRouter:
         image_pipeline_service: ImagePipelineService,
     ):
         # Arrange
-        decoy.when(
-            await image_pipeline_service.pre_process_batch(batch.uid)
-        ).then_return(batch)
+        decoy.when(image_pipeline_service.pre_process_batch(batch.uid)).then_return(
+            batch
+        )
 
         # Act
         response = test_client.post(f"api/batches/batch/{batch.uid}/pre_process")
@@ -415,8 +454,7 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
 
-    @pytest.mark.asyncio
-    async def test_pre_process_fail(
+    def test_pre_process_fail(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -424,9 +462,7 @@ class TestSlideTapBatchRouter:
     ):
         # Arrange
         uid = uuid4()
-        decoy.when(await image_pipeline_service.pre_process_batch(uid)).then_return(
-            None
-        )
+        decoy.when(image_pipeline_service.pre_process_batch(uid)).then_return(None)
 
         # Act
         response = test_client.post(f"/api/batches/batch/{uid}/pre_process")

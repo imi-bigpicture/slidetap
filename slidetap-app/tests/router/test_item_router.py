@@ -69,7 +69,6 @@ def test_client(
 
 @pytest.mark.unittest
 class TestSlideTapItemRouter:
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("error", "status_code"),
         [
@@ -77,7 +76,7 @@ class TestSlideTapItemRouter:
             (NotFoundError("Image does not exist."), HTTPStatus.NOT_FOUND),
         ],
     )
-    async def test_a_retry_refused_for_one_image_retries_none(
+    def test_a_retry_refused_for_one_image_retries_none(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -99,10 +98,9 @@ class TestSlideTapItemRouter:
 
         # Assert
         assert response.status_code == status_code
-        decoy.verify(await image_pipeline_service.retry(Anything()), times=0)
+        decoy.verify(image_pipeline_service.retry(Anything()), times=0)
 
-    @pytest.mark.asyncio
-    async def test_a_retry_of_images_that_can_be_retried_retries_each(
+    def test_a_retry_of_images_that_can_be_retried_retries_each(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -119,4 +117,4 @@ class TestSlideTapItemRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         for image_uid in image_uids:
-            decoy.verify(await image_pipeline_service.retry(image_uid), times=1)
+            decoy.verify(image_pipeline_service.retry(image_uid), times=1)

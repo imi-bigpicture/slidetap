@@ -14,9 +14,8 @@
 
 import datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-import pytest
 from procrastinate.jobs import Job
 
 from slidetap.model import TaskJobStatus
@@ -45,17 +44,23 @@ def create_task_app(
     """A task app whose queue holds the given jobs and events."""
     task_app = MagicMock()
 
-    async def list_jobs_async(status: str, **_: Any) -> list[Job]:
+    def list_jobs(status: str, **_: Any) -> list[Job]:
         return jobs_by_status.get(status, [])
 
-    task_app.job_manager.list_jobs_async = list_jobs_async
-    task_app.connector.execute_query_all_async = AsyncMock(return_value=time_rows)
+    task_app.job_manager.list_jobs = list_jobs
+    task_app.connector.get_sync_connector.return_value.execute_query_all = MagicMock(
+        return_value=time_rows
+    )
     return task_app
 
 
+def execute_query_all(task_app: MagicMock) -> MagicMock:
+    """The query the task app's sync connector runs the job times with."""
+    return task_app.connector.get_sync_connector.return_value.execute_query_all
+
+
 class TestJobTimes:
-    @pytest.mark.asyncio
-    async def test_a_finished_job_has_its_times(self):
+    def test_a_finished_job_has_its_times(self):
         # Arrange
         task_app = create_task_app(
             {"failed": [create_job(1)]},
@@ -71,7 +76,7 @@ class TestJobTimes:
         service = TaskQueueService(task_app)
 
         # Act
-        jobs = await service.get_jobs(status=TaskJobStatus.FAILED)
+        jobs = service.get_jobs(status=TaskJobStatus.FAILED)
 
         # Assert
         assert len(jobs) == 1
@@ -79,8 +84,7 @@ class TestJobTimes:
         assert jobs[0].started_at == STARTED
         assert jobs[0].finished_at == FINISHED
 
-    @pytest.mark.asyncio
-    async def test_a_job_retried_after_it_finished_is_not_finished(self):
+    def test_a_job_retried_after_it_finished_is_not_finished(self):
         # Arrange — started again after it failed, and running now.
         task_app = create_task_app(
             {"doing": [create_job(1)]},
@@ -96,14 +100,13 @@ class TestJobTimes:
         service = TaskQueueService(task_app)
 
         # Act
-        jobs = await service.get_jobs(status=TaskJobStatus.DOING)
+        jobs = service.get_jobs(status=TaskJobStatus.DOING)
 
         # Assert
         assert jobs[0].started_at == FINISHED + datetime.timedelta(minutes=1)
         assert jobs[0].finished_at is None
 
-    @pytest.mark.asyncio
-    async def test_only_the_jobs_returned_are_looked_up(self):
+    def test_only_the_jobs_returned_are_looked_up(self):
         # Arrange
         task_app = create_task_app(
             {"todo": [create_job(1), create_job(2), create_job(3)]}, []
@@ -111,24 +114,21 @@ class TestJobTimes:
         service = TaskQueueService(task_app)
 
         # Act
-        await service.get_jobs(status=TaskJobStatus.TODO, limit=2)
+        service.get_jobs(status=TaskJobStatus.TODO, limit=2)
 
         # Assert — newest first, so the two highest ids.
-        task_app.connector.execute_query_all_async.assert_awaited_once_with(
+        execute_query_all(task_app).assert_called_once_with(
             JOB_TIMES_QUERY, job_ids=[3, 2]
         )
 
-    @pytest.mark.asyncio
-    async def test_jobs_are_listed_without_times_when_they_cannot_be_read(self):
+    def test_jobs_are_listed_without_times_when_they_cannot_be_read(self):
         # Arrange
         task_app = create_task_app({"todo": [create_job(1)]}, [])
-        task_app.connector.execute_query_all_async = AsyncMock(
-            side_effect=RuntimeError("no such table")
-        )
+        execute_query_all(task_app).side_effect = RuntimeError("no such table")
         service = TaskQueueService(task_app)
 
         # Act
-        jobs = await service.get_jobs(status=TaskJobStatus.TODO)
+        jobs = service.get_jobs(status=TaskJobStatus.TODO)
 
         # Assert
         assert [job.id for job in jobs] == [1]
@@ -136,15 +136,14 @@ class TestJobTimes:
         assert jobs[0].started_at is None
         assert jobs[0].finished_at is None
 
-    @pytest.mark.asyncio
-    async def test_an_empty_queue_is_not_looked_up(self):
+    def test_an_empty_queue_is_not_looked_up(self):
         # Arrange
         task_app = create_task_app({}, [])
         service = TaskQueueService(task_app)
 
         # Act
-        jobs = await service.get_jobs(status=TaskJobStatus.TODO)
+        jobs = service.get_jobs(status=TaskJobStatus.TODO)
 
         # Assert
         assert jobs == []
-        task_app.connector.execute_query_all_async.assert_not_awaited()
+        execute_query_all(task_app).assert_not_called()

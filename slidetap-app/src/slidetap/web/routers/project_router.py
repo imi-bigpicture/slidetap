@@ -144,7 +144,7 @@ def update_project(
 
 
 @project_router.post("/project/{project_uid}/complete")
-async def complete(
+def complete(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     image_pipeline_service: FromDishka[ImagePipelineService],
@@ -174,7 +174,7 @@ async def complete(
         )
     logger.info(f"Storing images of project {project_uid} to outbox.")
     try:
-        await image_pipeline_service.store_project(project_uid)
+        image_pipeline_service.store_project(project_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -183,7 +183,7 @@ async def complete(
 
 
 @project_router.post("/project/{project_uid}/export")
-async def export(
+def export(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
@@ -228,7 +228,7 @@ async def export(
             ),
         )
     try:
-        await metadata_export_service.export(project)
+        metadata_export_service.export(project)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -539,7 +539,7 @@ def get_project_migration(
 
 
 @project_router.post("/project/{project_uid}/migration")
-async def create_project_migration(
+def create_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
     scheduler: FromDishka[Scheduler],
@@ -576,7 +576,7 @@ async def create_project_migration(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     try:
-        await scheduler.plan_migration(project_uid)
+        scheduler.plan_migration(project_uid)
     except Exception as exception:
         # Set as migrating already, and nothing would ever plan it.
         logger.error(f"Failed to start migrating project {project_uid}", exc_info=True)
@@ -632,7 +632,7 @@ def resolve_project_migration_attribute_issue(
 
 
 @project_router.post("/project/{project_uid}/migration/submit")
-async def submit_project_migration(
+def submit_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
     scheduler: FromDishka[Scheduler],
@@ -667,7 +667,7 @@ async def submit_project_migration(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     try:
-        await scheduler.complete_migration(project_uid)
+        scheduler.complete_migration(project_uid)
     except Exception as exception:
         logger.error(
             f"Failed to start completing the migration of project {project_uid}",
@@ -711,7 +711,7 @@ def revert_project_migration(
 
 
 @project_router.delete("/project/{project_uid}")
-async def delete_project(
+def delete_project(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
     scheduler: FromDishka[Scheduler],
@@ -746,7 +746,18 @@ async def delete_project(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     logger.info(f"Scheduling deletion of project {project_uid}.")
-    await scheduler.delete_project(project)
+    try:
+        scheduler.delete_project(project)
+    except Exception as exception:
+        # The project stays marked as deleting, and deleting it again
+        # schedules the deletion again.
+        logger.error(
+            f"Failed to schedule deletion of project {project_uid}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to schedule the deletion, delete the project again",
+        ) from exception
     return StatusResponse(status="scheduled")
 
 

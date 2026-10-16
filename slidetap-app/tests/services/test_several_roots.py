@@ -807,8 +807,7 @@ class TestViewOnlyRoot:
         with sqlite_database_service.get_session() as session:
             assert len(session.scalars(select(DatabaseSample)).all()) == 1
 
-    @pytest.mark.asyncio
-    async def test_search_is_refused(
+    def test_search_is_refused(
         self,
         decoy: Decoy,
         sqlite_database_service: DatabaseService,
@@ -831,7 +830,7 @@ class TestViewOnlyRoot:
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError):
-            await metadata_import_service.search(other.batch_uid, file)
+            metadata_import_service.search(other.batch_uid, file)
         decoy.verify(metadata_import_interface.parse_file(file), times=0)
 
     def test_the_search_task_is_refused(
@@ -872,8 +871,7 @@ class TestViewOnlyRoot:
             batch = sqlite_database_service.get_batch(session, other.batch_uid)
             assert batch.status == BatchStatus.FAILED
 
-    @pytest.mark.asyncio
-    async def test_image_processing_is_refused(
+    def test_image_processing_is_refused(
         self,
         decoy: Decoy,
         sqlite_database_service: DatabaseService,
@@ -891,9 +889,9 @@ class TestViewOnlyRoot:
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError):
-            await image_pipeline_service.pre_process_batch(other.batch_uid)
+            image_pipeline_service.pre_process_batch(other.batch_uid)
         with pytest.raises(ProjectNotEditableError):
-            await image_pipeline_service.export(other.batch_uid)
+            image_pipeline_service.export(other.batch_uid)
         decoy.verify(
             batch_service.set_as_pre_processing(
                 matchers.Anything(), matchers.Anything()
@@ -956,8 +954,7 @@ class TestViewOnlyRoot:
             times=2,
         )
 
-    @pytest.mark.asyncio
-    async def test_export_is_refused(
+    def test_export_is_refused(
         self,
         decoy: Decoy,
         sqlite_database_service: DatabaseService,
@@ -982,9 +979,9 @@ class TestViewOnlyRoot:
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError):
-            await metadata_export_service.export(other.project)
+            metadata_export_service.export(other.project)
         with pytest.raises(ProjectNotEditableError):
-            await image_pipeline_service.store_project(other.project.uid)
+            image_pipeline_service.store_project(other.project.uid)
         decoy.verify(project_service.set_as_exporting(other.project), times=0)
 
     def test_the_export_tasks_are_refused(

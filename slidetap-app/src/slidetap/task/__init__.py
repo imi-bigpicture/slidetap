@@ -27,10 +27,11 @@ still available for ad-hoc runs.
 """
 
 from slidetap.task.app_factory import SlideTapTaskAppFactory
-from slidetap.task.scheduler import Scheduler
+from slidetap.task.scheduler import DeferError, Scheduler
 from slidetap.task.service_provider import ProcrastinateAppProvider, TaskAppProvider
 
 __all__ = [
+    "DeferError",
     "ProcrastinateAppProvider",
     "Scheduler",
     "SlideTapTaskAppFactory",

@@ -13,13 +13,19 @@
 #    limitations under the License.
 
 import logging
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from functools import partial
 from uuid import UUID
 
-from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus, NotFoundError
+from slidetap.model import (
+    Batch,
+    BatchStatus,
+    ImageSchema,
+    ImageStatus,
+    NotFoundError,
+)
 from slidetap.services import BatchService, DatabaseService, SchemaService
-from slidetap.task import Scheduler
+from slidetap.task import DeferError, Scheduler
 
 
 class ImagePipelineService:
@@ -64,20 +70,23 @@ class ImagePipelineService:
                     raise NotFoundError(f"Image {image_uid} does not exist.")
                 self._schema_service.assert_can_change(image, session)
 
-    async def retry(self, image_uid: UUID) -> None:
+    def retry(self, image_uid: UUID) -> None:
         """Retry processing for a single failed image.
 
         Only acts on terminal-failure statuses (``*_FAILED``). Images in
         an in-progress state (``DOWNLOADING`` / ``PRE_PROCESSING`` /
-        ``POST_PROCESSING`` / ``STORING``) are left alone — Procrastinate's
+        ``POST_PROCESSING`` / ``STORING``) are left alone, as Procrastinate's
         stalled-job recovery handles those (see
         :func:`slidetap.task.tasks.retry_stalled_jobs`).
 
         An image that failed to store is stored by storing its batch again, as
         storing is done for a batch at a time. The batch is still storing, as it
         is not completed while an image it stores has failed to store.
+
+        A retry that cannot be queued sets the image back to the status it
+        failed with, with why, so that it can be retried again.
         """
-        retry_action: Callable[[], Awaitable[None]] | None = None
+        retry_action: Callable[[], None]
 
         with self._database_service.get_session() as session:
             image = self._database_service.get_image(session, image_uid)
@@ -85,6 +94,7 @@ class ImagePipelineService:
                 raise ValueError(f"Image {image_uid} does not exist.")
             # Storing is exporting the image, and the rest is processing it.
             self._schema_service.assert_can_change(image, session)
+            failed_status = image.status
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")
@@ -111,10 +121,21 @@ class ImagePipelineService:
             else:
                 return
 
-        await retry_action()
+        try:
+            retry_action()
+        except Exception as exception:
+            self._logger.error(
+                f"Failed to queue retry of image {image_uid}", exc_info=True
+            )
+            self._fail_images({image_uid: exception}, failed_status)
 
-    async def pre_process_batch(self, batch_uid: UUID) -> Batch | None:
-        """Pre-process a batch."""
+    def pre_process_batch(self, batch_uid: UUID) -> Batch | None:
+        """Pre-process a batch.
+
+        An image whose task cannot be queued is set as failed to download, to be
+        retried as any image that failed is. The batch is finished once no image
+        is on its way, which for a batch without images is at once.
+        """
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_optional_batch(
                 session, batch_uid
@@ -136,11 +157,20 @@ class ImagePipelineService:
             )
             image_uids = self._image_uids_in_batch(batch.uid, image_schema)
             if image_uids:
-                await self._scheduler.pre_process_images(image_uids)
-        return batch
+                try:
+                    self._scheduler.pre_process_images(image_uids)
+                except DeferError as error:
+                    self._fail_images(error.failures, ImageStatus.DOWNLOADING_FAILED)
+        self._batch_service.finish_pre_processing_if_settled(batch.uid)
+        return self._batch_service.get(batch.uid)
 
-    async def export(self, batch_uid: UUID) -> Batch | None:
-        """Post-process a batch (export)."""
+    def export(self, batch_uid: UUID) -> Batch | None:
+        """Post-process a batch (export).
+
+        An image whose task cannot be queued is set as failed to post-process,
+        to be retried as any image that failed is. The batch is finished once no
+        image is on its way, which for a batch without images is at once.
+        """
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
             self._schema_service.assert_can_change(database_batch, session)
@@ -159,28 +189,67 @@ class ImagePipelineService:
             )
             image_uids = self._image_uids_in_batch(batch.uid, image_schema)
             if image_uids:
-                await self._scheduler.post_process_images(image_uids)
-        return batch
+                try:
+                    self._scheduler.post_process_images(image_uids)
+                except DeferError as error:
+                    self._fail_images(
+                        error.failures, ImageStatus.POST_PROCESSING_FAILED
+                    )
+        self._batch_service.finish_post_processing_if_settled(batch.uid)
+        return self._batch_service.get(batch.uid)
 
-    async def store_project(self, project_uid: UUID) -> None:
+    def store_project(self, project_uid: UUID) -> None:
         """Write every curated batch of a project to the outbox.
 
         Storing waits for the project rather than following each batch, so that
         a batch reopened until then leaves nothing behind in a bundle that has
         been handed over. A batch already storing is stored again, which is how
         an attempt that failed part-way is resumed.
+
+        Every batch is tried. A batch whose storing cannot be queued is left
+        storing, to be stored by completing the project again, and raises once
+        the other batches are queued.
         """
         with self._database_service.get_session() as session:
             self._schema_service.assert_can_change(
                 self._database_service.get_project(session, project_uid), session
             )
+        failures: dict[UUID, Exception] = {}
         for batch in self._batch_service.get_all(project_uid=project_uid):
             if batch.status in (
                 BatchStatus.LOCKED,
                 BatchStatus.IMAGE_STORING,
             ):
                 stored = self._batch_service.set_as_storing(batch.uid)
-                await self._scheduler.store_images_in_batch(stored)
+                try:
+                    self._scheduler.store_images_in_batch(stored)
+                except Exception as exception:
+                    self._logger.error(
+                        f"Failed to queue storing of batch {batch.uid}", exc_info=True
+                    )
+                    failures[batch.uid] = exception
+        if failures:
+            batch_uid, exception = next(iter(failures.items()))
+            raise RuntimeError(
+                f"Failed to queue storing of {len(failures)} batch(es), "
+                f"batch {batch_uid}: {exception}"
+            ) from exception
+
+    def _fail_images(
+        self, failures: Mapping[UUID, BaseException], status: ImageStatus
+    ) -> None:
+        """Set images whose task could not be queued as failed, with why.
+
+        Set as failed rather than left waiting for a task that does not exist,
+        so that the batch can settle around them and they can be retried.
+        """
+        with self._database_service.get_session() as session:
+            for image_uid, exception in failures.items():
+                image = self._database_service.get_optional_image(session, image_uid)
+                if image is None:
+                    continue
+                image.status = status
+                image.set_status_message(f"Failed to queue processing: {exception}")
 
     def _image_uids_in_batch(
         self, batch_uid: UUID, image_schema: ImageSchema

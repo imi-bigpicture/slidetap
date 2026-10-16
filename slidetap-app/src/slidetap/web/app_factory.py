@@ -100,11 +100,17 @@ class SlideTapWebAppFactory:
             # migrations do not match the database refuses to start.
             await container.get(SchemaService)
 
+            # Opened synchronously: the routes defer tasks from worker threads,
+            # through the sync pool this opens, and an async pool bound to this
+            # event loop cannot be used from them.
             task_app = await container.get(TaskApp)
-            async with task_app.open_async():
+            task_app.open()
+            try:
                 logger.info("SlideTap FastAPI app started.")
                 yield
                 logger.info("Shutting down SlideTap FastAPI app.")
+            finally:
+                task_app.close()
 
             image_cache = await container.get(ImageCache)
             image_cache.close()

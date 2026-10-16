@@ -17,6 +17,7 @@ run again, and what the scheduler does when a task cannot be deferred."""
 
 import datetime
 from collections.abc import Callable, Iterator
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -53,6 +54,8 @@ from slidetap.services import (
     StorageService,
     ValidationService,
 )
+from slidetap.task import DeferError, Scheduler
+from slidetap.task import scheduler as scheduler_module
 from slidetap.task.tasks import (
     delete_batch,
     delete_project,
@@ -336,3 +339,54 @@ class TestProcessMetadataImportRunAgain:
         with sqlite_database_service.get_session() as session:
             batch = sqlite_database_service.get_batch(session, stored.batch_uid)
             assert batch.status == BatchStatus.METADATA_SEARCH_COMPLETE
+
+
+class FakeTask:
+    """A task whose deferring fails for the image uids it is given."""
+
+    name = "fake_task"
+
+    def __init__(self, failing: set[str]):
+        self._failing = failing
+        self.deferred: list[str] = []
+
+    def configure(self, **options: Any) -> "FakeTask":
+        return self
+
+    def defer(self, image_uid: str) -> None:
+        self.deferred.append(image_uid)
+        if image_uid in self._failing:
+            raise ConnectionError("Queue unreachable")
+
+
+class TestSchedulerDeferral:
+    def test_a_failure_to_defer_does_not_skip_the_other_images(
+        self, decoy: Decoy, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Arrange
+        image_uids = [uuid4(), uuid4(), uuid4()]
+        task = FakeTask({str(image_uids[1])})
+        monkeypatch.setattr(scheduler_module, "download_and_pre_process_image", task)
+        scheduler = Scheduler(decoy.mock(cls=scheduler_module.TaskApp))
+
+        # Act
+        with pytest.raises(DeferError) as raised:
+            scheduler.pre_process_images(image_uids)
+
+        # Assert
+        assert task.deferred == [str(image_uid) for image_uid in image_uids]
+        assert list(raised.value.failures) == [image_uids[1]]
+
+    def test_a_failure_to_defer_one_image_raises(
+        self, decoy: Decoy, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Arrange
+        image_uid = uuid4()
+        task = FakeTask({str(image_uid)})
+        monkeypatch.setattr(scheduler_module, "post_process_image", task)
+        scheduler = Scheduler(decoy.mock(cls=scheduler_module.TaskApp))
+        image = type("ImageStub", (), {"uid": image_uid})()
+
+        # Act & Assert
+        with pytest.raises(ConnectionError):
+            scheduler.post_process_image(image)  # type: ignore[arg-type]

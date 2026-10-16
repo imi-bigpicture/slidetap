@@ -72,7 +72,7 @@ def list_search_items(
 
 
 @metadata_search_router.post("/items/{search_item_uid}/retry")
-async def retry_search_item(
+def retry_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
@@ -85,7 +85,7 @@ async def retry_search_item(
         UID of the FAILED search item to retry.
     """
     try:
-        await metadata_import_service.retry_search_item(search_item_uid)
+        metadata_import_service.retry_search_item(search_item_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)

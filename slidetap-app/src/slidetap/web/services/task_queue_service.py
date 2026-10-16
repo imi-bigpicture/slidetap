@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import asyncio
 import datetime
 import logging
 from collections.abc import Sequence
@@ -80,7 +79,7 @@ class TaskQueueService:
         self._task_app = task_app
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    async def get_jobs(
+    def get_jobs(
         self,
         status: TaskJobStatus | None = None,
         task: str | None = None,
@@ -111,16 +110,13 @@ class TaskQueueService:
         )
         statuses = (status,) if status is not None else UNFINISHED_STATUSES
         # One listing per status, since the job manager takes one at a time.
-        # Together rather than in turn: they are separate queries against the
-        # same pool, and each is bounded by how many jobs are in that status.
-        listings = await asyncio.gather(
-            *(
-                self._task_app.job_manager.list_jobs_async(
-                    status=status_to_list.value, task=task, queue=queue
-                )
-                for status_to_list in statuses
+        # Each is bounded by how many jobs are in that status.
+        listings = [
+            self._task_app.job_manager.list_jobs(
+                status=status_to_list.value, task=task, queue=queue
             )
-        )
+            for status_to_list in statuses
+        ]
         # A job carries no id until it has been deferred, which none of these
         # can be short of — they were read from the queue — but the type allows
         # it, and a made-up id would be worse than leaving one out.
@@ -136,29 +132,23 @@ class TaskQueueService:
         jobs.sort(key=lambda job: job.id, reverse=True)
         jobs = jobs[: min(limit, MAX_JOB_LIMIT)]
         # Read after the cut, so that only the jobs returned are looked up.
-        times = await self._get_job_times([job.id for job in jobs])
+        times = self._get_job_times([job.id for job in jobs])
         return [
             job.model_copy(update=times[job.id]) if job.id in times else job
             for job in jobs
         ]
 
-    async def get_task_counts(self) -> list[TaskCounts]:
+    def get_task_counts(self) -> list[TaskCounts]:
         """Get every task the queue has held, with a count of each status."""
         self._logger.debug("Listing task counts.")
-        return [
-            self._counts(row)
-            for row in await self._task_app.job_manager.list_tasks_async()
-        ]
+        return [self._counts(row) for row in self._task_app.job_manager.list_tasks()]
 
-    async def get_queue_counts(self) -> list[TaskCounts]:
+    def get_queue_counts(self) -> list[TaskCounts]:
         """Get every queue, with a count of each status."""
         self._logger.debug("Listing queue counts.")
-        return [
-            self._counts(row)
-            for row in await self._task_app.job_manager.list_queues_async()
-        ]
+        return [self._counts(row) for row in self._task_app.job_manager.list_queues()]
 
-    async def _get_job_times(
+    def _get_job_times(
         self, job_ids: Sequence[int]
     ) -> dict[int, dict[str, datetime.datetime | None]]:
         """When each job was deferred, started and finished, by job id.
@@ -170,7 +160,7 @@ class TaskQueueService:
         if len(job_ids) == 0:
             return {}
         try:
-            rows = await self._task_app.connector.execute_query_all_async(
+            rows = self._task_app.connector.get_sync_connector().execute_query_all(
                 JOB_TIMES_QUERY, job_ids=list(job_ids)
             )
         except Exception:

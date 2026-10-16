@@ -26,7 +26,6 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from starlette.concurrency import run_in_threadpool
 
 from slidetap.model import (
     AnyItem,
@@ -809,7 +808,7 @@ def move_attribute(
 
 
 @item_router.post("/retry")
-async def retry(
+def retry(
     image_uids: list[UUID],
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
@@ -826,14 +825,14 @@ async def retry(
     """
     logger.debug(f"Retry images {image_uids}.")
     try:
-        await run_in_threadpool(image_pipeline_service.assert_can_retry, image_uids)
+        image_pipeline_service.assert_can_retry(image_uids)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     for image_uid in image_uids:
         try:
-            await image_pipeline_service.retry(image_uid)
+            image_pipeline_service.retry(image_uid)
         except NotAllowedActionError as exception:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT, detail=str(exception)

@@ -85,8 +85,7 @@ def image_pipeline_service(
 
 @pytest.mark.unittest
 class TestImagePipelineService:
-    @pytest.mark.asyncio
-    async def test_retry_of_storing_failed_image_stores_its_batch_again(
+    def test_retry_of_storing_failed_image_stores_its_batch_again(
         self,
         decoy: Decoy,
         image_pipeline_service: ImagePipelineService,
@@ -103,14 +102,13 @@ class TestImagePipelineService:
         decoy.when(database_image.status).then_return(ImageStatus.STORING_FAILED)
 
         # Act
-        await image_pipeline_service.retry(uuid4())
+        image_pipeline_service.retry(uuid4())
 
         # Assert
         decoy.verify(database_image.reset_as_post_processed(), times=1)
-        decoy.verify(await scheduler.store_images_in_batch(batch), times=1)
+        decoy.verify(scheduler.store_images_in_batch(batch), times=1)
 
-    @pytest.mark.asyncio
-    async def test_retry_of_storing_image_is_not_retried(
+    def test_retry_of_storing_image_is_not_retried(
         self,
         decoy: Decoy,
         image_pipeline_service: ImagePipelineService,
@@ -127,8 +125,8 @@ class TestImagePipelineService:
         decoy.when(database_image.status).then_return(ImageStatus.STORING)
 
         # Act
-        await image_pipeline_service.retry(uuid4())
+        image_pipeline_service.retry(uuid4())
 
         # Assert
         decoy.verify(database_image.reset_as_post_processed(), times=0)
-        decoy.verify(await scheduler.store_images_in_batch(batch), times=0)
+        decoy.verify(scheduler.store_images_in_batch(batch), times=0)
