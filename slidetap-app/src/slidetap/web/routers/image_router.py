@@ -23,6 +23,7 @@ from dishka.integrations.fastapi import (
     FromDishka,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from wsidicom.errors import WsiDicomNotFoundError, WsiDicomOutOfBoundsError
 
 from slidetap.model import Dzi, Image
 from slidetap.services import ImageService
@@ -59,13 +60,7 @@ def get_thumbnails(
     Iterable[Image]
         List of images that have thumbnails.
     """
-    images = image_service.get_images_with_thumbnail(dataset_uid, batch_uid)
-    if images is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"No images found for dataset {dataset_uid}",
-        )
-    return images
+    return image_service.get_images_with_thumbnail(dataset_uid, batch_uid)
 
 
 @image_router.get("/image/{image_uid}/thumbnail")
@@ -100,7 +95,30 @@ def get_thumbnail(
     return Response(content=thumbnail, media_type="image/png")
 
 
-@image_router.get("/image/{image_uid}/dzi/{dzi_level}/{x}_{y}.{extension}")
+def _read_tile(
+    image_service: ImageService,
+    image_uid: UUID,
+    dzi_level: int,
+    x: int,
+    y: int,
+    extension: str,
+    z: int | None,
+) -> Response:
+    """Read a tile, answering not found for an image without files to read
+    and for a tile outside the image."""
+    try:
+        tile = image_service.get_tile(image_uid, dzi_level, x, y, extension, z)
+    except (ValueError, WsiDicomNotFoundError, WsiDicomOutOfBoundsError) as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Tile not found for image {image_uid}",
+        ) from exception
+    return Response(content=tile, media_type="image/jpeg")
+
+
+# The coordinates are matched as integers, so that a 3D tile name such as
+# ``1_2_3.jpeg`` does not also match the 2D route with ``x`` as ``1_2``.
+@image_router.get("/image/{image_uid}/dzi/{dzi_level}/{x:int}_{y:int}.{extension}")
 def get_tile_2d(
     image_uid: UUID,
     dzi_level: int,
@@ -129,16 +147,12 @@ def get_tile_2d(
     Response
         Response with tile as bytes.
     """
-    tile = image_service.get_tile(image_uid, dzi_level, x, y, extension, None)
-    if tile is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Tile not found for image {image_uid}",
-        )
-    return Response(content=tile, media_type="image/jpeg")
+    return _read_tile(image_service, image_uid, dzi_level, x, y, extension, None)
 
 
-@image_router.get("/image/{image_uid}/dzi/{dzi_level}/{x}_{y}_{z}.{extension}")
+@image_router.get(
+    "/image/{image_uid}/dzi/{dzi_level}/{x:int}_{y:int}_{z:int}.{extension}"
+)
 def get_tile_3d(
     image_uid: UUID,
     dzi_level: int,
@@ -170,13 +184,7 @@ def get_tile_3d(
     Response
         Response with tile as bytes.
     """
-    tile = image_service.get_tile(image_uid, dzi_level, x, y, extension, z)
-    if tile is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Tile not found for image {image_uid}",
-        )
-    return Response(content=tile, media_type="image/jpeg")
+    return _read_tile(image_service, image_uid, dzi_level, x, y, extension, z)
 
 
 @image_router.get("/image/{image_uid}/dzi")
@@ -198,10 +206,11 @@ def get_dzi(
     """
     base_url = "/api/images/image/" + str(image_uid) + "/dzi/"
 
-    dzi = image_service.get_dzi(image_uid, base_url)
-    if dzi is None:
+    try:
+        return image_service.get_dzi(image_uid, base_url)
+    except ValueError as exception:
+        # The image has no files to read.
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"DZI metadata not found for image {image_uid}",
-        )
-    return dzi
+        ) from exception

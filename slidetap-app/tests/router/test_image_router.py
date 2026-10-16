@@ -22,6 +22,7 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from wsidicom.errors import WsiDicomNotFoundError, WsiDicomOutOfBoundsError
 
 from slidetap.services import ImageService
 from slidetap.web.routers import image_router
@@ -78,6 +79,90 @@ class TestSlideTapImageRouter:
             image_service.get_thumbnail(Anything(), Anything(), Anything(), Anything()),
             times=0,
         )
+
+    def test_a_2d_tile_is_read_without_a_focal_plane(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        image_service: ImageService,
+    ):
+        # Arrange
+        image_uid = uuid4()
+        decoy.when(
+            image_service.get_tile(image_uid, 3, 1, 2, "jpeg", None)
+        ).then_return(b"2d tile")
+
+        # Act
+        response = test_client.get(f"api/images/image/{image_uid}/dzi/3/1_2.jpeg")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.content == b"2d tile"
+
+    def test_a_3d_tile_is_read_from_its_focal_plane(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        image_service: ImageService,
+    ):
+        """``1_2_3`` is not taken by the 2D route as an ``x`` of ``1_2``."""
+        # Arrange
+        image_uid = uuid4()
+        decoy.when(image_service.get_tile(image_uid, 3, 1, 2, "jpeg", 5)).then_return(
+            b"3d tile"
+        )
+
+        # Act
+        response = test_client.get(f"api/images/image/{image_uid}/dzi/3/1_2_5.jpeg")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.content == b"3d tile"
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ValueError("Image not found in cache."),
+            WsiDicomOutOfBoundsError("tile", "level"),
+            WsiDicomNotFoundError("level", "pyramid"),
+        ],
+    )
+    def test_a_tile_that_cannot_be_read_is_not_found(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        image_service: ImageService,
+        error: Exception,
+    ):
+        # Arrange
+        image_uid = uuid4()
+        decoy.when(image_service.get_tile(image_uid, 3, 1, 2, "jpeg", None)).then_raise(
+            error
+        )
+
+        # Act
+        response = test_client.get(f"api/images/image/{image_uid}/dzi/3/1_2.jpeg")
+
+        # Assert
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_the_dzi_of_an_image_without_files_is_not_found(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        image_service: ImageService,
+    ):
+        # Arrange
+        image_uid = uuid4()
+        decoy.when(image_service.get_dzi(image_uid, Anything())).then_raise(
+            ValueError("Image not found in cache.")
+        )
+
+        # Act
+        response = test_client.get(f"api/images/image/{image_uid}/dzi")
+
+        # Assert
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
     def test_a_thumbnail_at_the_size_limit_is_made(
         self,
