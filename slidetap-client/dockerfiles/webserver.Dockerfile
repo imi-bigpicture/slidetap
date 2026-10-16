@@ -2,7 +2,7 @@
 # them.
 
 # build stage
-FROM node:24.22.0-alpine3.24 AS build-stage
+FROM node:26.10.0-alpine3.24 AS build-stage
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 WORKDIR /app
@@ -17,7 +17,7 @@ RUN pnpm run build
 # production stage
 # Runs nginx as the unprivileged `nginx` user (uid 101), so the listen port must
 # be above 1024 and the mounted certificate and key readable by that user.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine3.24 AS production-stage
+FROM nginxinc/nginx-unprivileged:1.31.5-alpine3.24 AS production-stage
 COPY --from=build-stage /app/dist /app
 
 COPY ./dockerfiles/nginx.conf /etc/nginx/nginx.conf

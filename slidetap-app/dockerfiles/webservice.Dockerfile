@@ -1,10 +1,10 @@
 # Base images are pinned to exact tags; Dependabot's docker ecosystem bumps
 # them. Build and production use the same Python image, so the interpreter the
 # venv links to exists in production.
-FROM ghcr.io/astral-sh/uv:0.12.21 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
 
 # build stage
-FROM python:3.12.15-slim-trixie AS build
+FROM python:3.14.7-slim-trixie AS build
 
 COPY --from=uv /uv /usr/local/bin/uv
 
@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
   uv sync --frozen --no-dev --package slidetap-example --extra web
 
 # production stage
-FROM python:3.12.15-slim-trixie AS production
+FROM python:3.14.7-slim-trixie AS production
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
