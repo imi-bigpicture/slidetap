@@ -26,6 +26,7 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from slidetap.model import (
     AnyItem,
@@ -815,12 +816,21 @@ async def retry(
 ) -> None:
     """Retry processing for failed or stuck images.
 
+    Every image is checked before any is retried, so that a refusal (409, or
+    404 for an image that does not exist) leaves all of them as they were.
+
     Parameters
     ----------
     image_uids: list[UUID]
         List of image UIDs to retry
     """
     logger.debug(f"Retry images {image_uids}.")
+    try:
+        await run_in_threadpool(image_pipeline_service.assert_can_retry, image_uids)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     for image_uid in image_uids:
         try:
             await image_pipeline_service.retry(image_uid)

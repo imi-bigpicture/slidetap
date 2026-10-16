@@ -13,11 +13,11 @@
 #    limitations under the License.
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from functools import partial
 from uuid import UUID
 
-from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus
+from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus, NotFoundError
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
 
@@ -43,6 +43,26 @@ class ImagePipelineService:
         self._schema_service = schema_service
         self._database_service = database_service
         self._logger = logging.getLogger(__name__)
+
+    def assert_can_retry(self, image_uids: Iterable[UUID]) -> None:
+        """Refuse retrying images unless every one of them can be retried.
+
+        Checked for all the images before any is retried, so that a refusal
+        leaves every image as it was rather than some of them queued.
+
+        Raises
+        ------
+        NotFoundError
+            If an image does not exist.
+        NotAllowedActionError
+            If the project of an image cannot be changed.
+        """
+        with self._database_service.get_session() as session:
+            for image_uid in image_uids:
+                image = self._database_service.get_optional_image(session, image_uid)
+                if image is None:
+                    raise NotFoundError(f"Image {image_uid} does not exist.")
+                self._schema_service.assert_can_change(image, session)
 
     async def retry(self, image_uid: UUID) -> None:
         """Retry processing for a single failed image.
