@@ -176,30 +176,6 @@ export function ImageTable({
         // any column it does not know.
         sortable: false,
       },
-      {
-        id: 'lastHeartbeatAt',
-        header: 'Last heartbeat',
-        accessorKey: 'lastHeartbeatAt',
-        sortable: false,
-        Cell: ({ value }) => {
-          const at = value as string | null
-          if (at == null) {
-            return ''
-          }
-          const date = new Date(at)
-          const elapsedSec = Math.max(
-            0,
-            Math.round((Date.now() - date.getTime()) / 1000),
-          )
-          const label =
-            elapsedSec < 60
-              ? `${elapsedSec}s ago`
-              : elapsedSec < 3600
-                ? `${Math.round(elapsedSec / 60)}m ago`
-                : `${Math.round(elapsedSec / 3600)}h ago`
-          return <span title={date.toLocaleString()}>{label}</span>
-        },
-      },
     ],
     [pseudonymMode],
   )

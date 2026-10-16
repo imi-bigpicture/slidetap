@@ -21,15 +21,18 @@ export interface Item {
   uid: string
   identifier: string
   name: string | null
+  externalIdentifier: string | null
   pseudonym: string | null
   selected: boolean
-  valid: boolean
+  /** Null where the item has not been validated yet. */
+  valid: boolean | null
   /** Whether the only thing the item is short of is what the import has not
    * delivered yet. Not stored: it holds until the batch has fetched what it is
    * waiting for, and is said by whatever draws the row. */
   pending: boolean
-  validAttributes: boolean
-  validRelations: boolean
+  validAttributes: boolean | null
+  validRelations: boolean | null
+  validPseudonym: boolean | null
   attributes: Record<string, Attribute<AttributeValueTypes>>
   privateAttributes: Record<string, Attribute<AttributeValueTypes>>
   tags: string[]
@@ -40,13 +43,11 @@ export interface Item {
   lastSaved: string | null
   datasetUid: string
   batchUid: string | null
-  schemaDisplayName: string
   schemaUid: string
   itemValueType: ItemValueType
 }
 
 export interface Observation extends Item {
-  item: [string, string] | null
   sample: [string, string] | null
   image: [string, string] | null
   annotation: [string, string] | null
@@ -72,11 +73,8 @@ export enum ImageFormat {
 }
 
 export interface Image extends Item {
-  external_identifier: string | null
   status: ImageStatus
-  statusMessage: string
-  processingStartedAt: string | null
-  lastHeartbeatAt: string | null
+  statusMessage: string | null
   files: ImageFile[]
   samples: Record<string, string[]>
   annotations: Record<string, string[]>

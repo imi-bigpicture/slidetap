@@ -632,7 +632,8 @@ export default function DisplayItemDetails({
                     />
                     <ChipDivider
                       label="Relations"
-                      color={item.validRelations ? 'default' : 'error'}
+                      // Null until validated, which is not shown as an error.
+                      color={item.validRelations === false ? 'error' : 'default'}
                     />
 
                     <ItemLinkage
@@ -656,7 +657,7 @@ export default function DisplayItemDetails({
                       <React.Fragment>
                         <ChipDivider
                           label="Attributes"
-                          color={item.validAttributes ? 'default' : 'error'}
+                          color={item.validAttributes === false ? 'error' : 'default'}
                         />
                         <AttributeDetails
                           schemas={itemSchema.attributes}
