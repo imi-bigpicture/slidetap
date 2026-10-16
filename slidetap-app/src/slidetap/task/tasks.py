@@ -776,6 +776,7 @@ def remap_dataset_attributes(
     name="delete_batch",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def delete_batch(
@@ -783,14 +784,16 @@ def delete_batch(
     batch_service: FromDishka[BatchService],
     database_service: FromDishka[DatabaseService],
     storage_service: FromDishka[StorageService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Delete a batch marked as deleting, rows first and then files.
 
     Idempotent under redelivery: the rows go in one transaction, so a run
     that was cut short left the batch as it was, still marked, and a run
-    after one that finished finds no batch to delete. A delete that fails
-    marks the batch as failed with the reason, and marking it as deleting
-    again reruns it.
+    after one that finished finds no batch to delete. A delete that fails,
+    including one whose transient failure is not going to be retried, marks
+    the batch as failed with the reason, and marking it as deleting again
+    reruns it.
 
     The files go after the commit, so that a worker dying part-way leaves
     files without rows, which is only disk, rather than rows without files.
@@ -812,9 +815,9 @@ def delete_batch(
     logger.info(f"Deleting batch {batch_uid}")
     try:
         image_paths = batch_service.delete(batch_uid)
-    except TransientTaskError:
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            raise
         logger.error(f"Failed to delete batch {batch_uid}", exc_info=True)
         batch_service.set_as_failed(batch_uid, message=f"Delete failed: {exception}")
         return
@@ -829,17 +832,20 @@ def delete_batch(
     name="delete_project",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def delete_project(
     project_uid: UUID | str,
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Delete a project marked as deleting, with everything it holds.
 
-    Idempotent the same way as :func:`delete_batch`. A delete that fails
-    marks the project as failed, and marking it as deleting again reruns it.
+    Idempotent the same way as :func:`delete_batch`. A delete that fails,
+    including one whose transient failure is not going to be retried, marks
+    the project as failed, and marking it as deleting again reruns it.
     """
     if isinstance(project_uid, str):
         project_uid = UUID(project_uid)
@@ -857,9 +863,9 @@ def delete_project(
     logger.info(f"Deleting project {project_uid}")
     try:
         project_service.delete(project_uid)
-    except TransientTaskError:
-        raise
     except Exception as exception:
+        if will_retry(exception):
+            raise
         logger.error(f"Failed to delete project {project_uid}", exc_info=True)
         project_service.set_as_failed(
             project_uid, message=f"Delete failed: {exception}"
@@ -871,6 +877,7 @@ def delete_project(
     name="process_metadata_export",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
     retry=_TRANSIENT_RETRY,
 )
 def process_metadata_export(
@@ -879,7 +886,14 @@ def process_metadata_export(
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
     schema_service: FromDishka[SchemaService],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
+    """Export the metadata of a project that is exporting.
+
+    An export that fails, including one whose transient failure is not going
+    to be retried, sets the project back as completed, so that it can be
+    exported again.
+    """
     if isinstance(project_id, str):
         project_id = UUID(project_id)
     logger.info(f"Exporting metadata for project {project_id}")
@@ -897,9 +911,9 @@ def process_metadata_export(
                 database_project.model, database_project.dataset.model
             )
             project_service.set_as_export_complete(database_project, session)
-        except TransientTaskError:
-            raise
-        except Exception:
+        except Exception as exception:
+            if will_retry(exception):
+                raise
             logger.error(
                 f"Failed to export metadata for project {project_id}", exc_info=True
             )
