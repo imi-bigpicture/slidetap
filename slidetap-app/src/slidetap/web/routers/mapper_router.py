@@ -53,6 +53,17 @@ mapper_router = APIRouter(
 )
 
 
+def _validate_expression(expression: str) -> None:
+    """Refuse, as a bad request, a mapping expression that cannot be matched
+    safely, saying why."""
+    try:
+        MapperService.validate_expression(expression)
+    except ValueError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+
+
 @mapper_router.post("/create")
 def create_mapper(
     mapper: MapperCreate,
@@ -268,6 +279,7 @@ def create_mapping(
         Created mapping
     """
     logger.debug("Creating mapping.")
+    _validate_expression(mapping.expression)
     created_mapping = mapper_service.create_mapping(mapping)
     return created_mapping
 
@@ -324,6 +336,7 @@ def update_mapping(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=f"Mapping uid {mapping.uid} does not match path uid {mapping_uid}",
         )
+    _validate_expression(mapping.expression)
     updated_mapping = mapper_service.update_mapping(mapping)
     return updated_mapping
 
