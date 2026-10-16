@@ -75,3 +75,7 @@ class FileOperations:
     def make_folder(self, path: Path) -> None:
         """Create folder, and any missing parents of it."""
         path.mkdir(parents=True, exist_ok=True)
+
+    def list_files(self, folder: Path) -> list[Path]:
+        """Files in folder and its subfolders, in sorted order."""
+        return sorted(path for path in folder.rglob("*") if path.is_file())

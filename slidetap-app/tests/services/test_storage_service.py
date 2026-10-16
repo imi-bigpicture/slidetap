@@ -314,6 +314,58 @@ class TestStorageService:
         assert processed_image.folder_path == str(image_destination)
         decoy.verify(file_operations.rename(source_folder, Anything()), times=0)
 
+    def test_recover_stored_image_takes_files_from_where_it_was_stored(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        dataset: Dataset,
+        processed_image: Image,
+        image_destination: Path,
+    ) -> None:
+        """An image stored but not recorded is taken up as it was stored."""
+        # Arrange
+        source_folder = Path(processed_image.folder_path)
+        decoy.when(file_operations.exists(source_folder)).then_return(False)
+        decoy.when(file_operations.list_files(image_destination)).then_return(
+            [image_destination.joinpath("a.dcm"), image_destination.joinpath("b.dcm")]
+        )
+        processed_image.metadata_digest = "digest"
+
+        # Act
+        recovered = storage_service.recover_stored_image(
+            project, processed_image, dataset
+        )
+
+        # Assert
+        assert recovered
+        assert processed_image.folder_path == str(image_destination)
+        assert [file.filename for file in processed_image.files] == ["a.dcm", "b.dcm"]
+        assert processed_image.metadata_digest is None
+
+    def test_recover_stored_image_leaves_image_still_on_record(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        dataset: Dataset,
+        processed_image: Image,
+    ) -> None:
+        # Arrange
+        folder_path = processed_image.folder_path
+
+        # Act
+        recovered = storage_service.recover_stored_image(
+            project, processed_image, dataset
+        )
+
+        # Assert
+        assert not recovered
+        assert processed_image.folder_path == folder_path
+        decoy.verify(file_operations.rename(Anything(), Anything()), times=0)
+
     def test_store_image_to_outbox_of_unreachable_image_raises_transient_error(
         self,
         decoy: Decoy,

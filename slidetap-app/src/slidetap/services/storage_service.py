@@ -28,7 +28,7 @@ from uuid import UUID, uuid4
 from slidetap.config import StorageConfig
 from slidetap.database import DatabaseDataset, DatabaseProject
 from slidetap.external_interfaces.exceptions import TransientTaskError
-from slidetap.model import Dataset, Image, Project
+from slidetap.model import Dataset, Image, ImageFile, Project
 from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.file_operations import FileOperations
 
@@ -413,6 +413,52 @@ class StorageService:
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
+
+    def recover_stored_image(
+        self, project: Project, image: Image, dataset: Dataset
+    ) -> bool:
+        """Take up an image stored by an attempt that did not get to record it.
+
+        An image whose folder is no longer where it is on record was moved or
+        written to the outbox by such an attempt. It is moved as it is, which
+        finds it already stored and updates its paths, and its files are taken
+        from the folder it was stored in. What the stored files say is not
+        known, so the metadata digest is cleared to count it as changed.
+
+        Parameters
+        ----------
+        project: Project
+            Project the image belongs to.
+        image: Image
+            Image to recover.
+        dataset: Dataset
+            Dataset the image is bundled in.
+
+        Returns
+        -------
+        bool
+            True if the image was recovered, False if its folder is still where
+            it is on record and it is to be stored as usual.
+
+        Raises
+        ------
+        TransientTaskError
+            If the image can be found neither where it is on record nor in the
+            outbox.
+        """
+        if image.folder_path is None or self._file_operations.exists(
+            Path(image.folder_path)
+        ):
+            return False
+        self.store_image_to_outbox(project, image, dataset)
+        if image.folder_path is not None:
+            stored = Path(image.folder_path)
+            image.files = [
+                ImageFile(uid=uuid4(), filename=str(file.relative_to(stored)))
+                for file in self._file_operations.list_files(stored)
+            ]
+        image.metadata_digest = None
+        return True
 
     def store_image_to_outbox(
         self, project: Project, image: Image, dataset: Dataset
