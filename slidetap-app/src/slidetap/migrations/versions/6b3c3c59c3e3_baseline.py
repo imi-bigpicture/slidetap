@@ -369,3 +369,14 @@ def downgrade() -> None:
     op.drop_table('mapper_group')
     op.drop_index(op.f('ix_dataset_schema_uid'), table_name='dataset')
     op.drop_table('dataset')
+    # Postgres keeps the enum types after their tables are dropped.
+    for enum_name in (
+        'projectstatus',
+        'batchstatus',
+        'itemvaluetype',
+        'attributevaluetype',
+        'imagestatus',
+        'imageformat',
+        'metadataimportstatus',
+    ):
+        sa.Enum(name=enum_name).drop(op.get_bind(), checkfirst=True)
