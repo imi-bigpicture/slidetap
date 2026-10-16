@@ -561,3 +561,92 @@ class TestStorageFolder:
         # Assert
         assert storage_service.project_bundle(project, stored_dataset) == claimed
         assert storage_service.dataset_folder(stored_dataset) == "BP-dataset_name"
+
+
+@pytest.mark.unittest
+class TestPathSafety:
+    """Names from outside SlideTap never reach outside the storage folders."""
+
+    @pytest.mark.parametrize(
+        ["name", "expected"],
+        [
+            ("image identifier", "image identifier"),
+            ("A.1", "A.1"),
+            ("../../etc", ".._.._etc"),
+            ("/srv/data", "_srv_data"),
+            ("..\\..\\windows", ".._.._windows"),
+        ],
+    )
+    def test_path_name_is_a_single_name(self, name: str, expected: str):
+        assert StorageService._path_name(name) == expected
+
+    @pytest.mark.parametrize("name", ["", " ", ".", ".."])
+    def test_path_name_without_a_name_of_its_own_is_refused(self, name: str):
+        with pytest.raises(ValueError):
+            StorageService._path_name(name)
+
+    def test_project_folder_name_cannot_leave_the_outbox(self):
+        # Arrange
+        uid = uuid4()
+
+        # Act
+        folder = StorageService._project_folder_name("../../escape", uid)
+
+        # Assert
+        assert folder == f".._.._escape.{uid}"
+
+    def test_download_path_of_traversing_identifier_stays_in_project(
+        self,
+        storage_service: StorageService,
+        project: Project,
+        image: Image,
+        config: StorageConfig,
+    ):
+        # Arrange
+        image.identifier = "../../../outside"
+
+        # Act
+        folder = storage_service.create_download_image_path(project, image)
+
+        # Assert
+        assert folder.parent == config.download.joinpath(project.storage_folder)
+
+    def test_cleanup_of_traversing_identifier_removes_only_inside_download(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        image: Image,
+        config: StorageConfig,
+    ):
+        # Arrange
+        image.identifier = "../.."
+        removed = Captor()
+
+        # Act
+        storage_service.cleanup_download_image_path(project, image)
+
+        # Assert
+        decoy.verify(file_operations.remove(removed), times=1)
+        assert removed.value == config.download.joinpath(
+            project.storage_folder, ".._.."
+        )
+
+    @pytest.mark.parametrize("outside", ["outside", "storage"])
+    def test_remove_refuses_paths_not_inside_storage(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        config: StorageConfig,
+        outside: str,
+    ):
+        # Arrange
+        path = config.outbox.parent.joinpath(outside)
+
+        # Act
+        storage_service._remove_path(path)
+
+        # Assert
+        decoy.verify(file_operations.remove(Anything()), times=0)
