@@ -133,12 +133,20 @@ export default function Curate({
     ItemDetailAction.EDIT,
   )
 
-  useEffect(() => {
-    const openItem = searchParams.get('openItem')
+  // An item the address asks to open is opened as soon as the address names it,
+  // and then taken off the address.
+  const openItem = searchParams.get('openItem')
+  const [addressedOpenItem, setAddressedOpenItem] = useState<string | null>(null)
+  if (openItem !== addressedOpenItem) {
+    setAddressedOpenItem(openItem)
     if (openItem) {
       setItemDetailUid(openItem)
       setItemDetailAction(ItemDetailAction.EDIT)
       setItemDetailsOpen(true)
+    }
+  }
+  useEffect(() => {
+    if (searchParams.get('openItem')) {
       const next = new URLSearchParams(searchParams)
       next.delete('openItem')
       setSearchParams(next, { replace: true })

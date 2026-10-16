@@ -65,12 +65,12 @@ export function useSessionManagement(): SessionManagementState {
     retry: 1,
   })
 
-  // Update session expiration when query data changes
-  useEffect(() => {
-    if (sessionQuery.data?.exp) {
-      setSessionExpiration(sessionQuery.data.exp)
-    }
-  }, [sessionQuery.data])
+  // Follow the expiration the session status gives, keeping the last one known
+  // while there is none
+  const latestExpiration = sessionQuery.data?.exp
+  if (latestExpiration && latestExpiration !== sessionExpiration) {
+    setSessionExpiration(latestExpiration)
+  }
 
   // Update time remaining every second
   useEffect(() => {

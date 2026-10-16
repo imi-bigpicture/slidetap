@@ -315,25 +315,6 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     return panel.layout.displayName
   }, [])
 
-  // One callback per panel, kept: a panel reports its edit state from an
-  // effect that watches the callback, so handing it a new one every render
-  // would have the report cause the render that causes the next report.
-  const editReporters = useMemo(
-    () => new Map<string, (state: OverviewEditState) => void>(),
-    [],
-  )
-  const editReporter = (key: string): ((state: OverviewEditState) => void) => {
-    const known = editReporters.get(key)
-    if (known !== undefined) {
-      return known
-    }
-    const reporter = (state: OverviewEditState): void => {
-      setEditStates((previous) => ({ ...previous, [key]: state }))
-    }
-    editReporters.set(key, reporter)
-    return reporter
-  }
-
   // Only the panels of the tab being shown: the others are unmounted, and what
   // they last reported says nothing about what is on screen.
   const edits = Object.entries(editStates)
@@ -366,28 +347,45 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
 
   // Of whatever is being reviewed right now: a queue holding more than one
   // kind of item is shown by whichever layout that kind has.
-  const tabs = tabsFor(current?.schemaUid)
+  // Kept, so that the callbacks built from its panels below can be too.
+  const currentSchemaUid = current?.schemaUid
+  const tabs = useMemo(() => tabsFor(currentSchemaUid), [tabsFor, currentSchemaUid])
   // Kept in range when stepping from one kind to another, which need not have
   // the same tabs.
   const shownTabIndex = Math.min(tabIndex, Math.max(tabs.length - 1, 0))
   const tab = tabs[shownTabIndex]
 
-  // Dropped with the item rather than left to be written over: the panels of
-  // the next item report as they mount, but an item whose tabs hold no
-  // editable panel reports nothing, and the buttons would go on offering to
-  // save what the last one had.
-  useEffect(() => {
-    setEditStates({})
-  }, [current?.uid])
+  // One callback per panel of the tab, kept: a panel reports its edit state
+  // from an effect that watches the callback, so handing it a new one every
+  // render would have the report cause the render that causes the next report.
+  const panelCount = tab?.panels.length ?? 0
+  const editReporters = useMemo(
+    () =>
+      Array.from({ length: panelCount }, (_, panelIndex) => {
+        const key = `${tabIndex}:${panelIndex}`
+        return (state: OverviewEditState): void => {
+          setEditStates((previous) => ({ ...previous, [key]: state }))
+        }
+      }),
+    [tabIndex, panelCount],
+  )
 
   // Why the last attempt to mark something reviewed was turned down. Held
   // here rather than read off the mutation, which forgets it as soon as the
   // reviewer flags something else, and dropped when they move on: it is about
   // the item in front of them, and says nothing about the next one.
   const [refusal, setRefusal] = useState<string | undefined>(undefined)
-  useEffect(() => {
+
+  // The edit states are dropped with the item rather than left to be written
+  // over: the panels of the next item report as they mount, but an item whose
+  // tabs hold no editable panel reports nothing, and the buttons would go on
+  // offering to save what the last one had.
+  const [shownUid, setShownUid] = useState(current?.uid)
+  if (current?.uid !== shownUid) {
+    setShownUid(current?.uid)
+    setEditStates({})
     setRefusal(undefined)
-  }, [current?.uid])
+  }
 
   const flagInvalidMutation = useMutation({
     mutationFn: async () => await itemApi.flagInvalid(project.datasetUid, batch?.uid),
@@ -852,9 +850,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                             hideHeader
                             openedItemUid={dock.openedUid}
                             onOpenItem={dock.open}
-                            onEditStateChange={editReporter(
-                              `${tabIndex}:${panelIndex}`,
-                            )}
+                            onEditStateChange={editReporters[panelIndex]}
                           />
                         )}
                       </Box>

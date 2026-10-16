@@ -32,6 +32,7 @@ import React, { useState } from 'react'
 import { NIL_UID } from 'src/models/attribute'
 import { Tag } from 'src/models/tag'
 import tagApi from 'src/services/api/tag_api'
+import { splitTagSelection } from 'src/components/item/tag_selection'
 import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayItemTagsProps {
@@ -119,18 +120,10 @@ export default function DisplayItemTags({
         // })}
         value={tags}
         freeSolo
-        onChange={async (_, newValue) => {
-          // A tag not yet saved is typed in as a string, and shown back as a
-          // tag with the nil uid; either way it is a name still to be created,
-          // not a reference to an existing tag.
-          const newTags = newValue.flatMap((tag) =>
-            typeof tag === 'string' ? [tag] : tag.uid === NIL_UID ? [tag.name] : [],
-          )
-          setNewTags(newTags)
-          const updatedTags = newValue
-            .filter((tag): tag is Tag => typeof tag !== 'string' && tag.uid !== NIL_UID)
-            .map((tag) => tag.uid)
-          handleTagsUpdate(updatedTags)
+        onChange={(_, newValue) => {
+          const selection = splitTagSelection(newValue)
+          setNewTags(selection.newTagNames)
+          handleTagsUpdate(selection.tagUids)
         }}
         renderInput={(params) => (
           <TextField

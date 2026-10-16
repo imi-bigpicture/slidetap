@@ -111,12 +111,7 @@ export default function AttributeValueControls({
       return ValueDisplayType.ORIGINAL
     }
     return ValueDisplayType.CURRENT
-  }, [
-    attribute.updatedValue,
-    attribute.mappedValue,
-    attribute.originalValue,
-    attribute.rejected,
-  ])
+  }, [attribute])
 
   const rejected = attribute.rejected ?? RejectedValues.NONE
   const toggleRejected = (source: RejectedValues): void => {

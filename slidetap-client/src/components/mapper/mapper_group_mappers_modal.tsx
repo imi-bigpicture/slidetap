@@ -43,9 +43,13 @@ export default function MapperGroupMappersModal({
     },
   })
 
-  React.useEffect(() => {
+  // Back to what the group holds whenever another group, or a newer copy of
+  // it, is passed in.
+  const [shownGroup, setShownGroup] = React.useState(group)
+  if (group !== shownGroup) {
+    setShownGroup(group)
     setSelectedMappers(group.mappers)
-  }, [group])
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {

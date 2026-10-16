@@ -174,8 +174,7 @@ export default function DisplayListAttribute({
           ? `${currentCount} (min ${schema.minItems})`
           : undefined
   const handleListChange = (children: Array<Attribute<AttributeValueTypes>>): void => {
-    attribute.updatedValue = children
-    handleAttributeUpdate(schema.tag, attribute)
+    handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: children })
   }
   /** What a child says, for the ones whose value is the text itself. */
   const childText = (child: Attribute<AttributeValueTypes>): string => {

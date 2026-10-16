@@ -12,23 +12,35 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 
 /** An object URL for a blob, made once per blob and revoked when the blob
  * changes or the component unmounts, so the blob is not held after it is no
- * longer shown. Undefined until the URL is made. */
+ * longer shown. Undefined until the URL is made.
+ *
+ * The URL is made when the component subscribes to the blob, after render,
+ * and revoked when it unsubscribes. A revoked URL is never the one rendered: a
+ * component that subscribes again, as StrictMode has it do, is handed a fresh
+ * one. Each component makes its own, so one that stops showing a blob never
+ * revokes a URL another is still showing. */
 export function useObjectUrl(blob: Blob | undefined): string | undefined {
-  const [objectUrl, setObjectUrl] = useState<string>()
-  useEffect(() => {
-    if (blob === undefined) {
-      setObjectUrl(undefined)
-      return
-    }
-    const url = URL.createObjectURL(blob)
-    setObjectUrl(url)
-    return () => {
-      URL.revokeObjectURL(url)
-    }
-  }, [blob])
-  return objectUrl
+  const [madeUrls] = useState(() => new Map<Blob, string>())
+  const subscribe = useCallback(
+    (onUrlChange: () => void) => {
+      if (blob === undefined) {
+        return () => {}
+      }
+      const url = URL.createObjectURL(blob)
+      madeUrls.set(blob, url)
+      onUrlChange()
+      return () => {
+        madeUrls.delete(blob)
+        URL.revokeObjectURL(url)
+      }
+    },
+    [blob, madeUrls],
+  )
+  return useSyncExternalStore(subscribe, () =>
+    blob === undefined ? undefined : madeUrls.get(blob),
+  )
 }

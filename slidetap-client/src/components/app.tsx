@@ -15,7 +15,7 @@
 import CssBaseline from '@mui/material/CssBaseline'
 import { LocalizationProvider } from '@mui/x-date-pickers'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
-import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { Outlet, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
@@ -38,8 +38,8 @@ import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
 import TasksPage from 'src/pages/tasks'
 import Title from 'src/pages/title'
-import { AuthenticationError } from 'src/services/api/api_methods'
 import auth from 'src/services/auth'
+import { createQueryClient } from 'src/services/query_client'
 
 /** Layout component that wraps all protected routes with schema context */
 function ProtectedLayout(): ReactElement {
@@ -50,40 +50,6 @@ function ProtectedLayout(): ReactElement {
       </SchemaContextProvider>
     </ProtectedRoute>
   )
-}
-
-function createQueryClient(
-  showError: (message: string, error?: unknown) => void,
-): QueryClient {
-  return new QueryClient({
-    // A mutation that fails is shown to the user, unless it handles the error
-    // itself: by an `onError` of its own, or by `meta: { handlesError: true }`
-    // where it catches what `mutateAsync` throws. A request turned away as
-    // unauthenticated is not reported, as it leads to the login page.
-    mutationCache: new MutationCache({
-      onError: (error, _variables, _context, mutation) => {
-        if (
-          mutation.options.onError !== undefined ||
-          mutation.meta?.handlesError === true ||
-          error instanceof AuthenticationError
-        ) {
-          return
-        }
-        const message = error instanceof Error ? error.message : 'Request failed'
-        showError(message, error)
-      },
-    }),
-    defaultOptions: {
-      queries: {
-        // A request turned away as unauthenticated is not tried again: it ends
-        // the session, and the login page is shown instead.
-        retry: (failureCount, error) =>
-          !(error instanceof AuthenticationError) && failureCount < 1,
-        refetchOnWindowFocus: false,
-        staleTime: 30000,
-      },
-    },
-  })
 }
 
 /** Provides the query client, reporting failed mutations in the error display

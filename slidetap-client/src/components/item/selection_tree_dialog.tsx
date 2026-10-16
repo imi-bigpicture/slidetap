@@ -43,7 +43,8 @@ import type { RootSchema } from 'src/models/schema/root_schema'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import DisplayItemTags from './display_item_tags'
-import { ChangeGroup, schemaName } from './selection_preview'
+import { ChangeGroup } from './selection_preview'
+import { schemaName } from './schema_name'
 
 /** The items asked for, as the parent of the top of each tree. Always in. */
 const ROOT = ''

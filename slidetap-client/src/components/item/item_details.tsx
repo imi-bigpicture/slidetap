@@ -172,9 +172,11 @@ export default function DisplayItemDetails({
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   // Tags typed in belong to the item they were typed on, and are not carried
   // to the next one opened.
-  useEffect(() => {
+  const [newTagsItemUid, setNewTagsItemUid] = useState(itemUid)
+  if (newTagsItemUid !== itemUid) {
+    setNewTagsItemUid(itemUid)
     setNewTagsToSave([])
-  }, [itemUid])
+  }
   const [item, setItem] = useState<Item>()
   const [isDirty, setIsDirty] = useState(false)
   /** The item and whether it is edited, as they are rather than as they were
@@ -196,14 +198,13 @@ export default function DisplayItemDetails({
   const [flagAnchor, setFlagAnchor] = useState<{ top: number; left: number } | null>(
     null,
   )
-  const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const COMPACT_ACTIONS_THRESHOLD_PX = 600
   const compactActions =
     containerWidth !== null && containerWidth < COMPACT_ACTIONS_THRESHOLD_PX
   const closeOverflow = (): void => setOverflowAnchor(null)
 
-  useEffect(() => {
+  const observeContainer = useCallback((containerNode: HTMLDivElement | null) => {
     if (containerNode === null) return
     setContainerWidth(containerNode.clientWidth)
     const observer = new ResizeObserver((entries) => {
@@ -212,7 +213,7 @@ export default function DisplayItemDetails({
     })
     observer.observe(containerNode)
     return () => observer.disconnect()
-  }, [containerNode])
+  }, [])
 
   const currentIndex = itemUids?.indexOf(itemUid) ?? -1
   const hasPrevious = itemUids !== undefined && currentIndex > 0
@@ -265,18 +266,17 @@ export default function DisplayItemDetails({
     },
     enabled: itemUid !== undefined,
   })
-  useEffect(() => {
+  /** What was fetched when the item shown was last taken from it. */
+  const [takenData, setTakenData] = useState<Item | undefined>(undefined)
+  if (itemQuery.data !== takenData) {
+    setTakenData(itemQuery.data)
     if (itemQuery.data !== undefined) {
       const loaded = itemQuery.data
-      if (isDirtyRef.current && itemRef.current?.uid === loaded.uid) {
+      if (isDirty && item?.uid === loaded.uid) {
         // The item is fetched again whenever something invalidates it, such as
         // marking it reviewed. Edits not yet saved are kept, and only what is
         // set elsewhere than in this view is taken from what was fetched.
-        setItem((current) =>
-          current !== undefined
-            ? { ...current, reviewStatus: loaded.reviewStatus }
-            : loaded,
-        )
+        setItem({ ...item, reviewStatus: loaded.reviewStatus })
       } else {
         setItem(loaded)
         setIsDirty(false)
@@ -285,17 +285,17 @@ export default function DisplayItemDetails({
       // arrives; named here so stepping back to it can say where back is.
       setOpenedItems((opened) =>
         opened.map((entry) =>
-          entry.uid === itemQuery.data.uid && entry.identifier === ''
+          entry.uid === loaded.uid && entry.identifier === ''
             ? {
-                identifier: itemQuery.data.identifier,
+                identifier: loaded.identifier,
                 uid: entry.uid,
-                pseudonym: itemQuery.data.pseudonym,
+                pseudonym: loaded.pseudonym,
               }
             : entry,
         ),
       )
     }
-  }, [itemQuery.data])
+  }
 
   const changeAction = (action: ItemDetailAction): void => {
     if (action !== ItemDetailAction.VIEW && action !== ItemDetailAction.EDIT) {
@@ -540,23 +540,21 @@ export default function DisplayItemDetails({
   // back out, a step at a time. Only the step just taken is offered — a trail
   // of everything passed through on the way says more than it is worth.
   const previousItem = openedItems[openedItems.length - 2]
-  const back =
+  const backIdentifier =
     previousItem === undefined
       ? undefined
-      : {
-          identifier:
-            getDisplayIdentifier(previousItem, pseudonymMode) || 'the previous item',
-          go: () => {
-            requestLeaving(() => {
-              setOpenedItems((opened) => opened.slice(0, -1))
-              setItemUid(previousItem.uid)
-            })
-          },
-        }
+      : getDisplayIdentifier(previousItem, pseudonymMode) || 'the previous item'
+  const goBack = (): void => {
+    if (previousItem === undefined) return
+    requestLeaving(() => {
+      setOpenedItems((opened) => opened.slice(0, -1))
+      setItemUid(previousItem.uid)
+    })
+  }
 
   return (
     <Spinner loading={itemQuery.isLoading}>
-      <Box ref={setContainerNode} sx={{ width: '100%', minWidth: 0 }}>
+      <Box ref={observeContainer} sx={{ width: '100%', minWidth: 0 }}>
         {/* The same bar every other view of an item carries. */}
         {pageHeader && item !== undefined && (
           <ItemViewHeader
@@ -580,9 +578,9 @@ export default function DisplayItemDetails({
                 : undefined
             }
           >
-            {back !== undefined && (
-              <Tooltip title={`Back to ${back.identifier}`}>
-                <IconButton onClick={back.go} size="small">
+            {backIdentifier !== undefined && (
+              <Tooltip title={`Back to ${backIdentifier}`}>
+                <IconButton onClick={goBack} size="small">
                   <ArrowBack fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -606,9 +604,9 @@ export default function DisplayItemDetails({
                 borderColor: 'divider',
               }}
             >
-              {back !== undefined && (
-                <Tooltip title={`Back to ${back.identifier}`}>
-                  <IconButton onClick={back.go} size="small" sx={{ ml: -1 }}>
+              {backIdentifier !== undefined && (
+                <Tooltip title={`Back to ${backIdentifier}`}>
+                  <IconButton onClick={goBack} size="small" sx={{ ml: -1 }}>
                     <ArrowBack fontSize="small" />
                   </IconButton>
                 </Tooltip>

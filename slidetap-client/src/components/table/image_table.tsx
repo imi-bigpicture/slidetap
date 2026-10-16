@@ -58,6 +58,25 @@ interface ImageTableProps {
   refresh: boolean
 }
 
+const statusColorMap: Record<
+  ImageStatus,
+  'success' | 'error' | 'primary' | 'secondary' | 'warning'
+> = {
+  [ImageStatus.NOT_STARTED]: 'secondary',
+  [ImageStatus.DOWNLOADING]: 'primary',
+  [ImageStatus.DOWNLOADING_FAILED]: 'error',
+  [ImageStatus.DOWNLOADED]: 'primary',
+  [ImageStatus.PRE_PROCESSING]: 'primary',
+  [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
+  [ImageStatus.PRE_PROCESSED]: 'success',
+  [ImageStatus.POST_PROCESSING]: 'primary',
+  [ImageStatus.POST_PROCESSING_FAILED]: 'error',
+  [ImageStatus.POST_PROCESSED]: 'success',
+  [ImageStatus.STORING]: 'primary',
+  [ImageStatus.STORING_FAILED]: 'error',
+  [ImageStatus.STORED]: 'success',
+}
+
 export function ImageTable({
   project,
   batch,
@@ -103,28 +122,8 @@ export function ImageTable({
           : 0,
     }
   })
-  const statusColorMap: Record<
-    ImageStatus,
-    'success' | 'error' | 'primary' | 'secondary' | 'warning'
-  > = {
-    [ImageStatus.NOT_STARTED]: 'secondary',
-    [ImageStatus.DOWNLOADING]: 'primary',
-    [ImageStatus.DOWNLOADING_FAILED]: 'error',
-    [ImageStatus.DOWNLOADED]: 'primary',
-    [ImageStatus.PRE_PROCESSING]: 'primary',
-    [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
-    [ImageStatus.PRE_PROCESSED]: 'success',
-    [ImageStatus.POST_PROCESSING]: 'primary',
-    [ImageStatus.POST_PROCESSING_FAILED]: 'error',
-    [ImageStatus.POST_PROCESSED]: 'success',
-    [ImageStatus.STORING]: 'primary',
-    [ImageStatus.STORING_FAILED]: 'error',
-    [ImageStatus.STORED]: 'success',
-  }
-
   // Built once per set of inputs. A fresh array on every render makes
   // TanStack discard every column object and the caches on it.
-  // statusColorMap is rebuilt with it and holds only constants.
   const columns = useMemo<Array<ColumnDef<Image>>>(
     () => [
       {
