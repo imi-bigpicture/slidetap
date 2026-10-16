@@ -17,10 +17,10 @@
 import io
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from threading import Semaphore
+from threading import Lock
 from types import TracebackType
 from uuid import UUID
 
@@ -41,20 +41,26 @@ class ImageCacheItem:
     """A opened image (WsiDicom) that is cached."""
 
     item: WsiDicom
-    last_accessed: datetime = datetime.now()
-    in_use: Semaphore = Semaphore()
+    last_accessed: datetime = field(default_factory=datetime.now)
+    users: int = 0
+    """Number of requests currently reading the image."""
 
     def close(self):
         self.item.close()
 
 
 class ImageCache:
-    """A collection of cached images."""
+    """A collection of cached images.
+
+    Safe to use from several threads. An image is only closed and removed when
+    the cache is over its size and no request is reading the image.
+    """
 
     def __init__(self, config: ImageCacheConfig, database_service: DatabaseService):
         self._database_service = database_service
         self._cache: dict[UUID, ImageCacheItem] = {}
         self._cache_size = config.cache_size
+        self._lock = Lock()
 
     def __enter__(self):
         return self
@@ -68,8 +74,10 @@ class ImageCache:
         self.close()
 
     def close(self):
-        for item in self._cache.values():
-            item.close()
+        with self._lock:
+            for item in self._cache.values():
+                item.close()
+            self._cache.clear()
 
     @property
     def is_full(self) -> bool:
@@ -77,26 +85,43 @@ class ImageCache:
 
     @contextmanager
     def get(self, uid: UUID) -> Generator[WsiDicom | None, None, None]:
+        """The opened image, or None if the image has no files to open.
+
+        The image is kept open for as long as the context is entered.
+        """
         cached_item = self._acquire(uid)
         if cached_item is None:
-            return None
-        holds_lock = cached_item.in_use.acquire(blocking=False)
+            yield None
+            return
         try:
             yield cached_item.item
         finally:
-            if holds_lock:
-                cached_item.in_use.release()
+            with self._lock:
+                cached_item.users -= 1
                 self._remove_old()
 
     def _acquire(self, uid: UUID) -> ImageCacheItem | None:
-        if uid in self._cache:
-            cached_item = self._cache[uid]
-            cached_item.last_accessed = datetime.now()
-        else:
-            cached_item = self._open(uid)
+        with self._lock:
+            cached_item = self._cache.get(uid)
+            if cached_item is not None:
+                cached_item.last_accessed = datetime.now()
+                cached_item.users += 1
+                return cached_item
+        # Opened outside the lock, as opening can be slow. Should another request
+        # have opened the same image meanwhile, the image already cached is used.
+        opened_item = self._open(uid)
+        if opened_item is None:
+            return None
+        with self._lock:
+            cached_item = self._cache.get(uid)
             if cached_item is None:
-                return None
-            self._insert_into_cache(uid, cached_item)
+                cached_item = opened_item
+                self._cache[uid] = cached_item
+            else:
+                opened_item.close()
+            cached_item.last_accessed = datetime.now()
+            cached_item.users += 1
+            self._remove_old()
         return cached_item
 
     def _open(self, uid: UUID) -> ImageCacheItem | None:
@@ -114,27 +139,25 @@ class ImageCache:
                 return None
             return ImageCacheItem(wsi)
 
-    def _insert_into_cache(self, uid: UUID, item: ImageCacheItem):
-        self._remove_old()
-        self._cache[uid] = item
-
     def _remove_old(self):
+        """Close and remove the least recently used images that no request is
+        reading, until the cache is within its size. Called holding the lock."""
         while self.is_full and self._remove_oldest_not_in_use():
             pass
 
     def _remove_oldest_not_in_use(self) -> bool:
-        try:
-            to_remove = next(
-                path
-                for (path, item) in sorted(
-                    self._cache.items(), key=lambda item: item[1].last_accessed
-                )
-                if item.in_use.acquire(False)
-            )
-            removed_item = self._cache.pop(to_remove)
-            removed_item.close()
-        except StopIteration:
+        not_in_use = [
+            (uid, cached_item)
+            for uid, cached_item in self._cache.items()
+            if cached_item.users == 0
+        ]
+        if not not_in_use:
             return False
+        oldest_uid, oldest_item = min(
+            not_in_use, key=lambda entry: entry[1].last_accessed
+        )
+        del self._cache[oldest_uid]
+        oldest_item.close()
         return True
 
 
