@@ -1004,7 +1004,10 @@ def process_metadata_import(
     persist error).
 
     A search that fails sets the batch as failed, unless the failure has the
-    task retried, which leaves the batch searching for the retry.
+    task retried, which leaves the batch searching for the retry. A search run
+    again, retried or recovered from a worker that died, skips the results an
+    earlier attempt imported and records the others on the rows that attempt
+    created, see :meth:`MetadataSearchItemService.create_or_resume`.
     """
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
@@ -1033,13 +1036,19 @@ def process_metadata_import(
         results = metadata_import_interface.search(batch, dataset, search_parameters)
         for result in results:
             with database_service.get_session() as session:
-                search_item = search_item_service.create(
+                search_item = search_item_service.create_or_resume(
                     batch_uid=batch_uid,
                     identifier=result.identifier,
                     schema_uid=result.schema_uid,
                     search_parameters=result.search_parameters,
                     session=session,
                 )
+                if search_item is None:
+                    logger.info(
+                        f"Skipping search result {result.identifier}: imported by "
+                        f"an earlier attempt."
+                    )
+                    continue
                 if result.is_failure:
                     search_item_service.mark_failed(
                         search_item,

@@ -16,38 +16,48 @@
 run again, and what the scheduler does when a task cannot be deferred."""
 
 import datetime
-from collections.abc import Callable
-from uuid import UUID
+from collections.abc import Callable, Iterator
+from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
 from decoy.matchers import Anything
 from slidetap_example import ExampleSchema
+from sqlalchemy import select
 
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
+    DatabaseMetadataSearchItem,
     DatabaseProject,
 )
 from slidetap.external_interfaces import (
     MetadataExportInterface,
+    MetadataImportInterface,
     TransientTaskError,
 )
 from slidetap.model import (
     BatchStatus,
+    MetadataImportStatus,
+    MetadataSearchResult,
     ProjectStatus,
 )
 from slidetap.services import (
     BatchService,
     DatabaseService,
+    ItemService,
+    MetadataSearchItemService,
     ProjectService,
+    ReviewService,
     SchemaService,
     StorageService,
+    ValidationService,
 )
 from slidetap.task.tasks import (
     delete_batch,
     delete_project,
     process_metadata_export,
+    process_metadata_import,
 )
 
 
@@ -239,3 +249,90 @@ class TestProcessMetadataExport:
         decoy.verify(
             project_service.revert_export(Anything(), Anything()), times=reverted
         )
+
+
+@pytest.mark.integration
+class TestProcessMetadataImportRunAgain:
+    def test_a_search_run_again_does_not_duplicate_search_items(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+    ):
+        """The failure this guards against: the retry of a search that failed
+        part-way records every result the first attempt recorded a second
+        time, and imports what it imported again."""
+        # Arrange
+        stored = _add_batch(
+            sqlite_database_service, schema, BatchStatus.METADATA_SEARCHING
+        )
+        schema_uid = schema.patient_schema_uid
+        imported = MetadataSearchResult.succeeded("patient-1", schema_uid, items=[])
+        failed = MetadataSearchResult.failed("patient-2", schema_uid, "Not found")
+        added = MetadataSearchResult.succeeded("patient-3", schema_uid, items=[])
+
+        def first_attempt() -> Iterator[MetadataSearchResult]:
+            yield imported
+            yield failed
+            raise TransientTaskError("Source unreachable")
+
+        def second_attempt() -> Iterator[MetadataSearchResult]:
+            yield imported
+            yield failed
+            yield added
+
+        attempts = iter([first_attempt(), second_attempt()])
+        metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
+        decoy.when(
+            metadata_import_interface.search(Anything(), Anything(), Anything())
+        ).then_do(lambda batch, dataset, parameters: next(attempts))
+        item_service = decoy.mock(cls=ItemService)
+        added_identifiers: list[str] = []
+
+        def _add(result: MetadataSearchResult) -> UUID:
+            added_identifiers.append(result.identifier)
+            return uuid4()
+
+        decoy.when(
+            item_service.add_search_result(Anything(), Anything(), session=Anything())
+        ).then_do(lambda result, mappers, session: _add(result))
+        batch_service = BatchService(
+            schema_service=decoy.mock(cls=SchemaService),
+            validation_service=decoy.mock(cls=ValidationService),
+            database_service=sqlite_database_service,
+            review_service=decoy.mock(cls=ReviewService),
+        )
+
+        def run(will_retry: Callable[[BaseException], bool]) -> None:
+            process_metadata_import.func.__wrapped__(  # type: ignore[attr-defined]
+                batch_uid=stored.batch_uid,
+                search_parameters={},
+                metadata_import_interface=metadata_import_interface,
+                database_service=sqlite_database_service,
+                batch_service=batch_service,
+                item_service=item_service,
+                search_item_service=MetadataSearchItemService(sqlite_database_service),
+                schema_service=schema_service,
+                will_retry=will_retry,
+            )
+
+        # Act
+        with pytest.raises(TransientTaskError):
+            run(_retried)
+        run(_not_retried)
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            search_items = session.scalars(select(DatabaseMetadataSearchItem)).all()
+            statuses = {item.identifier: item.status for item in search_items}
+        assert len(search_items) == 3
+        assert statuses == {
+            "patient-1": MetadataImportStatus.COMPLETE,
+            "patient-2": MetadataImportStatus.FAILED,
+            "patient-3": MetadataImportStatus.COMPLETE,
+        }
+        assert added_identifiers == ["patient-1", "patient-3"]
+        with sqlite_database_service.get_session() as session:
+            batch = sqlite_database_service.get_batch(session, stored.batch_uid)
+            assert batch.status == BatchStatus.METADATA_SEARCH_COMPLETE

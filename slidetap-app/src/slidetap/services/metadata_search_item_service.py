@@ -54,6 +54,47 @@ class MetadataSearchItemService:
             session.flush()
             return item
 
+    def create_or_resume(
+        self,
+        batch_uid: UUID,
+        identifier: str,
+        schema_uid: UUID,
+        search_parameters: dict[str, Any] | None = None,
+        session: Session | None = None,
+    ) -> DatabaseMetadataSearchItem | None:
+        """The search item to record a search result on, or None if the result
+        has already been imported.
+
+        A search run again, as a retried or recovered task is, meets the
+        results an earlier attempt recorded. A result recorded as complete is
+        not imported again, and returns None. One recorded as anything else is
+        resumed on its existing row, set back as not started, so that the batch
+        holds one search item per result however many attempts it took.
+        """
+        with self._database_service.get_session(session) as session:
+            item = session.scalars(
+                select(DatabaseMetadataSearchItem).where(
+                    DatabaseMetadataSearchItem.batch_uid == batch_uid,
+                    DatabaseMetadataSearchItem.identifier == identifier,
+                    DatabaseMetadataSearchItem.schema_uid == schema_uid,
+                )
+            ).first()
+            if item is None:
+                return self.create(
+                    batch_uid,
+                    identifier,
+                    schema_uid,
+                    search_parameters=search_parameters,
+                    session=session,
+                )
+            if item.status == MetadataImportStatus.COMPLETE:
+                return None
+            item.status = MetadataImportStatus.NOT_STARTED
+            item.message = None
+            item.search_parameters = search_parameters
+            item.attempted_at = datetime.now(UTC)
+            return item
+
     def mark_complete(
         self,
         target: UUID | DatabaseMetadataSearchItem,
