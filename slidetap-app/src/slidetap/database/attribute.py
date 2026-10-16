@@ -322,11 +322,6 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         self._raise_if_not_editable()
         self.mappable_value = value
 
-    @abstractmethod
-    def copy(self) -> DatabaseAttribute:
-        """Copy the attribute."""
-        raise NotImplementedError()
-
     @property
     @abstractmethod
     def model(self) -> AnyAttribute:
@@ -407,16 +402,6 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseStringAttribute:
-        return DatabaseStringAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
     """An attribute defined by a tag and a string value"""
@@ -484,16 +469,6 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseEnumAttribute:
-        return DatabaseEnumAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
 
 
@@ -565,16 +540,6 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseDatetimeAttribute:
-        return DatabaseDatetimeAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
     """An attribute defined by a tag and a float value"""
@@ -642,16 +607,6 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseNumericAttribute:
-        return DatabaseNumericAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
 
 
@@ -725,16 +680,6 @@ class DatabaseMeasurementAttribute(
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseMeasurementAttribute:
-        return DatabaseMeasurementAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     """An attribute defined by a tag and a code value"""
@@ -804,16 +749,6 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseCodeAttribute:
-        return DatabaseCodeAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
     """An attribute defined by a tag and a boolean value"""
@@ -881,16 +816,6 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseBooleanAttribute:
-        return DatabaseBooleanAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
 
 
@@ -970,16 +895,6 @@ class DatabaseObjectAttribute(
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseObjectAttribute:
-        return DatabaseObjectAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]):
     """Attribute that can hold a list of the same type (defined by schema)."""
@@ -1055,16 +970,6 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]
             rejected=self._rejected,
         )
 
-    def copy(self) -> DatabaseListAttribute:
-        return DatabaseListAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
-        )
-
 
 class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
     """Attribute that can be of different specified (by schema) type."""
@@ -1133,14 +1038,4 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
             rejected=self._rejected,
-        )
-
-    def copy(self) -> DatabaseUnionAttribute:
-        return DatabaseUnionAttribute(
-            tag=self.tag,
-            schema_uid=self.schema_uid,
-            original_value=self.original_value,
-            updated_value=self.updated_value,
-            mapped_value=self.mapped_value,
-            mappable_value=self.mappable_value,
         )
