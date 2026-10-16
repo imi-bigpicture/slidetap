@@ -116,11 +116,17 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
               })
             : oldData,
       )
+      // Selecting an image changes what it is in every table it is listed in,
+      // and can take what goes with it along.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
     },
   })
   if (imagesWithThumbnailQuery.data === undefined) {
     return <LinearProgress />
   }
+  // Kept within the pages there are: switching what is shown can leave fewer
+  // pages than the one that was open.
+  const shownPage = Math.max(1, Math.min(page, pageCount))
 
   function handlePageChange(_: React.ChangeEvent<unknown>, page: number): void {
     setPage(page)
@@ -151,7 +157,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
 
       <ImageList cols={PER_ROW} rowHeight={size.height}>
         {imagesWithThumbnailQuery.data
-          .slice((page - 1) * PER_PAGE, page * PER_PAGE)
+          .slice((shownPage - 1) * PER_PAGE, shownPage * PER_PAGE)
           .map((image) => (
             <ImageListItem
               key={image.uid}
@@ -170,7 +176,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
       <Pagination
         count={pageCount}
         size="large"
-        page={page}
+        page={shownPage}
         variant="outlined"
         shape="rounded"
         onChange={handlePageChange}
