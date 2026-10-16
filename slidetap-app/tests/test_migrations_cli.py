@@ -668,3 +668,69 @@ def test_an_attribute_issue_of_an_entity_is_unique(
             session.execute(sa.insert(issue), [duplicate])
             session.commit()
         session.rollback()
+
+
+def test_a_mapper_keeps_its_lowest_group_on_downgrade_to_one_group(
+    session: Session,
+):
+    """The column a mapper's group goes back to holds one group, so of the
+    groups it is in, the one with the lowest uid is kept."""
+    command.upgrade(config(), "b4e2f7c81a95")
+    mapper_group = sa.table(
+        "mapper_group",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("default_enabled", sa.Boolean()),
+    )
+    mapper = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("root_attribute_schema_uid", sa.Uuid()),
+    )
+    join_table = sa.table(
+        "mapper_to_mapper_group",
+        sa.column("mapper_uid", sa.Uuid()),
+        sa.column("mapper_group_uid", sa.Uuid()),
+    )
+    lowest_group_uid = UUID("00000000-0000-4000-8000-000000000001")
+    highest_group_uid = UUID("ffffffff-0000-4000-8000-000000000001")
+    mapper_uid = uuid4()
+    session.execute(
+        sa.insert(mapper_group),
+        [
+            {"uid": group_uid, "name": str(group_uid), "default_enabled": False}
+            for group_uid in (highest_group_uid, lowest_group_uid)
+        ],
+    )
+    session.execute(
+        sa.insert(mapper),
+        [
+            {
+                "uid": mapper_uid,
+                "name": "Diagnose",
+                "attribute_schema_uid": uuid4(),
+                "root_attribute_schema_uid": uuid4(),
+            }
+        ],
+    )
+    session.execute(
+        sa.insert(join_table),
+        [
+            {"mapper_uid": mapper_uid, "mapper_group_uid": group_uid}
+            for group_uid in (highest_group_uid, lowest_group_uid)
+        ],
+    )
+    session.commit()
+
+    command.downgrade(config(), "70048a43fda6")
+
+    single_group = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("mapper_group_uid", sa.Uuid()),
+    )
+    assert session.execute(
+        sa.select(single_group.c.uid, single_group.c.mapper_group_uid)
+    ).all() == [(mapper_uid, lowest_group_uid)]

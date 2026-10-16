@@ -6,15 +6,17 @@ Create Date: 2026-08-03 09:14:22.118374
 
 """
 
-from typing import Sequence, Union
+from collections import defaultdict
+from collections.abc import Sequence
+from uuid import UUID
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b4e2f7c81a95"
-down_revision: Union[str, None] = "70048a43fda6"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "70048a43fda6"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 _TABLE = "mapper_to_mapper_group"
 _INDEX = "ix_mapper_mapper_group_uid"
@@ -87,13 +89,15 @@ def downgrade() -> None:
         sa.column("mapper_group_uid", sa.Uuid()),
     )
     connection = op.get_bind()
-    rows = connection.execute(
-        sa.select(
-            join_table.c.mapper_uid,
-            sa.func.min(join_table.c.mapper_group_uid),
-        ).group_by(join_table.c.mapper_uid)
-    ).all()
-    for mapper_uid, group_uid in rows:
+    # Chosen here rather than by min() in the query, as Postgres has no min()
+    # over uuids. The lowest uid is the one whose text sorts first.
+    group_uids_by_mapper: dict[UUID, list[UUID]] = defaultdict(list)
+    for mapper_uid, group_uid in connection.execute(
+        sa.select(join_table.c.mapper_uid, join_table.c.mapper_group_uid)
+    ):
+        group_uids_by_mapper[mapper_uid].append(group_uid)
+    for mapper_uid, group_uids in group_uids_by_mapper.items():
+        group_uid = min(group_uids, key=str)
         connection.execute(
             sa.update(mapper)
             .where(mapper.c.uid == mapper_uid)
