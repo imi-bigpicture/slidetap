@@ -1,13 +1,39 @@
+# Local environments and caches
+.venv
+**/__pycache__
 **/*.pyc
 **/*.pyo
-*.bat
-*.Dockerfile
 .pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+**/*.egg-info
+build
+dist
+
+# Tests and their downloaded images
 tests
-**/__pycache__
+pytest.ini
+**/*.svs
+**/*.ndpi
+**/*.mrxs
+**/*.tif
+**/*.tiff
+**/*.dcm
+
+# Local configuration and secrets, mounted at runtime instead
+.env
+.env.*
+config.yaml
+
+# Build outputs and repository files
+*.Dockerfile
+*.bat
+*.tar
+*.zip
 .dockerignore
 .gitignore
-pytest.ini
-*.svs
-.venv
 .git
+.vscode
+.idea

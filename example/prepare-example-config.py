@@ -25,6 +25,16 @@ parser.add_argument(
     default=None,
     help="At least 32 bytes. A random key is generated when not given.",
 )
+parser.add_argument("--postgres-user", type=str, default="slidetap")
+parser.add_argument(
+    "--postgres-password",
+    type=str,
+    default=None,
+    help=(
+        "Kept from an existing .env when not given, as Postgres only applies it "
+        "when the database volume is created. Otherwise a random one is generated."
+    ),
+)
 parser.add_argument("--test-data-path", type=str, default="/storage/images")
 parser.add_argument("--test-data-image-extension", type=str, default=".svs")
 
@@ -57,7 +67,22 @@ SLIDETAP_SSL_CERTIFICATE_KEY = "privkey.pem"
 SLIDETAP_API_PORT = 10000
 SLIDETAP_WEBAPP_URL = args.servername + ":" + str(args.port)
 
-with open(".env", "w") as env_file:
+env_path = Path(__file__).parent / ".env"
+existing_env: dict[str, str] = {}
+if env_path.exists():
+    for line in env_path.read_text().splitlines():
+        name, separator, value = line.partition("=")
+        if separator:
+            existing_env[name.strip()] = value.strip()
+POSTGRES_USER = args.postgres_user
+POSTGRES_PASSWORD = (
+    args.postgres_password
+    or existing_env.get("POSTGRES_PASSWORD")
+    or secrets.token_urlsafe(32)
+)
+POSTGRES_DB = "slidetap"
+
+with open(env_path, "w") as env_file:
     env_file.write(
         f"SLIDETAP_SERVERNAME={args.servername}\n"
         f"SLIDETAP_PORT={args.port}\n"
@@ -71,4 +96,7 @@ with open(".env", "w") as env_file:
         f"SLIDETAP_SSL_CERTIFICATE_KEY={SLIDETAP_SSL_CERTIFICATE_KEY}\n"
         f"SLIDETAP_SECRET_KEY={SLIDETAP_SECRET_KEY}\n"
         f"SLIDETAP_WEBAPP_URL={SLIDETAP_WEBAPP_URL}\n"
+        f"POSTGRES_USER={POSTGRES_USER}\n"
+        f"POSTGRES_PASSWORD={POSTGRES_PASSWORD}\n"
+        f"POSTGRES_DB={POSTGRES_DB}\n"
     )

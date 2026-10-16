@@ -3,7 +3,8 @@
 Images for the two back-end processes. Both are built with `slidetap-app` as
 the build context, and both install the library and the example app, so they
 run the example application out of the box. To ship your own application,
-replace the second `pip install` with your own distribution.
+replace `--package slidetap-example` in the `uv sync` steps with your own
+workspace package.
 
 | File | Image | Runs |
 |---|---|---|
@@ -71,6 +72,10 @@ All three commands are idempotent, so this is safe on every boot.
 ## Notes
 
 The images install the packages in editable mode against the copied source, and
-the web image installs the example app's `[web]` extra. `libturbojpeg0` is
+the web image installs the example app's `[web]` extra. Dependencies are
+synced from `uv.lock` before the source is copied, so source edits reuse the
+cached dependency layer. Build and runtime stages share one pinned Python
+image, and the code is owned by root while the process runs as an unprivileged
+user. `libturbojpeg0` is
 installed for image reading; the OpenSlide and build-toolchain lines are
 commented out, and need uncommenting if your image import or export needs them.

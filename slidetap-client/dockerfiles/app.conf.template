@@ -13,6 +13,22 @@ server {
   proxy_ssl_session_reuse on;
 
   server_name  ${SLIDETAP_SERVERNAME};
+  server_tokens off;
+
+  # Inherited by every location below, as none adds headers of its own.
+  include /etc/nginx/snippets/security-headers.conf;
+
+  # Proxy settings for the /api locations. Like add_header, proxy_set_header is
+  # only inherited by locations that set none of their own. This is the edge
+  # proxy, so client-supplied forwarding headers are replaced, not appended to.
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Forwarded-Host ${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT};
+  # Metadata uploads and their processing can take minutes.
+  proxy_read_timeout 300s;
+  proxy_send_timeout 300s;
+
   location / {
     root   /app;
     index  index.html;
@@ -28,13 +44,9 @@ server {
   location ~ ^/api/batches/batch/[^/]+/uploadFile$ {
     client_max_body_size 100M;
     proxy_pass http://slidetap_api;
-    proxy_set_header X-Forwarded-Proto https;
-    proxy_set_header X-Forwarded-Host ${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT};
   }
 
   location ~ ^/(api) {
     proxy_pass http://slidetap_api;
-    proxy_set_header X-Forwarded-Proto https;
-    proxy_set_header X-Forwarded-Host ${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT};
   }
 }
