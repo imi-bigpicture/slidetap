@@ -23,6 +23,7 @@ import {
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSessionManagement } from 'src/hooks/use_session_management'
+import loginApi from 'src/services/api/login_api'
 import auth from 'src/services/auth'
 
 function formatTimeRemaining(seconds: number): string {
@@ -37,6 +38,10 @@ export default function SessionTimeoutDialog(): React.ReactElement {
   const navigate = useNavigate()
 
   const handleLogout = (): void => {
+    // Ends the session on the server too, so its cookie no longer serves.
+    loginApi.logout().catch((error) => {
+      console.error('Failed to log out:', error)
+    })
     auth.logout()
     navigate('/login')
   }

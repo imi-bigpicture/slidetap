@@ -28,6 +28,7 @@ import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provid
 import { PseudonymProvider } from 'src/contexts/pseudonym/pseudonym_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
 import { ExtensionsContext, type AppExtensions } from 'src/extensions'
+import { useIsLoggedIn } from 'src/hooks/use_is_logged_in'
 import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
 import MappingPage from 'src/pages/mapper'
 import MappersPage from 'src/pages/mappers'
@@ -36,6 +37,7 @@ import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
 import TasksPage from 'src/pages/tasks'
 import Title from 'src/pages/title'
+import { AuthenticationError } from 'src/services/api/api_methods'
 import auth from 'src/services/auth'
 
 /** Layout component that wraps all protected routes with schema context */
@@ -52,7 +54,10 @@ function ProtectedLayout(): ReactElement {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // A request turned away as unauthenticated is not tried again: it ends
+      // the session, and the login page is shown instead.
+      retry: (failureCount, error) =>
+        !(error instanceof AuthenticationError) && failureCount < 1,
       refetchOnWindowFocus: false,
       staleTime: 30000,
     },
@@ -71,6 +76,14 @@ function App({ extensions = {} }: AppProps): ReactElement {
 
   // Enable periodic keep-alive to maintain session for active users
   usePeriodicKeepAlive()
+
+  const isLoggedIn = useIsLoggedIn()
+  // What was fetched for one user is not shown to the next one logging in.
+  useEffect(() => {
+    if (!isLoggedIn) {
+      queryClient.clear()
+    }
+  }, [isLoggedIn])
 
   return (
     <ExtensionsContext.Provider value={extensions}>
@@ -101,7 +114,7 @@ function App({ extensions = {} }: AppProps): ReactElement {
                         <Route path="/tasks" element={<TasksPage />} />
                       </Route>
                     </Routes>
-                    {auth.isLoggedIn() && <SessionTimeoutDialog />}
+                    {isLoggedIn && <SessionTimeoutDialog />}
                   </ErrorBoundary>
                 </Router>
               </PseudonymProvider>

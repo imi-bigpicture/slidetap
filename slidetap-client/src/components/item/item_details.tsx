@@ -64,7 +64,7 @@ import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 import Spinner from 'src/components/spinner'
 import { ItemDetailAction } from 'src/models/action'
 import { ReviewStatus } from 'src/models/review_status'
-import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import { NIL_UID, type Attribute, type AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
 import type { Image } from 'src/models/item'
 import { Item } from 'src/models/item'
@@ -170,6 +170,11 @@ export default function DisplayItemDetails({
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
+  // Tags typed in belong to the item they were typed on, and are not carried
+  // to the next one opened.
+  useEffect(() => {
+    setNewTagsToSave([])
+  }, [itemUid])
   const [item, setItem] = useState<Item>()
   const [isDirty, setIsDirty] = useState(false)
   /** The item and whether it is edited, as they are rather than as they were
@@ -255,8 +260,20 @@ export default function DisplayItemDetails({
   })
   useEffect(() => {
     if (itemQuery.data !== undefined) {
-      setItem(itemQuery.data)
-      setIsDirty(false)
+      const loaded = itemQuery.data
+      if (isDirtyRef.current && itemRef.current?.uid === loaded.uid) {
+        // The item is fetched again whenever something invalidates it, such as
+        // marking it reviewed. Edits not yet saved are kept, and only what is
+        // set elsewhere than in this view is taken from what was fetched.
+        setItem((current) =>
+          current !== undefined
+            ? { ...current, reviewStatus: loaded.reviewStatus }
+            : loaded,
+        )
+      } else {
+        setItem(loaded)
+        setIsDirty(false)
+      }
       // The item the panel opened on is only known by its uid until it
       // arrives; named here so stepping back to it can say where back is.
       setOpenedItems((opened) =>
@@ -285,15 +302,14 @@ export default function DisplayItemDetails({
       newTagsToSave.map(
         async (tag) =>
           await tagApi.save({
-            uid: '00000000-0000-0000-0000-000000000000',
+            uid: NIL_UID,
             name: tag,
             description: null,
             color: null,
           }),
       ),
     ).then((tags) => tags.map((tag) => tag.uid))
-    item.tags = [...item.tags, ...savedTags]
-    return await itemApi.save(item)
+    return await itemApi.save({ ...item, tags: [...item.tags, ...savedTags] })
   }
 
   const reviewMutation = useMutation({
@@ -363,9 +379,18 @@ export default function DisplayItemDetails({
       void queryClient.invalidateQueries({
         predicate: (query) => query.queryKey.includes('overview'),
       })
+      // The tags typed in are created by the save and are now among the item's
+      // tags, so the list of tags is asked for again to name them.
+      if (newTagsToSave.length > 0) {
+        setNewTagsToSave([])
+        void queryClient.invalidateQueries({ queryKey: queryKeys.tag.all })
+      }
       // Stays editable: saving is a checkpoint in the middle of curating an
       // item, not the end of it.
-      setIsDirty(false)
+      if (itemRef.current?.uid === savedItem.uid) {
+        setItem(savedItem)
+        setIsDirty(false)
+      }
     },
   })
 
@@ -535,6 +560,7 @@ export default function DisplayItemDetails({
                     save: handleSave,
                     revert: () => {
                       setItem(itemQuery.data)
+                      setNewTagsToSave([])
                       setIsDirty(false)
                     },
                   }
@@ -709,6 +735,7 @@ export default function DisplayItemDetails({
                       disabled={!isDirty}
                       onClick={() => {
                         setItem(itemQuery.data)
+                        setNewTagsToSave([])
                         setIsDirty(false)
                       }}
                     >
@@ -745,14 +772,16 @@ export default function DisplayItemDetails({
                         icon: <AutoFixNormal />,
                         label: 'Re-apply mappers to this item',
                         onClick: () => remapMutation.mutate({ hierarchy: false }),
-                        disabled: remapMutation.isPending,
+                        // Saved or reverted first: what remapping writes would be
+                        // overwritten by the edits on the next save.
+                        disabled: remapMutation.isPending || isDirty,
                       },
                       {
                         key: 'remap-tree',
                         icon: <AutoFixHigh />,
                         label: 'Re-apply mappers to this item and all descendants',
                         onClick: () => remapMutation.mutate({ hierarchy: true }),
-                        disabled: remapMutation.isPending,
+                        disabled: remapMutation.isPending || isDirty,
                       },
                     ]
                   : []
@@ -1026,6 +1055,7 @@ export default function DisplayItemDetails({
             onClick={() => {
               setUnsavedDialogOpen(false)
               setItem(itemQuery.data)
+              setNewTagsToSave([])
               setIsDirty(false)
               if (pendingNavigationUid) {
                 navigateTo(pendingNavigationUid)

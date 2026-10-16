@@ -51,7 +51,9 @@ function getTimeRemaining(expirationTimestamp: number): number {
 export function useSessionManagement(): SessionManagementState {
   const [sessionExpiration, setSessionExpiration] = useState<number | null>(null)
   const [timeRemaining, setTimeRemaining] = useState<number>(0)
-  const [showWarning, setShowWarning] = useState<boolean>(false)
+  /** The expiration the warning was dismissed or extended for. The warning
+   * comes back only for a later expiration, not on the next tick. */
+  const [handledExpiration, setHandledExpiration] = useState<number | null>(null)
 
   // Fetch session status
   const sessionQuery = useQuery({
@@ -76,19 +78,10 @@ export function useSessionManagement(): SessionManagementState {
       return
     }
 
+    // Once expired, the warning is no longer shown: the next request is
+    // turned away as unauthenticated and that leads to the login page.
     const updateTimer = (): void => {
-      const remaining = getTimeRemaining(sessionExpiration)
-      setTimeRemaining(remaining)
-
-      const thresholdSeconds = WARNING_THRESHOLD_MINUTES * 60
-      if (remaining > 0 && remaining <= thresholdSeconds && !showWarning) {
-        setShowWarning(true)
-      }
-
-      if (remaining === 0) {
-        // Session expired - will be handled by 401 response
-        setShowWarning(false)
-      }
+      setTimeRemaining(getTimeRemaining(sessionExpiration))
     }
 
     // Update immediately
@@ -100,7 +93,7 @@ export function useSessionManagement(): SessionManagementState {
     return () => {
       clearInterval(interval)
     }
-  }, [sessionExpiration, showWarning])
+  }, [sessionExpiration])
 
   const extendSession = (): void => {
     loginApi
@@ -110,7 +103,7 @@ export function useSessionManagement(): SessionManagementState {
         sessionQuery.refetch().catch((error) => {
           console.error('Failed to refetch session status:', error)
         })
-        setShowWarning(false)
+        setHandledExpiration(sessionExpiration)
       })
       .catch((error) => {
         console.error('Failed to extend session:', error)
@@ -118,11 +111,12 @@ export function useSessionManagement(): SessionManagementState {
   }
 
   const dismissWarning = (): void => {
-    setShowWarning(false)
+    setHandledExpiration(sessionExpiration)
   }
 
   const isExpiringSoon =
     timeRemaining > 0 && timeRemaining <= WARNING_THRESHOLD_MINUTES * 60
+  const showWarning = isExpiringSoon && handledExpiration !== sessionExpiration
 
   return {
     sessionExpiration,
