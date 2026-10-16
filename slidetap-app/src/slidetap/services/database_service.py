@@ -188,7 +188,7 @@ class ImagePaths(NamedTuple):
 class OpenIssues(NamedTuple):
     """What is open on a review unit, as the queue needs to say it."""
 
-    count: int
+    total: int
     """How many issues are open on it."""
 
     reasons: tuple[str, ...]
@@ -616,7 +616,10 @@ class DatabaseService:
             query = query.where(DatabaseItem.dataset_uid == dataset_uid)
         if batch_uid is not None:
             query = query.where(DatabaseItem.batch_uid == batch_uid)
-        return [tuple(row) for row in session.execute(query).all()]
+        return [
+            (uid, identifier, pseudonym)
+            for uid, identifier, pseudonym in session.execute(query).all()
+        ]
 
     def get_items_in_batch(
         self,
@@ -1475,7 +1478,7 @@ class DatabaseService:
         # source says about itself, which the database has no opinion on.
         return {
             unit_uid: OpenIssues(
-                count=len(unit_rows),
+                total=len(unit_rows),
                 reasons=tuple(
                     reason
                     for _, _, reason in sorted(
@@ -1531,7 +1534,7 @@ class DatabaseService:
         session.commit()
 
     @staticmethod
-    def _item_uids_of_batches(batch_uids: Sequence[UUID]) -> Select[tuple[UUID]]:
+    def _item_uids_of_batches(batch_uids: Sequence[UUID]) -> Select[UUID]:
         """The uids of every item in the batches, as a subquery.
 
         What the bulk statements below match on, so that none of them has to
@@ -1541,7 +1544,7 @@ class DatabaseService:
         item = _table_of(DatabaseItem)
         return select(item.c.uid).where(item.c.batch_uid.in_(batch_uids))
 
-    def _items_held_by_other_batches(self, batch_uid: UUID) -> Select[tuple[UUID]]:
+    def _items_held_by_other_batches(self, batch_uid: UUID) -> Select[UUID]:
         """Items of the batch that something in another batch hangs directly
         under.
 
@@ -1557,7 +1560,7 @@ class DatabaseService:
 
         def parents_of_outside_children(
             link: FromClause, parent: ColumnElement[UUID | None], child: ColumnElement
-        ) -> Select[tuple[UUID | None]]:
+        ) -> Select[UUID | None]:
             return (
                 select(parent)
                 .select_from(link.join(item, item.c.uid == child))
@@ -2026,15 +2029,22 @@ class DatabaseService:
             ):
                 yield attribute.uid, attribute.schema_uid, attribute.mappable_value
             return
-        held = attribute.value
-        if held is None:
-            return
+        children: list[AnyAttribute]
         if isinstance(attribute, (ObjectAttribute, DatabaseObjectAttribute)):
-            children = list(held.values())
+            held_object = attribute.value
+            if held_object is None:
+                return
+            children = list(held_object.values())
         elif isinstance(attribute, (ListAttribute, DatabaseListAttribute)):
-            children = list(held)
+            held_list = attribute.value
+            if held_list is None:
+                return
+            children = list(held_list)
         elif isinstance(attribute, (UnionAttribute, DatabaseUnionAttribute)):
-            children = [held]
+            held_union = attribute.value
+            if held_union is None:
+                return
+            children = [held_union]
         else:
             return
         for child in children:
@@ -2605,7 +2615,7 @@ class DatabaseService:
 
     def get_literal_mapping_candidate(
         self, session: Session, mapper_uid: UUID, literal: str
-    ) -> Row[tuple[str, int, UUID]] | None:
+    ) -> Row[str, int, UUID] | None:
         """Return the highest-hit mapping item whose expression matches
         `literal` exactly.
 
@@ -2626,7 +2636,7 @@ class DatabaseService:
 
         Returns
         -------
-        Row[tuple[str, int, UUID]] | None
+        Row[str, int, UUID] | None
             A narrow (expression, hits, uid) projection, not the full entity,
             since the caller never needs the (JSON-serialized) `attribute`
             payload — the winning expression is looked up again via
@@ -2649,7 +2659,7 @@ class DatabaseService:
 
     def get_regex_mapping_items(
         self, session: Session, mapper_uid: UUID
-    ) -> Iterable[Row[tuple[str, int, UUID]]]:
+    ) -> Iterable[Row[str, int, UUID]]:
         """Return this mapper's genuinely regex-shaped mapping items.
 
         Mapping items with no exact literal (`DatabaseMappingItem.literal is
@@ -2666,7 +2676,7 @@ class DatabaseService:
 
         Returns
         -------
-        Iterable[Row[tuple[str, int, UUID]]]
+        Iterable[Row[str, int, UUID]]
             A narrow (expression, hits, uid) projection per item; see
             `get_literal_mapping_candidate` for why.
         """

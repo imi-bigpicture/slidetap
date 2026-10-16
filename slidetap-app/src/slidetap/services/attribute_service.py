@@ -622,6 +622,11 @@ class AttributeService:
         directly, so leaving it stale after a child-swap blanks the column.
         """
         schema = self._schema_service.get_any_attribute(parent.schema_uid)
+        if not isinstance(schema, ObjectAttributeSchema):
+            raise TypeError(
+                f"Object attribute {parent.uid} has schema {schema.uid} of type "
+                f"{type(schema).__name__}."
+            )
         value = parent.value
         if value is None or not value:
             parent.display_value = None

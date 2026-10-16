@@ -322,7 +322,7 @@ class ReviewService:
                         ),
                         last_saved=item.last_saved,
                         open_issues=(
-                            open_issues[item.uid].count
+                            open_issues[item.uid].total
                             if item.uid in open_issues
                             else 0
                         ),

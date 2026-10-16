@@ -332,7 +332,7 @@ class DicomProcessingStep(ImageProcessingStep):
                 raise ValueError(
                     f"The conversion of {image.identifier} did not ask for metadata."
                 )
-            return [Path(file) for file in files], written[-1]
+            return [Path(str(file)) for file in files], written[-1]
 
     def _resave_dicom(
         self,
@@ -401,7 +401,7 @@ class DicomProcessingStep(ImageProcessingStep):
         self._logger.info(
             f"Re-saved DICOM for {image.uid} in {path}. Created files {files}."
         )
-        return [Path(file) for file in files]
+        return [Path(str(file)) for file in files]
 
 
 class CreateThumbnails(ImageProcessingStep):

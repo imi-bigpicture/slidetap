@@ -2085,7 +2085,7 @@ class ItemService:
             # and moved onto the slide it is of makes that slide valid; a slide
             # whose only image is moved away stops being valid, and nothing
             # else would ever say so.
-            left_behind = self._parents_of(moved, session)
+            left_behind = self._holders_of(moved, session)
             touched_items = [moved, parent, *left_behind]
             was_valid = {
                 touched.uid: self._validation_service.item_is_valid_for_now(
@@ -2118,7 +2118,7 @@ class ItemService:
             return moved.model
 
     @staticmethod
-    def _parents_of(item: DatabaseItem, session: Session) -> list[DatabaseItem]:
+    def _holders_of(item: DatabaseItem, session: Session) -> list[DatabaseItem]:
         """What holds an item, before something else does.
 
         Read per type, as the move itself is: a sample is held by its parents,

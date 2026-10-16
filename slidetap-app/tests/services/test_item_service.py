@@ -729,6 +729,70 @@ class TestHierarchyRowAttributes:
 
 
 @pytest.mark.unittest
+class TestEditingALockedItem:
+    """A locked batch fixes where its items sit in the hierarchy, but an edit
+    that leaves the identifier, the name and the parents as they are is let
+    through."""
+
+    @pytest.fixture()
+    def item_service(self, decoy: Decoy) -> ItemService:
+        return ItemService(
+            decoy.mock(cls=AttributeService),
+            decoy.mock(cls=TagService),
+            decoy.mock(cls=MapperService),
+            decoy.mock(cls=SchemaService),
+            decoy.mock(cls=ValidationService),
+            decoy.mock(cls=DatabaseService),
+            decoy.mock(cls=ReviewService),
+        )
+
+    @pytest.fixture()
+    def sample(self) -> Sample:
+        return Sample(
+            uid=uuid4(),
+            identifier="PL1234-20-1-A",
+            dataset_uid=uuid4(),
+            batch_uid=uuid4(),
+            schema_uid=uuid4(),
+            parents={uuid4(): [uuid4()]},
+        )
+
+    @pytest.fixture()
+    def locked_sample(self, decoy: Decoy, sample: Sample) -> DatabaseSample:
+        locked_sample = decoy.mock(cls=DatabaseSample)
+        decoy.when(locked_sample.locked).then_return(True)
+        decoy.when(locked_sample.identifier).then_return(sample.identifier)
+        decoy.when(locked_sample.name).then_return(sample.name)
+        decoy.when(locked_sample.model).then_return(sample)
+        return locked_sample
+
+    def test_an_edit_keeping_the_parents_is_let_through(
+        self,
+        item_service: ItemService,
+        locked_sample: DatabaseSample,
+        sample: Sample,
+    ):
+        # Arrange
+        edited = sample.model_copy(update={"comment": "checked"})
+
+        # Act and assert: nothing is raised.
+        item_service._raise_if_locked_edit(locked_sample, edited)
+
+    def test_moving_the_item_is_refused(
+        self,
+        item_service: ItemService,
+        locked_sample: DatabaseSample,
+        sample: Sample,
+    ):
+        # Arrange
+        moved = sample.model_copy(update={"parents": {uuid4(): [uuid4()]}})
+
+        # Act and assert
+        with pytest.raises(NotAllowedActionError, match="Cannot move"):
+            item_service._raise_if_locked_edit(locked_sample, moved)
+
+
+@pytest.mark.unittest
 class TestWhetherARowIsStillInTheProject:
     """A row says whether its item is still part of the project, and whether
     that is still a question.

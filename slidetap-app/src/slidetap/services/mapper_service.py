@@ -888,14 +888,14 @@ class MapperService:
         root_attribute_schema_uid: UUID,
         mapper_uids: Sequence[UUID],
         cache: MapperCache | None,
-    ) -> list[DatabaseMapper]:
+    ) -> Sequence[DatabaseMapper]:
         """The mappers that apply, from the cache when it holds them."""
         if cache is None:
             return self._database_service.get_mappers_for_root_attribute(
                 session, root_attribute_schema_uid, mapper_uids
             ).all()
         if root_attribute_schema_uid not in cache.mappers_for_root:
-            cache.mappers_for_root[root_attribute_schema_uid] = (
+            cache.mappers_for_root[root_attribute_schema_uid] = list(
                 self._database_service.get_mappers_for_root_attribute(
                     session, root_attribute_schema_uid, mapper_uids
                 ).all()
@@ -904,7 +904,7 @@ class MapperService:
 
     def _cached_regex_items(
         self, session: Session, mapper_uid: UUID, cache: MapperCache | None
-    ) -> Iterable[Row[tuple[str, int, UUID]] | DatabaseMappingItem]:
+    ) -> Iterable[Row[str, int, UUID] | DatabaseMappingItem]:
         """The mapper's regex-shaped mapping items, hits-ordered.
 
         Ordered here rather than by the database when the cache holds them,
@@ -927,7 +927,7 @@ class MapperService:
         mapper_uid: UUID,
         value: str,
         cache: MapperCache | None,
-    ) -> Row[tuple[str, int, UUID]] | DatabaseMappingItem | None:
+    ) -> Row[str, int, UUID] | DatabaseMappingItem | None:
         """The mapping item whose literal is exactly this value, the most hit
         of them where there is more than one."""
         if cache is None or mapper_uid not in cache.items_by_mapper:
@@ -1124,7 +1124,7 @@ class MapperService:
             # values; never on the hot path.
             return self._linear_scan_expression(session, mapper_uid, value)
 
-        candidates: list[Row[tuple[str, int, UUID]]] = []
+        candidates: list[Row[str, int, UUID] | DatabaseMappingItem] = []
         exact = self._cached_literal_item(session, mapper_uid, value, cache)
         if exact is not None:
             candidates.append(exact)

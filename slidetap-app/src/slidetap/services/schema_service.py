@@ -33,6 +33,7 @@ from slidetap.database import (
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
+    AnyAttributeSchema,
     AttributeSchema,
     NotFoundError,
     Project,
@@ -377,7 +378,7 @@ class SchemaService:
                 return root.family_uid
         return None
 
-    def get_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
+    def get_attribute(self, attribute_schema_uid: UUID) -> AnyAttributeSchema:
         return self._attributes[attribute_schema_uid]
 
     def get_attribute_by_name(
@@ -394,7 +395,7 @@ class SchemaService:
             else self.default_root
         ).get_attribute_by_name(attribute_name)
 
-    def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
+    def get_private_attribute(self, attribute_schema_uid: UUID) -> AnyAttributeSchema:
         return self._private_attributes[attribute_schema_uid]
 
     def has_attribute(self, attribute_schema_uid: UUID) -> bool:
@@ -409,7 +410,7 @@ class SchemaService:
             or attribute_schema_uid in self._private_attributes
         )
 
-    def get_any_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
+    def get_any_attribute(self, attribute_schema_uid: UUID) -> AnyAttributeSchema:
         """The attribute schema of this uid, a public or a private attribute,
         in whichever root defines it.
 
@@ -425,7 +426,7 @@ class SchemaService:
         raise ValueError(f"Attribute schema with UID {attribute_schema_uid} not found.")
 
     @cached_property
-    def _attributes(self) -> dict[UUID, AttributeSchema]:
+    def _attributes(self) -> dict[UUID, AnyAttributeSchema]:
         """Every public attribute schema, across roots."""
         return {
             uid: attribute
@@ -434,7 +435,7 @@ class SchemaService:
         }
 
     @cached_property
-    def _private_attributes(self) -> dict[UUID, AttributeSchema]:
+    def _private_attributes(self) -> dict[UUID, AnyAttributeSchema]:
         """Every private attribute schema, across roots."""
         return {
             uid: attribute
