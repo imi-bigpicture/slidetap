@@ -32,6 +32,27 @@ updates:
       frontend:
         patterns: ["*"]
 
+  # Base images of the application images
+  - package-ecosystem: docker
+    directories:
+      - /slidetap-app/dockerfiles
+      - /slidetap-client/dockerfiles
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      docker:
+        patterns: ["*"]
+
+  # Images of the example deployment
+  - package-ecosystem: docker-compose
+    directory: /example
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+
   # GitHub Actions used by workflows
   - package-ecosystem: github-actions
     directory: /
