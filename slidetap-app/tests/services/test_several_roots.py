@@ -1077,6 +1077,34 @@ class TestViewOnlyRoot:
             metadata_export_interface.preview_item(matchers.Anything()), times=0
         )
 
+    def test_there_are_no_export_notices(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+        other: StoredProject,
+    ):
+        # Arrange
+        image_uid = self._image(stored_database_service, schema, other)
+        metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
+        metadata_export_service = MetadataExportService(
+            decoy.mock(cls=Scheduler),
+            decoy.mock(cls=ProjectService),
+            stored_database_service,
+            schema_service,
+            metadata_export_interface,
+        )
+
+        # Act
+        notices = metadata_export_service.export_notices(image_uid)
+
+        # Assert
+        assert notices == []
+        decoy.verify(
+            metadata_export_interface.export_notices(matchers.Anything()), times=0
+        )
+
     def test_a_refused_remap_task_is_not_failed(self, decoy: Decoy):
         """A remap scheduled before the project became view only leaves it as
         it is, rather than fail and be retried."""

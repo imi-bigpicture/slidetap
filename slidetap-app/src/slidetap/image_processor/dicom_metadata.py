@@ -18,6 +18,8 @@ import dataclasses
 import hashlib
 import json
 import logging
+import os
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -91,6 +93,25 @@ class DicomMetadataWriter:
             }
         )
 
+    def name_by_index(self, files: Sequence[Path]) -> list[Path]:
+        """Rename the files of an image written to DICOM to ``0.dcm``, ``1.dcm``
+        and so on, in the order they were written.
+
+        DICOM is written to files named after the instances in them, and what a
+        file is named is kept on the image to find it again. A name that is the
+        SOP instance uid would keep a link from every exported file to the image,
+        and through it to where the image came from, whatever else of the link is
+        cut: the uid is written in the file and in the exported metadata. The
+        index says nothing beyond the folder the files are in.
+        """
+        named: list[Path] = []
+        for index, file in enumerate(files):
+            target = file.with_name(f"{index}.dcm")
+            if file != target:
+                os.replace(file, target)
+            named.append(target)
+        return named
+
     def resave(
         self,
         source: Path,
@@ -111,7 +132,8 @@ class DicomMetadataWriter:
         not say is not an omission.
 
         The instance uids are new, which is what the standard asks for when what
-        a file says about the images has changed.
+        a file says about the images has changed. The files are named by index,
+        see `name_by_index()`.
         """
         with WsiDicom.open(source) as wsi:
             files = wsi.save(
@@ -126,7 +148,7 @@ class DicomMetadataWriter:
         self._logger.info(
             f"Re-saved DICOM from {source} to {destination} with new metadata."
         )
-        return [Path(str(file)) for file in files]
+        return self.name_by_index([Path(str(file)) for file in files])
 
     def _with_icc_profiles(
         self, metadata: WsiDicomizerMetadata, found: WsiMetadata

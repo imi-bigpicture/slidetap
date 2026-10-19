@@ -14,7 +14,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from slidetap.model import Dataset, Item, Project
+from slidetap.model import Dataset, ExportNotice, Item, Project
 
 
 class MetadataExportInterface(metaclass=ABCMeta):
@@ -35,6 +35,20 @@ class MetadataExportInterface(metaclass=ABCMeta):
             The item to serialize.
         """
         raise NotImplementedError()
+
+    def export_notices(self, item: Item) -> list[ExportNotice]:
+        """
+        What a curator should know about how the item is exported, where it is
+        exported otherwise than it is stored, such as a case exported as several:
+        one notice for each way it is. Empty where there is nothing to say, which
+        is the default.
+
+        Parameters
+        ----------
+        item: Item
+            The item to tell about.
+        """
+        return []
 
     @abstractmethod
     def export(self, project: Project, dataset: Dataset) -> None:

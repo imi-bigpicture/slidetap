@@ -234,6 +234,25 @@ class TestProjectService:
         # Assert
         assert result == seed
 
+    def test_get_seed_of_dataset(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        seed = uuid4()
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(session.scalar(matchers.Anything())).then_return(seed)
+
+        # Act
+        result = project_service.get_seed_of_dataset(project.dataset_uid)
+
+        # Assert
+        assert result == seed
+
     def test_clear_seed(
         self,
         decoy: Decoy,

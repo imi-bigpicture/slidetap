@@ -28,6 +28,8 @@ from slidetap_example import ExampleSchema
 from slidetap.model import (
     Batch,
     Dataset,
+    ExportNotice,
+    ExportNoticeKind,
     ItemNeighbours,
     MoveAttributeRequest,
     NewChildSuggestion,
@@ -238,6 +240,51 @@ class TestSlideTapItemRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert response.json() == {"preview": preview}
+
+    def test_the_export_notices_of_an_item_are_got(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        metadata_export_service: MetadataExportService,
+    ):
+        # Arrange
+        item_uid = uuid4()
+        notices = [
+            ExportNotice(kind=ExportNoticeKind.MOVED, message="Exported elsewhere."),
+            ExportNotice(kind=ExportNoticeKind.RENAMED, message="Renamed."),
+        ]
+        decoy.when(metadata_export_service.export_notices(item_uid)).then_return(
+            notices
+        )
+
+        # Act
+        response = test_client.get(f"api/items/item/{item_uid}/export-notices")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {
+            "notices": [
+                {"kind": "moved", "message": "Exported elsewhere."},
+                {"kind": "renamed", "message": "Renamed."},
+            ]
+        }
+
+    def test_an_item_exported_as_stored_has_no_export_notices(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        metadata_export_service: MetadataExportService,
+    ):
+        # Arrange
+        item_uid = uuid4()
+        decoy.when(metadata_export_service.export_notices(item_uid)).then_return([])
+
+        # Act
+        response = test_client.get(f"api/items/item/{item_uid}/export-notices")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {"notices": []}
 
     def test_the_review_status_of_an_item_is_set(
         self,

@@ -19,6 +19,7 @@ import logging
 from collections.abc import Iterable
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseProject
@@ -174,6 +175,20 @@ class ProjectService:
         """
         with self._database_service.get_session() as session:
             return self._database_service.get_project(session, uid).seed
+
+    def get_seed_of_dataset(self, dataset_uid: UUID) -> UUID | None:
+        """The importer seed of the project the dataset is of, None where it
+        has been cleared, see `get_seed`.
+
+        For an export that derives what it writes from the seed, so that what
+        it writes cannot be derived again once the seed is cleared.
+        """
+        with self._database_service.get_session() as session:
+            return session.scalar(
+                select(DatabaseProject.seed).where(
+                    DatabaseProject.dataset_uid == dataset_uid
+                )
+            )
 
     def clear_seed(
         self,

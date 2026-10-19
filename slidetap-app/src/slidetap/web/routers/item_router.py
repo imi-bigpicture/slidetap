@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from slidetap.model import (
     AnyItem,
+    ExportNotice,
     ImageGroup,
     ItemNeighbours,
     MoveAttributeRequest,
@@ -72,6 +73,12 @@ class PreviewResponse(BaseModel):
     """Response model for item preview."""
 
     preview: str | None
+
+
+class ExportNoticesResponse(BaseModel):
+    """Response model for the export notices of an item."""
+
+    notices: list[ExportNotice]
 
 
 class ItemsResponse(BaseModel):
@@ -156,6 +163,31 @@ def preview_item(
     """
     logger.debug(f"Preview item {item_uid}.")
     return PreviewResponse(preview=metadata_export_service.preview_item(item_uid))
+
+
+@item_router.get("/item/{item_uid}/export-notices")
+def get_export_notices(
+    item_uid: UUID,
+    metadata_export_service: FromDishka[MetadataExportService],
+    logger: Logger,
+) -> ExportNoticesResponse:
+    """Return what to know about how the item is exported.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item
+
+    Returns
+    ----------
+    ExportNoticesResponse
+        One notice for each way the item is exported otherwise than it is
+        stored, none where it is exported as stored.
+    """
+    logger.debug(f"Export notices of item {item_uid}.")
+    return ExportNoticesResponse(
+        notices=metadata_export_service.export_notices(item_uid)
+    )
 
 
 @item_router.post("/item/{item_uid}/review")

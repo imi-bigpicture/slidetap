@@ -18,7 +18,7 @@ import logging
 from uuid import UUID
 
 from slidetap.external_interfaces import MetadataExportInterface
-from slidetap.model import Project
+from slidetap.model import ExportNotice, Project
 from slidetap.services import ProjectService, SchemaService
 from slidetap.services.database_service import DatabaseService
 from slidetap.task import Scheduler
@@ -66,3 +66,12 @@ class MetadataExportService:
             if not self._schema_service.can_change(item, session):
                 return None
             return self._metadata_export_interface.preview_item(item.model)
+
+    def export_notices(self, item_uid: UUID) -> list[ExportNotice]:
+        """What to know about how the item is exported, empty where there is
+        nothing or the project cannot be changed, as for the preview."""
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            if not self._schema_service.can_change(item, session):
+                return []
+            return self._metadata_export_interface.export_notices(item.model)

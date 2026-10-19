@@ -45,6 +45,7 @@ from slidetap.model.errors import (
     NotFoundError,
     ProjectNotEditableError,
 )
+from slidetap.model.export_notice import ExportNotice, ExportNoticeKind
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item import (
@@ -228,6 +229,8 @@ __all__ = [
     "Dzi",
     "EnumAttribute",
     "EnumAttributeSchema",
+    "ExportNotice",
+    "ExportNoticeKind",
     "File",
     "Image",
     "ImageFile",

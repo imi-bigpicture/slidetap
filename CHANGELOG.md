@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `MetadataExportInterface.export_notices()`, what a curator should know about how an item is exported where it is exported otherwise than stored, as `ExportNotice`s of an `ExportNoticeKind` such as a case exported as several, and `GET /api/items/item/{item_uid}/export-notices`. The client shows them at the top of the item details and above the preview in the `export_preview` review panel.
+- The DICOM files of an image are named `0.dcm`, `1.dcm` and so on, in the order they are written, both at post-processing and when they are written again on storing, instead of after their SOP instance uid. The name is kept on the image, and a uid kept there would link every exported file back to the image whatever else of the link is cut.
 - `DELETING` batch and project statuses, shown while a background task removes what they hold.
 - Deleting a batch asks for confirmation in the client and removes the downloaded and processed files of its images.
 - Export is refused, with the reason, for a project with a batch being deleted or a selected image that was never stored.

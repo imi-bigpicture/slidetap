@@ -83,6 +83,7 @@ import AttributeDetails from '../attribute/attribute_details'
 import ChipDivider from './chip_divider'
 import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
+import ExportNotices from './export_notice'
 import ItemViewHeader from './item_view_header'
 import type { ItemStepping } from './use_item_stepping'
 import DisplayItemIdentifiers from './item_identifiers'
@@ -625,6 +626,7 @@ export default function DisplayItemDetails({
             <Grid container>
               <Grid size="grow">
                 <Stack spacing={1}>
+                    <ExportNotices itemUid={item.uid} enabled={canEdit} />
                     <DisplayItemIdentifiers
                       item={item}
                       action={action}

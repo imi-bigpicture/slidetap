@@ -139,6 +139,8 @@ export const queryKeys = {
       [...queryKeys.item.detail(itemUid), 'hierarchy', hierarchyLayoutUid] as const,
     preview: (itemUid: string) =>
       [...queryKeys.item.detail(itemUid), 'preview'] as const,
+    exportNotices: (itemUid: string) =>
+      [...queryKeys.item.detail(itemUid), 'exportNotices'] as const,
     images: (
       itemUid: string,
       groupBySchemaUid: string,

@@ -23,6 +23,7 @@ rather than written.
 
 import dataclasses
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from wsidicom.conceptcode import SpecimenStainsCode
@@ -222,3 +223,38 @@ class TestIccProfiles:
         )
 
         assert written.pyramid.optical_paths[0].icc_profile is None
+
+
+@pytest.mark.unittest
+class TestNameByIndex:
+    """The files of an image are named by index rather than after the SOP
+    instance uid, which the image would otherwise keep a link to every
+    exported file by."""
+
+    def test_files_are_named_by_index_in_the_order_written(self, tmp_path: Path):
+        # Arrange
+        first = tmp_path.joinpath("1.2.826.0.1.3680043.8.498.111.dcm")
+        second = tmp_path.joinpath("1.2.826.0.1.3680043.8.498.222.dcm")
+        first.write_bytes(b"first")
+        second.write_bytes(b"second")
+
+        # Act
+        named = DicomMetadataWriter().name_by_index([first, second])
+
+        # Assert
+        assert named == [tmp_path.joinpath("0.dcm"), tmp_path.joinpath("1.dcm")]
+        assert named[0].read_bytes() == b"first"
+        assert named[1].read_bytes() == b"second"
+        assert sorted(path.name for path in tmp_path.iterdir()) == ["0.dcm", "1.dcm"]
+
+    def test_files_already_named_by_index_are_left(self, tmp_path: Path):
+        # Arrange
+        file = tmp_path.joinpath("0.dcm")
+        file.write_bytes(b"first")
+
+        # Act
+        named = DicomMetadataWriter().name_by_index([file])
+
+        # Assert
+        assert named == [file]
+        assert file.read_bytes() == b"first"
