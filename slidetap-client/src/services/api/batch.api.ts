@@ -12,11 +12,24 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Batch, BatchCreate } from 'src/models/batch'
+import type { Batch, BatchCreate, BatchStoringProgress } from 'src/models/batch'
 import type { BatchStatus } from 'src/models/batch_status'
 import { BatchValidation } from 'src/models/validation'
+import type {
+  BatchVerification,
+  VerificationEntry,
+  VerificationDecision,
+  VerificationRound,
+  VerificationRoundCreate,
+} from 'src/models/verification'
 
-import { delete_, get, parseJsonResponse, post, postFile } from 'src/services/api/api_methods'
+import {
+  delete_,
+  get,
+  parseJsonResponse,
+  post,
+  postFile,
+} from 'src/services/api/api_methods'
 
 const batchApi = {
   create: async (batch: BatchCreate) => {
@@ -35,14 +48,14 @@ const batchApi = {
   },
 
   getBatches: async (projectUid?: string, status?: BatchStatus) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams()
     if (projectUid !== undefined) {
       params.append('project_uid', projectUid)
     }
     if (status !== undefined) {
       params.append('status', status.toString())
     }
-    const url = "batches" + (params.size > 0 ? "?" + params.toString() : "")
+    const url = 'batches' + (params.size > 0 ? '?' + params.toString() : '')
     const response = await get(url)
     return await parseJsonResponse<Batch[]>(response)
   },
@@ -66,6 +79,11 @@ const batchApi = {
     return await parseJsonResponse<Batch>(response)
   },
 
+  getStoringProgress: async (batchUid: string) => {
+    const response = await get(`batches/batch/${batchUid}/storing`)
+    return await parseJsonResponse<BatchStoringProgress>(response)
+  },
+
   getValidation: async (batchUid: string) => {
     const response = await get(`batches/batch/${batchUid}/validation`)
     return await parseJsonResponse<BatchValidation>(response)
@@ -81,9 +99,31 @@ const batchApi = {
     return await parseJsonResponse<Batch>(response)
   },
 
+  /** How verifying the batch stands: what was drawn, what was decided, and
+   * what holds the batch back from being completed. */
+  getVerification: async (batchUid: string) => {
+    const response = await get(`batches/batch/${batchUid}/verification`)
+    return await parseJsonResponse<BatchVerification>(response)
+  },
+
+  /** Draw review units of the batch at random to verify. */
+  drawVerificationRound: async (batchUid: string, request: VerificationRoundCreate) => {
+    const response = await post(
+      `batches/batch/${batchUid}/verification/rounds`,
+      request,
+    )
+    return await parseJsonResponse<VerificationRound>(response)
+  },
+
+  /** Pass or fail a unit drawn for verification. */
+  decideVerification: async (entryUid: string, decision: VerificationDecision) => {
+    const response = await post(`batches/verification/${entryUid}`, decision)
+    return await parseJsonResponse<VerificationEntry>(response)
+  },
+
   remap: async (batchUid: string) => {
     return await post(`batches/batch/${batchUid}/remap`)
-  }
+  },
 }
 
 export default batchApi

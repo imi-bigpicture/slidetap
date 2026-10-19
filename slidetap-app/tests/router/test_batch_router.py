@@ -28,6 +28,7 @@ from slidetap.external_interfaces import FileParseError
 from slidetap.model import (
     Batch,
     BatchStatus,
+    BatchStoringProgress,
     NotAllowedActionError,
     ProjectNotEditableError,
 )
@@ -168,6 +169,27 @@ class TestSlideTapBatchRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+
+    def test_storing_progress_is_got(
+        self, decoy: Decoy, test_client: TestClient, batch_service: BatchService
+    ):
+        # Arrange
+        uid = uuid4()
+        decoy.when(batch_service.get_storing_progress(uid)).then_return(
+            BatchStoringProgress(batch_uid=uid, total=10, stored=4, failed=1)
+        )
+
+        # Act
+        response = test_client.get(f"api/batches/batch/{uid}/storing")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {
+            "batchUid": str(uid),
+            "total": 10,
+            "stored": 4,
+            "failed": 1,
+        }
 
     def test_delete_batch_not_found(
         self, decoy: Decoy, test_client: TestClient, batch_service: BatchService

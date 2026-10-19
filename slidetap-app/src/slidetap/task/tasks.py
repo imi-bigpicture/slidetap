@@ -715,10 +715,20 @@ def _store_image(
         # written are new ones, so the files that were stored are not the files
         # that were processed.
         image.files = [
-            ImageFile(uid=uuid4(), filename=str(file.relative_to(staged)))
+            ImageFile(uid=uuid4(), filename=_filename_in(file, staged))
             for file in written_files
         ]
     image.metadata_digest = digest
+
+
+def _filename_in(file: Path, folder: Path) -> str:
+    """The name of a file written into a folder, relative to the folder.
+
+    Both are resolved first: the writer hands back absolute paths, and a folder
+    configured without a drive, such as ``/mnt/c/...`` on Windows, is only
+    absolute once resolved.
+    """
+    return str(file.resolve().relative_to(folder.resolve()))
 
 
 @dishka_task(

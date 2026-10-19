@@ -60,10 +60,12 @@ from slidetap.services import (
     SchemaService,
     StorageService,
     ValidationService,
+    VerificationService,
 )
 from slidetap.task.dishka_integration import retry_check
 from slidetap.task.tasks import (
     _TRANSIENT_RETRY,
+    _filename_in,
     _reset_state_for_stalled_job,
     download_and_pre_process_image,
     post_process_image,
@@ -183,6 +185,7 @@ def batch_service(
         validation_service=decoy.mock(cls=ValidationService),
         database_service=stored_database_service,
         review_service=decoy.mock(cls=ReviewService),
+        verification_service=decoy.mock(cls=VerificationService),
     )
 
 
@@ -608,6 +611,79 @@ class TestPostProcessImage:
             _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
         )
+
+
+@pytest.mark.integration
+class TestStoringProgress:
+    def test_counts_what_storing_takes_and_where_it_is(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema: ExampleSchema,
+    ):
+        """Images storing does not take, as one not processed or not
+        selected, are not counted."""
+        # Arrange
+        schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.root_of(Anything(), Anything())).then_return(schema)
+        batch_service = BatchService(
+            schema_service=schema_service,
+            validation_service=decoy.mock(cls=ValidationService),
+            database_service=stored_database_service,
+            review_service=decoy.mock(cls=ReviewService),
+            verification_service=decoy.mock(cls=VerificationService),
+        )
+        stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
+        for index, status in enumerate(
+            [
+                ImageStatus.STORED,
+                ImageStatus.STORED,
+                ImageStatus.STORING,
+                ImageStatus.POST_PROCESSED,
+                ImageStatus.STORING_FAILED,
+                ImageStatus.POST_PROCESSING_FAILED,
+            ]
+        ):
+            _add_image(
+                stored_database_service,
+                schema,
+                stored,
+                status,
+                identifier=f"PL1234-20-{index}",
+            )
+        deselected = _add_image(
+            stored_database_service,
+            schema,
+            stored,
+            ImageStatus.POST_PROCESSED,
+            identifier="PL1234-20-deselected",
+        )
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_image(session, deselected).selected = False
+
+        # Act
+        progress = batch_service.get_storing_progress(stored.batch_uid)
+
+        # Assert
+        assert progress.total == 5
+        assert progress.stored == 2
+        assert progress.failed == 1
+
+
+@pytest.mark.unittest
+class TestFilenameIn:
+    def test_a_folder_without_a_drive_holds_what_was_written_into_it(self):
+        """The writer hands back absolute paths, which on Windows carry the
+        drive a folder like ``/mnt/c/storage`` was configured without."""
+        # Arrange
+        folder = Path("/mnt/c/storage/.tmp-1")
+        written = Path("/mnt/c/storage/.tmp-1/1.2.3.dcm").resolve()
+
+        # Act
+        filename = _filename_in(written, folder)
+
+        # Assert
+        assert filename == "1.2.3.dcm"
 
 
 @pytest.mark.integration

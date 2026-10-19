@@ -32,14 +32,23 @@ from slidetap.model import (
     Batch,
     BatchCreate,
     BatchStatus,
+    BatchStoringProgress,
     File,
     NotAllowedActionError,
     ProjectNotEditableError,
 )
 from slidetap.model.validation import BatchValidation
+from slidetap.model.verification import (
+    BatchVerification,
+    VerificationDecision,
+    VerificationEntry,
+    VerificationRound,
+    VerificationRoundCreate,
+)
 from slidetap.services import (
     BatchService,
     ValidationService,
+    VerificationService,
 )
 from slidetap.task import Scheduler
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -310,6 +319,103 @@ def complete(
         ) from exception
 
 
+@batch_router.get("/batch/{batch_uid}/verification")
+async def get_verification(
+    batch_uid: UUID,
+    verification_service: FromDishka[VerificationService],
+    logger: Logger,
+) -> BatchVerification:
+    """How verifying the batch stands: what was drawn, what was decided, and
+    what holds the batch back from being locked.
+
+    Parameters
+    ----------
+    batch_uid: UUID
+        Id of batch.
+
+    Returns
+    ----------
+    BatchVerification
+        Not verified, and otherwise empty, where the schema of the project
+        declares no verification.
+    """
+    logger.debug(f"Get verification of batch {batch_uid}.")
+    return verification_service.get(batch_uid)
+
+
+@batch_router.post("/batch/{batch_uid}/verification/rounds")
+async def draw_verification_round(
+    batch_uid: UUID,
+    request: VerificationRoundCreate,
+    verification_service: FromDishka[VerificationService],
+    logger: Logger,
+) -> VerificationRound:
+    """Draw review units of the batch at random to verify.
+
+    Answers with conflict where the batch is not verified, is not ready to be,
+    has nothing left to draw, or another draw took the same units first.
+
+    Parameters
+    ----------
+    batch_uid: UUID
+        Id of batch.
+    request: VerificationRoundCreate
+        How many to draw, from which units, and with what seed.
+
+    Returns
+    ----------
+    VerificationRound
+        The round drawn.
+    """
+    logger.info(f"Drawing units of batch {batch_uid} to verify.")
+    try:
+        return verification_service.draw(batch_uid, request)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+
+
+@batch_router.post("/verification/{entry_uid}")
+async def decide_verification(
+    entry_uid: UUID,
+    decision: VerificationDecision,
+    verification_service: FromDishka[VerificationService],
+    logger: Logger,
+) -> VerificationEntry:
+    """Pass or fail a unit drawn for verification.
+
+    Failing needs a reason, and raises it as an issue on the unit. Answers with
+    conflict where the batch cannot be verified now, or the unit has been taken
+    out of the project.
+
+    Parameters
+    ----------
+    entry_uid: UUID
+        Id of the entry of the unit, as the batch's verification lists it.
+    decision: VerificationDecision
+        Whether it passes, and why not where it fails.
+
+    Returns
+    ----------
+    VerificationEntry
+        The entry as it now stands.
+    """
+    logger.info(f"Deciding {decision.verdict.name} on verification {entry_uid}.")
+    try:
+        return verification_service.decide(entry_uid, decision)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+
+
 @batch_router.post("/batch/{batch_uid}/reopen")
 def reopen(
     batch_uid: UUID,
@@ -440,6 +546,27 @@ def delete_batch(
             detail="Failed to schedule the deletion, delete the batch again",
         ) from exception
     return StatusResponse(status="scheduled")
+
+
+@batch_router.get("/batch/{batch_uid}/storing")
+def get_storing_progress(
+    batch_uid: UUID,
+    batch_service: FromDishka[BatchService],
+) -> BatchStoringProgress:
+    """How far storing the images of a batch to the outbox has come.
+
+    Parameters
+    ----------
+    batch_uid: UUID
+        Id of the batch.
+
+    Returns
+    ----------
+    BatchStoringProgress
+        How many images the batch stores, how many are stored, and how many
+        failed.
+    """
+    return batch_service.get_storing_progress(batch_uid)
 
 
 @batch_router.get("/batch/{batch_uid}/validation")

@@ -28,3 +28,15 @@ export interface Batch {
     readonly isDefault: boolean
     readonly created: string
 }
+
+/** How far storing the images of a batch to the outbox has come, counted over
+ * the selected images the batch stores. */
+export interface BatchStoringProgress {
+    readonly batchUid: string
+    /** How many images the batch stores. */
+    readonly total: number
+    /** How many of them are in the outbox. */
+    readonly stored: number
+    /** How many failed to store, and wait to be retried or taken out. */
+    readonly failed: number
+}

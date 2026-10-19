@@ -110,6 +110,12 @@ const projectApi = {
     return await delete_(`projects/project/${projectUid}`)
   },
 
+  /** Store the images of every locked batch of the project to the outbox. */
+  storeImages: async (projectUid: string) => {
+    const response = await post(`projects/project/${projectUid}/complete`)
+    return await parseJsonResponse<Project>(response)
+  },
+
   export: async (projectUid: string) => {
     const response = await post(`projects/project/${projectUid}/export`)
     return await parseJsonResponse<Project>(response)

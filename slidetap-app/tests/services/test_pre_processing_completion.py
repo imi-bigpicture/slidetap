@@ -41,6 +41,7 @@ from slidetap.services import (
     ReviewService,
     SchemaService,
     ValidationService,
+    VerificationService,
 )
 from slidetap.services.batch_service import PRE_PROCESSING_SETTLED
 
@@ -139,6 +140,7 @@ def batch_service(
         validation_service=decoy.mock(cls=ValidationService),
         database_service=stored_database_service,
         review_service=review_service,
+        verification_service=decoy.mock(cls=VerificationService),
     )
 
 

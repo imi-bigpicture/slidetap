@@ -14,6 +14,8 @@
 
 """Module containing entities stored in database."""
 
+# Imported for what it registers: when items changed is kept on every flush.
+from slidetap.database import change_tracking  # noqa: F401
 from slidetap.database.attribute import (
     DatabaseAttribute,
     DatabaseBooleanAttribute,
@@ -55,6 +57,10 @@ from slidetap.database.project_migration import (
 )
 from slidetap.database.review_issue import DatabaseReviewIssue
 from slidetap.database.unmapped_value import DatabaseUnmappedValue
+from slidetap.database.verification import (
+    DatabaseVerificationEntry,
+    DatabaseVerificationRound,
+)
 
 __all__ = [
     "Base",
@@ -85,6 +91,8 @@ __all__ = [
     "DatabaseMigrationEntity",
     "DatabaseAttributeMigrationIssue",
     "DatabaseUnmappedValue",
+    "DatabaseVerificationEntry",
+    "DatabaseVerificationRound",
     "DatabaseProject",
     "DatabaseDataset",
     "DatabaseBatch",

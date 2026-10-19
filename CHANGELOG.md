@@ -26,11 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Neither the web app nor a worker starts while projects hold items or attributes on schemas their root does not have, and the error names those roots.
 - The stored mappers are set up on deploy by `slidetap-mappers set-up`, not at startup of the web app, so the plugin's mapper sheets are injected only when it runs.
 - `ItemService.get_hierarchy()`, `ItemService.get_images_for_item()`, and `OverviewService.get_overview_data()` take the uid of the layout, which they look up in the root of the item.
+- `BatchService` takes a `VerificationService`.
+- `GET /api/images/thumbnails/{dataset_uid}` and `ImageService.get_images_with_thumbnail()` are removed.
 
 ### Added
 
 - `MetadataExportInterface.export_notices()`, what a curator should know about how an item is exported where it is exported otherwise than stored, as `ExportNotice`s of an `ExportNoticeKind` such as a case exported as several, and `GET /api/items/item/{item_uid}/export-notices`. The client shows them at the top of the item details and above the preview in the `export_preview` review panel.
 - The DICOM files of an image are named `0.dcm`, `1.dcm` and so on, in the order they are written, both at post-processing and when they are written again on storing, instead of after their SOP instance uid. The name is kept on the image, and a uid kept there would link every exported file back to the image whatever else of the link is cut.
+- Batch verification: a `VerificationPolicy` on the review unit of a root has review units drawn at random from a batch and passed or failed by hand on the Verify page. The Validate page is removed, and Verify is offered only for projects whose root declares a policy. A failed unit raises a review issue of the new `VERIFICATION` source, and blocks completing the batch until it passes again or is taken out of the project. Where the policy requires it, a batch is also completed only once at least the policy's minimum of units still in the project have been drawn, and every one of them decided on and not changed since. Each round records the seed it was drawn with, always picked at random by the server so that a draw cannot be steered, and the population it was drawn from. The draw dialog says why the policy suggests the size it does, and what completing the batch requires. Nothing can be edited on the Verify page: what is wrong is failed with a reason and fixed in review.
+- Items record when what they hold, or anything under them, last changed, kept on every flush whichever way the change was made.
+- An `export_preview` review panel, showing what the metadata export writes for a unit and everything connected to it, one tab per file, from the new `MetadataExportInterface.preview_export()` and `GET /api/items/item/{item_uid}/export-preview`. An interface that does not implement it previews the unit alone.
+
 - `DELETING` batch and project statuses, shown while a background task removes what they hold.
 - Deleting a batch asks for confirmation in the client and removes the downloaded and processed files of its images.
 - Export is refused, with the reason, for a project with a batch being deleted or a selected image that was never stored.
@@ -69,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The batch's Complete page is the Lock page, as what it does is lock a curated batch; "completed" is kept for a batch whose images are in the outbox. The Export page stores the images of the locked batches to the outbox (`POST /api/projects/project/{uid}/complete`), which the client never called, and offers submitting only once every batch is stored, showing for each batch how many of its images are stored and how many failed, from the new `GET /api/batches/batch/{uid}/storing`.
 - Batch and project deletion run as background tasks. `DELETE /api/batches/batch/{uid}` and `DELETE /api/projects/project/{uid}` mark the row as deleting, answer `{"status": "scheduled"}` and refuse with `409` while a worker holds the batch.
 - A batch that is locked, storing images or completed can no longer be deleted; a locked batch is reopened first.
 - Items in a batch are deleted with set-based statements instead of one at a time.
@@ -87,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Storing an image whose metadata changed no longer fails where the storage folder is configured without a drive on Windows, such as `/mnt/c/...`.
 - Deleting a large batch no longer blocks the web server for the duration of the delete.
 - A batch delete that is interrupted no longer leaves a deleted batch behind with its items still selected in the dataset.
 

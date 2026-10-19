@@ -55,6 +55,7 @@ from slidetap.services import (
     SchemaService,
     StorageService,
     ValidationService,
+    VerificationService,
 )
 from slidetap.task import DeferError, Scheduler
 from slidetap.task import scheduler as scheduler_module
@@ -313,6 +314,7 @@ class TestProcessMetadataImportRunAgain:
             validation_service=decoy.mock(cls=ValidationService),
             database_service=stored_database_service,
             review_service=decoy.mock(cls=ReviewService),
+            verification_service=decoy.mock(cls=VerificationService),
         )
 
         def run(will_retry: Callable[[BaseException], bool]) -> None:

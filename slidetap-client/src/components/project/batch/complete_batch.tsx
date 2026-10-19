@@ -14,9 +14,10 @@
 
 import { Alert, Button, Stack, Typography } from '@mui/material'
 import Grid from '@mui/material/Grid'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
+import { BatchStatus } from 'src/models/batch_status'
 import { ApiError } from 'src/services/api/api_methods'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
@@ -35,6 +36,12 @@ function refusal(error: Error | null): string | undefined {
 
 export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactElement {
   const queryClient = useQueryClient()
+  // Said before completing is tried rather than only as the refusal: what is
+  // left to verify is work to go and do, not a fault.
+  const verificationQuery = useQuery({
+    queryKey: queryKeys.batch.verification(batch.uid),
+    queryFn: async () => await batchApi.getVerification(batch.uid),
+  })
   const completeBatchMutation = useMutation({
     mutationFn: async (batchUid: string) => await batchApi.complete(batchUid),
     // Its error is shown beside the action.
@@ -50,6 +57,16 @@ export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactE
       void queryClient.invalidateQueries({ queryKey: queryKeys.project.all })
     },
   })
+  // The server refuses it as well; this only saves trying what the warning
+  // already says will be refused.
+  const blockedByVerification = (verificationQuery.data?.blocking.length ?? 0) > 0
+  // Read from the batch as it was last fetched, which locking updates.
+  const shownBatch = completeBatchMutation.data ?? batch
+  const locked = [
+    BatchStatus.LOCKED,
+    BatchStatus.IMAGE_STORING,
+    BatchStatus.COMPLETED,
+  ].includes(shownBatch.status)
   const handleCompleteBatch = (): void => {
     completeBatchMutation.mutate(batch.uid)
   }
@@ -58,12 +75,34 @@ export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactE
     <Grid size={{ xs: 4 }}>
       <Stack spacing={1}>
         <Typography variant="body2" color="text.secondary">
-          Completing the batch locks what it holds. Everything in it has to be valid, or
-          taken out of the project. Reopening it again is done from the batch list.
+          Locking the batch closes what it holds to editing once it is curated.
+          Everything in it has to be valid, or taken out of the project, and where the
+          project verifies batches, the units drawn have to be verified. A locked batch
+          can be reopened from the batch list until its images are stored to the outbox,
+          which is done for the whole project from its Export page.
         </Typography>
-        <Button disabled={completeBatchMutation.isPending} onClick={handleCompleteBatch}>
-          Complete
-        </Button>
+        {locked && (
+          <Alert severity="success">
+            The batch is locked. Store its images to the outbox from the project's
+            Export page once every batch is locked.
+          </Alert>
+        )}
+        {!locked && blockedByVerification && (
+          <Alert severity="warning">
+            Verifying holds the batch back:
+            {verificationQuery.data?.blocking.map((reason) => (
+              <div key={reason}>{reason}</div>
+            ))}
+          </Alert>
+        )}
+        {!locked && (
+          <Button
+            disabled={completeBatchMutation.isPending || blockedByVerification}
+            onClick={handleCompleteBatch}
+          >
+            Lock
+          </Button>
+        )}
         {completeBatchMutation.isError && (
           <Alert severity="error">{refusal(completeBatchMutation.error)}</Alert>
         )}

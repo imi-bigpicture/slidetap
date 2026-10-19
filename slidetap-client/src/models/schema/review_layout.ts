@@ -55,12 +55,18 @@ export interface NonValidItemsPanelLayout extends ReviewPanelLayout {
   kind: 'non_valid_items'
 }
 
+/** A panel showing the item as the metadata export would write it. */
+export interface ExportPreviewPanelLayout extends ReviewPanelLayout {
+  kind: 'export_preview'
+}
+
 export type AnyReviewPanelLayout =
   | OverviewPanelLayout
   | HierarchyPanelLayout
   | ImagesPanelLayout
   | NonValidItemsPanelLayout
   | ReviewIssuesPanelLayout
+  | ExportPreviewPanelLayout
 
 /**
  * One tab of the review view, and what it puts side by side.

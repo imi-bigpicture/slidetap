@@ -55,6 +55,7 @@ from slidetap.services import (
     SchemaService,
     StorageService,
     ValidationService,
+    VerificationService,
 )
 from slidetap.services.migration.project_migration_executor import (
     ProjectMigrationExecutor,
@@ -99,6 +100,7 @@ class BaseProvider(Provider):
         self.provide(StorageService)
         self.provide(RepairService)
         self.provide(ValidationService)
+        self.provide(VerificationService)
         self.provide(TagService)
         self.provide(ModelService)
         self.provide(metadata_import_interface, provides=MetadataImportInterface)

@@ -44,6 +44,10 @@ class ReviewIssueSource(Enum):
     than by a reviewer taking a view on it.
     """
 
+    VERIFICATION = "verification"
+    """Raised by a verifier who failed the unit when checking a sample of the
+    batch, with why. Settled when the unit passes verification again."""
+
     @property
     def queue_priority(self) -> int:
         """Where what this raised comes in a list of what is open, lowest
@@ -61,6 +65,7 @@ class ReviewIssueSource(Enum):
 
 _QUEUE_PRIORITY = {
     ReviewIssueSource.USER: 0,
+    ReviewIssueSource.VERIFICATION: 0,
     ReviewIssueSource.METADATA_IMPORTER: 1,
     ReviewIssueSource.IMAGE_IMPORTER: 1,
     ReviewIssueSource.VALIDATION: 2,

@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from slidetap.model import (
     AnyItem,
     ExportNotice,
+    ExportPreviewFile,
     ImageGroup,
     ItemNeighbours,
     MoveAttributeRequest,
@@ -73,6 +74,13 @@ class PreviewResponse(BaseModel):
     """Response model for item preview."""
 
     preview: str | None
+
+
+class ExportPreviewResponse(BaseModel):
+    """Response model for what the export writes for an item and what it is
+    connected to."""
+
+    files: list[ExportPreviewFile]
 
 
 class ExportNoticesResponse(BaseModel):
@@ -163,6 +171,29 @@ def preview_item(
     """
     logger.debug(f"Preview item {item_uid}.")
     return PreviewResponse(preview=metadata_export_service.preview_item(item_uid))
+
+
+@item_router.get("/item/{item_uid}/export-preview")
+def preview_export(
+    item_uid: UUID,
+    metadata_export_service: FromDishka[MetadataExportService],
+    logger: Logger,
+) -> ExportPreviewResponse:
+    """Return what the export writes for the item and everything connected to it.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item
+
+    Returns
+    ----------
+    ExportPreviewResponse
+        One entry per file the export writes them to, none where the project
+        cannot be changed.
+    """
+    logger.debug(f"Export preview of item {item_uid}.")
+    return ExportPreviewResponse(files=metadata_export_service.preview_export(item_uid))
 
 
 @item_router.get("/item/{item_uid}/export-notices")

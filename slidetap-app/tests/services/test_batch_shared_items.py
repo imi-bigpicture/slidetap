@@ -49,6 +49,7 @@ from slidetap.services import (
     ReviewService,
     SchemaService,
     ValidationService,
+    VerificationService,
 )
 
 
@@ -73,6 +74,7 @@ def batch_service(
         validation_service,
         stored_database_service,
         review_service,
+        VerificationService(schema_service, stored_database_service, review_service),
     )
 
 

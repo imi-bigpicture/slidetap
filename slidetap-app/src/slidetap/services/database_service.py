@@ -95,6 +95,8 @@ from slidetap.database import (
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
     DatabaseUnmappedValue,
+    DatabaseVerificationEntry,
+    DatabaseVerificationRound,
 )
 from slidetap.database.change_tracking import direct_parents, stamp_with_ancestors
 from slidetap.database.item import DatabaseTag
@@ -149,6 +151,8 @@ from slidetap.model import (
     StringAttributeSchema,
     UnionAttribute,
     UnionAttributeSchema,
+    VerificationPopulation,
+    VerificationVerdict,
 )
 from slidetap.model.table import (
     AttributeFilter,
@@ -1215,19 +1219,7 @@ class DatabaseService:
 
     @staticmethod
     def _direct_parents(item: DatabaseItem) -> Iterable[DatabaseItem]:
-        if isinstance(item, DatabaseSample):
-            return item.parents
-        if isinstance(item, DatabaseImage):
-            return item.samples
-        if isinstance(item, DatabaseAnnotation):
-            return [item.image] if item.image is not None else []
-        if isinstance(item, DatabaseObservation):
-            return [
-                related
-                for related in (item.sample, item.image, item.annotation)
-                if related is not None
-            ]
-        return []
+        return direct_parents(item)
 
     def get_optional_image(
         self,
@@ -1532,16 +1524,7 @@ class DatabaseService:
             dataset = dataset.uid
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
-        if isinstance(schema, SampleSchema):
-            query_item = DatabaseSample
-        elif isinstance(schema, ImageSchema):
-            query_item = DatabaseImage
-        elif isinstance(schema, ObservationSchema):
-            query_item = DatabaseObservation
-        elif isinstance(schema, AnnotationSchema):
-            query_item = DatabaseAnnotation
-        else:
-            raise TypeError(f"Unknown schema type {schema}.")
+        query_item = self._item_type_for(schema)
         query = select(query_item)
         if dataset is not None:
             query = query.filter_by(dataset_uid=dataset)
@@ -1743,16 +1726,7 @@ class DatabaseService:
             dataset = dataset.uid
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
-        if isinstance(schema, SampleSchema):
-            query_item = DatabaseSample
-        elif isinstance(schema, ImageSchema):
-            query_item = DatabaseImage
-        elif isinstance(schema, ObservationSchema):
-            query_item = DatabaseObservation
-        elif isinstance(schema, AnnotationSchema):
-            query_item = DatabaseAnnotation
-        else:
-            raise TypeError(f"Unknown schema type {schema}.")
+        query_item = self._item_type_for(schema)
         query = self._items_query(
             select(func.count()).select_from(query_item),
             schema=schema,
@@ -1914,6 +1888,166 @@ class DatabaseService:
             ),
         )
 
+    def get_verification_rounds(
+        self, session: Session, batch_uid: UUID
+    ) -> Sequence[DatabaseVerificationRound]:
+        """The rounds drawn from a batch, in the order they were drawn."""
+        query = (
+            select(DatabaseVerificationRound)
+            .filter_by(batch_uid=batch_uid)
+            .order_by(DatabaseVerificationRound.created_at)
+        )
+        return session.scalars(query).all()
+
+    def get_optional_verification_entry(
+        self, session: Session, entry_uid: UUID
+    ) -> DatabaseVerificationEntry | None:
+        return session.get(DatabaseVerificationEntry, entry_uid)
+
+    def add_verification_round(
+        self,
+        session: Session,
+        batch_uid: UUID,
+        seed: int,
+        requested_size: int | None,
+        requested_fraction: float | None,
+        population: VerificationPopulation | None,
+        population_size: int,
+        origin_entry_uid: UUID | None,
+        unit_uids: Iterable[UUID],
+    ) -> DatabaseVerificationRound:
+        """Add a round of a batch with a pending entry for each unit it drew.
+
+        Parameters
+        ----------
+        session: Session
+            Session to add it in.
+        batch_uid: UUID
+            The batch it was drawn from.
+        seed: int
+            What it was drawn with.
+        requested_size: int | None
+            How many were asked for, None where a fraction or nothing was.
+        requested_fraction: float | None
+            What share was asked for, None where a size or nothing was.
+        population: VerificationPopulation | None
+            How the units it was drawn from were filtered, None for all of them.
+        population_size: int
+            How many units it was drawn from.
+        origin_entry_uid: UUID | None
+            The entry whose failure it follows up on, where it does.
+        unit_uids: Iterable[UUID]
+            The units it drew.
+        """
+        verification_round = DatabaseVerificationRound(
+            batch_uid=batch_uid,
+            created_at=datetime.datetime.now(),
+            seed=seed,
+            requested_size=requested_size,
+            requested_fraction=requested_fraction,
+            population=population,
+            population_size=population_size,
+            origin_entry_uid=origin_entry_uid,
+            entries=[
+                DatabaseVerificationEntry(
+                    unit_uid=unit_uid, verdict=VerificationVerdict.PENDING
+                )
+                for unit_uid in unit_uids
+            ],
+        )
+        return self._add_to_session(session, verification_round)
+
+    def get_undrawn_unit_uids(
+        self,
+        session: Session,
+        schema: ItemSchema,
+        batch_uid: UUID,
+        population: VerificationPopulation | None = None,
+    ) -> list[UUID]:
+        """The units of a batch a round can draw from.
+
+        Parameters
+        ----------
+        session: Session
+            Session to look in.
+        schema: ItemSchema
+            The schema of the review unit.
+        batch_uid: UUID
+            The batch to draw from.
+        population: VerificationPopulation | None
+            How to filter the units, every unit where None.
+
+        Returns
+        -------
+        list[UUID]
+            The units in the project that no round has drawn, filtered as the
+            population says. Ordered by identifier, so that a seed draws the
+            same units from the same population whatever order the database
+            keeps them in.
+        """
+        query_item = self._item_type_for(schema)
+        query = self._undrawn_units_query(
+            select(query_item.uid).select_from(query_item),
+            query_item,
+            schema,
+            batch_uid,
+            population,
+        ).order_by(query_item.identifier, query_item.uid)
+        return list(session.scalars(query))
+
+    def count_undrawn_units(
+        self, session: Session, schema: ItemSchema, batch_uid: UUID
+    ) -> int:
+        """How many units of a batch no round has drawn, of those in the
+        project."""
+        query_item = self._item_type_for(schema)
+        query = self._undrawn_units_query(
+            select(func.count()).select_from(query_item),
+            query_item,
+            schema,
+            batch_uid,
+            None,
+        )
+        return session.scalars(query).one()
+
+    @classmethod
+    def _undrawn_units_query(
+        cls,
+        query: Select,
+        query_item: type[DatabaseItem],
+        schema: ItemSchema,
+        batch_uid: UUID,
+        population: VerificationPopulation | None,
+    ) -> Select:
+        query = cls._items_query(
+            query,
+            schema=schema,
+            batch_uid=batch_uid,
+            attributes_filters=(
+                population.attribute_filters if population is not None else None
+            ),
+            relation_filters=(
+                population.relation_filters if population is not None else None
+            ),
+            selected=True,
+        )
+        return query.where(
+            query_item.uid.not_in(select(DatabaseVerificationEntry.unit_uid))
+        )
+
+    @staticmethod
+    def _item_type_for(schema: ItemSchema) -> type[DatabaseItem]:
+        """The database class items of a schema are stored as."""
+        if isinstance(schema, SampleSchema):
+            return DatabaseSample
+        if isinstance(schema, ImageSchema):
+            return DatabaseImage
+        if isinstance(schema, ObservationSchema):
+            return DatabaseObservation
+        if isinstance(schema, AnnotationSchema):
+            return DatabaseAnnotation
+        raise TypeError(f"Unknown schema type {schema}.")
+
     def delete_items(
         self,
         session: Session,
@@ -2068,7 +2202,69 @@ class DatabaseService:
         every batch that can hold them at once.
         """
         items = self._item_uids_of_batches(batch_uids)
+        verification_round = _table_of(DatabaseVerificationRound)
+        rounds = select(verification_round.c.uid).where(
+            verification_round.c.batch_uid.in_(batch_uids)
+        )
+        verification_entry = _table_of(DatabaseVerificationEntry)
+        # What verifying raised goes with the rounds, also on a unit handed
+        # over to another batch: nothing is left that could pass it again.
+        drawn_units = select(verification_entry.c.unit_uid).where(
+            verification_entry.c.round_uid.in_(rounds)
+        )
         review_issue = _table_of(DatabaseReviewIssue)
+        raised_by_verifying = review_issue.c.source == ReviewIssueSource.VERIFICATION
+        # Only the units verifying flagged leave the queue with what it
+        # raised: one flagged by hand with nothing behind it stays, as
+        # everywhere else.
+        flagged_by_verifying = list(
+            session.scalars(
+                select(review_issue.c.review_unit_uid)
+                .where(
+                    review_issue.c.review_unit_uid.in_(drawn_units),
+                    raised_by_verifying,
+                    review_issue.c.resolved_at.is_(None),
+                )
+                .distinct()
+            )
+        )
+        session.execute(
+            delete(review_issue).where(
+                review_issue.c.review_unit_uid.in_(drawn_units), raised_by_verifying
+            )
+        )
+        item = _table_of(DatabaseItem)
+        still_open = (
+            select(review_issue.c.uid)
+            .where(
+                review_issue.c.review_unit_uid == item.c.uid,
+                review_issue.c.resolved_at.is_(None),
+            )
+            .exists()
+        )
+        session.execute(
+            update(item)
+            .where(
+                item.c.uid.in_(flagged_by_verifying),
+                item.c.review_status == ReviewStatus.FLAGGED,
+                ~still_open,
+            )
+            .values(review_status=ReviewStatus.NOT_REVIEWED)
+        )
+        losing_children = self._items_losing_children_to(session, items)
+        session.execute(
+            delete(verification_entry).where(
+                or_(
+                    verification_entry.c.round_uid.in_(rounds),
+                    verification_entry.c.unit_uid.in_(items),
+                )
+            )
+        )
+        session.execute(
+            delete(verification_round).where(
+                verification_round.c.batch_uid.in_(batch_uids)
+            )
+        )
         session.execute(
             delete(review_issue).where(
                 or_(
@@ -2154,7 +2350,54 @@ class DatabaseService:
         result = session.execute(delete(item).where(item.c.batch_uid.in_(batch_uids)))
         if not isinstance(result, CursorResult):
             raise TypeError("A delete statement answers with a cursor result.")
+        # Stamped here, since a bulk delete is not seen by what keeps when
+        # items changed on flush: what is left above what went has lost it.
+        now = datetime.datetime.now()
+        stamped: set[UUID] = set()
+        for parent in session.scalars(
+            select(DatabaseItem).where(DatabaseItem.uid.in_(losing_children))
+        ):
+            stamp_with_ancestors(parent, now, stamped)
         return result.rowcount
+
+    @staticmethod
+    def _items_losing_children_to(
+        session: Session, items: Select[tuple[UUID]]
+    ) -> list[UUID]:
+        """The items outside ``items`` that something in ``items`` hangs
+        directly under, and that deleting ``items`` takes it from."""
+        observation = _table_of(DatabaseObservation)
+        annotation = _table_of(DatabaseAnnotation)
+        sample_to_sample = DatabaseSample.sample_to_sample
+        sample_to_image = DatabaseImage.sample_to_image
+        parents = [
+            select(sample_to_sample.c.parent_uid).where(
+                sample_to_sample.c.child_uid.in_(items)
+            ),
+            select(sample_to_image.c.sample_uid).where(
+                sample_to_image.c.image_uid.in_(items)
+            ),
+            *(
+                select(column).where(observation.c.uid.in_(items), column.is_not(None))
+                for column in (
+                    observation.c.sample_uid,
+                    observation.c.image_uid,
+                    observation.c.annotation_uid,
+                )
+            ),
+            select(annotation.c.image_uid).where(
+                annotation.c.uid.in_(items), annotation.c.image_uid.is_not(None)
+            ),
+        ]
+        return list(
+            {
+                parent
+                for query in parents
+                for parent in session.scalars(query)
+                if parent is not None
+            }
+            - set(session.scalars(items))
+        )
 
     def delete_batch(self, session: Session, batch_uid: UUID) -> None:
         """Delete the batch row. What it holds goes first, with

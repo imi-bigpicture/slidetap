@@ -15,7 +15,7 @@
 """Service for accessing image data."""
 
 import io
-from collections.abc import Generator, Iterable
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -25,13 +25,12 @@ from types import TracebackType
 from uuid import UUID
 
 from PIL import Image as PILImage
-from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
 from slidetap.config import ImageCacheConfig
 from slidetap.database import DatabaseImage
-from slidetap.model import Dzi, Image, ImageFormat
+from slidetap.model import Dzi, ImageFormat
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.storage_service import StorageService
 
@@ -171,19 +170,6 @@ class ImageService:
         self._storage_service = storage_service
         self._database_service = database_service
         self._image_cache = image_cache
-
-    def get_images_with_thumbnail(
-        self, dataset_uid: UUID, batch_uid: UUID | None = None
-    ) -> Iterable[Image]:
-        query = select(DatabaseImage).filter(
-            DatabaseImage.dataset_uid == dataset_uid,
-            DatabaseImage.thumbnail_path.isnot(None),
-        )
-        if batch_uid is not None:
-            query = query.filter(DatabaseImage.batch_uid == batch_uid)
-        with self._database_service.get_session() as session:
-            images = session.scalars(query)
-            return [image.model for image in images]
 
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str

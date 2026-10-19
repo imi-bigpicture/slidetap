@@ -33,6 +33,7 @@ from slidetap.services import (
     ReviewService,
     SchemaService,
     ValidationService,
+    VerificationService,
 )
 
 
@@ -77,6 +78,7 @@ def batch_service(
         validation_service=decoy.mock(cls=ValidationService),
         database_service=database_service,
         review_service=review_service,
+        verification_service=decoy.mock(cls=VerificationService),
     )
 
 

@@ -40,3 +40,19 @@ class Batch(CamelCaseBaseModel):
     created: datetime.datetime
     status_message: str | None = None
     """Why the batch is in its current status, if it failed."""
+
+
+class BatchStoringProgress(CamelCaseBaseModel):
+    """How far storing the images of a batch to the outbox has come.
+
+    Counted over the selected images the batch stores: those processed, being
+    stored, stored, or failed to store.
+    """
+
+    batch_uid: UUID
+    total: int
+    """How many images the batch stores."""
+    stored: int
+    """How many of them are in the outbox."""
+    failed: int
+    """How many failed to store, and wait to be retried or taken out."""

@@ -52,7 +52,7 @@ import OverviewPage from 'src/pages/overview'
 import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
 import Migrate from 'src/components/project/migrate'
-import Validate from 'src/components/project/validate/validate'
+import Verify from 'src/components/project/verify'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
 import { assertExtensionPath, useExtensions } from 'src/extensions'
 import { Batch } from 'src/models/batch'
@@ -514,20 +514,25 @@ export default function DisplayProject({
           ),
         description: 'Post-process images in batch',
       },
-
+      // Only where the schema says how batches are verified: without a
+      // policy there is nothing to draw or decide.
+      ...(rootSchema.reviewUnit?.verification != null
+        ? [
+            {
+              name: 'Verify',
+              path: 'verify',
+              enabled: batchIsProcessingOrCompleted(batch.status),
+              icon: <Grading />,
+              description: 'Verify a random sample of the batch',
+            },
+          ]
+        : []),
       {
-        name: 'Validate',
-        path: 'validate',
-        enabled: batchIsProcessingOrCompleted(batch.status),
-        icon: <Grading />,
-        description: 'Validate items in batch',
-      },
-      {
-        name: 'Complete',
-        path: 'complete',
+        name: 'Lock',
+        path: 'lock',
         enabled: actions.edit && batchIsProcessed(batch.status),
         icon: <AssignmentTurnedIn />,
-        description: 'Complete batch',
+        description: 'Lock the batch once it is curated',
       },
     ],
   }
@@ -716,15 +721,11 @@ export default function DisplayProject({
       element={<ProcessImages project={project} batch={batch} />}
     />,
     <Route
-      key="validate"
-      path="/validate"
-      element={<Validate project={project} batch={batch} />}
+      key="verify"
+      path="/verify"
+      element={<Verify project={project} batch={batch} />}
     />,
-    <Route
-      key="complete"
-      path="/complete"
-      element={<CompleteBatches batch={batch} />}
-    />,
+    <Route key="lock" path="/lock" element={<CompleteBatches batch={batch} />} />,
     <Route key="export" path="/export" element={<Export project={project} />} />,
     <Route key="migrate" path="/migrate" element={<Migrate project={project} />} />,
     ...extensionRoutes,

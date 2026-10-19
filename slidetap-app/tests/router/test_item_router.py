@@ -30,6 +30,7 @@ from slidetap.model import (
     Dataset,
     ExportNotice,
     ExportNoticeKind,
+    ExportPreviewFile,
     ItemNeighbours,
     MoveAttributeRequest,
     NewChildSuggestion,
@@ -240,6 +241,32 @@ class TestSlideTapItemRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert response.json() == {"preview": preview}
+
+    def test_the_export_preview_of_an_item_is_got(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        metadata_export_service: MetadataExportService,
+    ):
+        # Arrange
+        item_uid = uuid4()
+        files = [
+            ExportPreviewFile(name="sample.xml", content="<samples/>"),
+            ExportPreviewFile(name="image.xml", content="<images/>"),
+        ]
+        decoy.when(metadata_export_service.preview_export(item_uid)).then_return(files)
+
+        # Act
+        response = test_client.get(f"api/items/item/{item_uid}/export-preview")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {
+            "files": [
+                {"name": "sample.xml", "content": "<samples/>"},
+                {"name": "image.xml", "content": "<images/>"},
+            ]
+        }
 
     def test_the_export_notices_of_an_item_are_got(
         self,

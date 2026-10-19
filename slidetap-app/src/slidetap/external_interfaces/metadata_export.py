@@ -14,7 +14,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from slidetap.model import Dataset, ExportNotice, Item, Project
+from slidetap.model import Dataset, ExportNotice, ExportPreviewFile, Item, Project
 
 
 class MetadataExportInterface(metaclass=ABCMeta):
@@ -22,6 +22,9 @@ class MetadataExportInterface(metaclass=ABCMeta):
     Metaclass for interface for exporting metadata. Implementations must implement:
     - preview_item: Return a serialized representation of the item.
     - export: Serialize all metadata for the project to storage.
+
+    And may implement `preview_export`, to show what the export writes for an
+    item together with everything connected to it.
     """
 
     @abstractmethod
@@ -35,6 +38,25 @@ class MetadataExportInterface(metaclass=ABCMeta):
             The item to serialize.
         """
         raise NotImplementedError()
+
+    def preview_export(self, item: Item) -> list[ExportPreviewFile]:
+        """
+        What the export writes for the item and everything connected to it, such
+        as a case with its samples, images and observations, as one entry per
+        file the export writes them to. Empty where nothing is written.
+
+        The default is the preview of the item alone, as one file named by the
+        item's identifier.
+
+        Parameters
+        ----------
+        item: Item
+            The item to preview.
+        """
+        preview = self.preview_item(item)
+        if preview is None:
+            return []
+        return [ExportPreviewFile(name=item.identifier, content=preview)]
 
     def export_notices(self, item: Item) -> list[ExportNotice]:
         """

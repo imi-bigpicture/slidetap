@@ -14,7 +14,6 @@
 
 """FastAPI router for accessing image data."""
 
-from collections.abc import Iterable
 from http import HTTPStatus
 from uuid import UUID
 
@@ -25,7 +24,7 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from wsidicom.errors import WsiDicomNotFoundError, WsiDicomOutOfBoundsError
 
-from slidetap.model import Dzi, Image
+from slidetap.model import Dzi
 from slidetap.services import ImageService
 from slidetap.web.services.login_service import require_valid_token
 
@@ -38,29 +37,6 @@ image_router = APIRouter(
 
 MAX_THUMBNAIL_SIZE = 2048
 """The largest width or height, in pixels, a thumbnail is made at."""
-
-
-@image_router.get("/thumbnails/{dataset_uid}")
-def get_thumbnails(
-    dataset_uid: UUID,
-    image_service: FromDishka[ImageService],
-    batch_uid: UUID | None = Query(None, alias="batchUid"),
-) -> Iterable[Image]:
-    """Get images that have thumbnails of specified dataset.
-
-    Parameters
-    ----------
-    dataset_uid: UUID
-        Id of dataset to get images that have thumbnails from.
-    batch_uid: UUID | None
-        Optional batch UID to filter by
-
-    Returns
-    ----------
-    Iterable[Image]
-        List of images that have thumbnails.
-    """
-    return image_service.get_images_with_thumbnail(dataset_uid, batch_uid)
 
 
 @image_router.get("/image/{image_uid}/thumbnail")

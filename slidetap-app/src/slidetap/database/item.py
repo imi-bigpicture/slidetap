@@ -166,6 +166,11 @@ class DatabaseItem(Base, Generic[ItemType]):
     """When a user last saved this item. Empty for one nobody has edited: an
     import is not a save, or every item would carry the same time and the
     column would say nothing."""
+    last_changed: Mapped[datetime | None] = mapped_column(DateTime)
+    """When what the item holds, or anything under it, last changed, however
+    it was changed. Kept by `slidetap.database.change_tracking` on every flush,
+    and empty for an item nothing has changed under since it was added. What a
+    verifier decided on is stale once this is later than the decision."""
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations

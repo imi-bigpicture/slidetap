@@ -27,6 +27,7 @@ import {
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { ReviewIssueSource } from 'src/models/review_issue'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -39,6 +40,7 @@ const SOURCE_NAMES: Record<ReviewIssueSource, string> = {
   [ReviewIssueSource.MetadataImporter]: 'Metadata import',
   [ReviewIssueSource.ImageImporter]: 'Image import',
   [ReviewIssueSource.Validation]: 'Not valid',
+  [ReviewIssueSource.Verification]: 'Failed verification',
 }
 
 interface ReviewIssuesProps {
@@ -63,6 +65,7 @@ export default function ReviewIssues({
   onOpenItem,
 }: ReviewIssuesProps): ReactElement {
   const queryClient = useQueryClient()
+  const { edit: canEdit } = useProjectActions()
   const issuesQuery = useQuery({
     queryKey: queryKeys.item.reviewIssues(reviewUnitUid),
     queryFn: async () => await itemApi.getReviewIssues(reviewUnitUid),
@@ -98,8 +101,10 @@ export default function ReviewIssues({
             // the item becoming valid or leaving the project, and settling it
             // by hand would take the case out of the queue with the item still
             // not valid — which is what reviewing the case is refused for.
+            // Nor where nothing may be changed, as in a locked project or on
+            // the Verify page.
             secondaryAction={
-              issue.source === ReviewIssueSource.Validation ? (
+              issue.source === ReviewIssueSource.Validation || !canEdit ? (
                 // The slot is kept and left empty rather than dropped: a row
                 // without it is wider than the rows that carry a button, and
                 // the highlight steps in and out as the list is read down.

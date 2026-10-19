@@ -22,6 +22,9 @@ export enum ReviewIssueSource {
    * end of it, so it is shown as what is not valid rather than as something
    * raised. */
   Validation = 'validation',
+  /** Raised by a verifier who failed the unit, with why. Settled when the unit
+   * passes verification again. */
+  Verification = 'verification',
 }
 
 /**

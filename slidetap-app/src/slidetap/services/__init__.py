@@ -36,6 +36,7 @@ from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
+from slidetap.services.verification_service import VerificationService
 
 __all__ = [
     "AttributeService",
@@ -60,5 +61,6 @@ __all__ = [
     "TagService",
     "RepairService",
     "ValidationService",
+    "VerificationService",
     "ModelService",
 ]

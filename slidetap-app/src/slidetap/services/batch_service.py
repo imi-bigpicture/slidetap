@@ -28,6 +28,7 @@ from slidetap.model import (
     Batch,
     BatchCreate,
     BatchStatus,
+    BatchStoringProgress,
     ImageStatus,
     NotAllowedActionError,
     ProjectStatus,
@@ -37,6 +38,7 @@ from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
+from slidetap.services.verification_service import VerificationService
 
 PRE_PROCESSING_SETTLED = [
     # An image that failed is not going to reach the next status by itself, and
@@ -58,6 +60,16 @@ POST_PROCESSING_SETTLED = [
 """What an image has to be for the batch to be finished post-processing it."""
 
 
+STORED_BY_BATCH = [
+    ImageStatus.POST_PROCESSED,
+    ImageStatus.STORING,
+    ImageStatus.STORED,
+    ImageStatus.STORING_FAILED,
+]
+"""What a selected image is, from when storing the batch takes it to when it is
+done with it."""
+
+
 class BatchService:
     def __init__(
         self,
@@ -65,11 +77,13 @@ class BatchService:
         validation_service: ValidationService,
         database_service: DatabaseService,
         review_service: ReviewService,
+        verification_service: VerificationService,
     ):
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
         self._review_service = review_service
+        self._verification_service = verification_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(
@@ -93,6 +107,42 @@ class BatchService:
     def get(self, uid: UUID, session: Session | None = None) -> Batch:
         with self._database_service.get_session(session) as session:
             return self._database_service.get_batch(session, uid).model
+
+    def get_storing_progress(
+        self, uid: UUID, session: Session | None = None
+    ) -> BatchStoringProgress:
+        """How far storing the images of the batch to the outbox has come.
+
+        Counted over the selected images storing the batch takes, of every
+        image schema of the root of its project.
+
+        Raises
+        ------
+        NotFoundError
+            There is no such batch.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, uid)
+            root = self._schema_service.root_of(batch.project, session)
+
+            def count(statuses: list[ImageStatus]) -> int:
+                return sum(
+                    self._database_service.get_item_count(
+                        session,
+                        image_schema,
+                        batch=batch.uid,
+                        selected=True,
+                        status_filter=statuses,
+                    )
+                    for image_schema in root.images.values()
+                )
+
+            return BatchStoringProgress(
+                batch_uid=batch.uid,
+                total=count(STORED_BY_BATCH),
+                stored=count([ImageStatus.STORED]),
+                failed=count([ImageStatus.STORING_FAILED]),
+            )
 
     def assert_can_change(self, uid: UUID, session: Session | None = None) -> None:
         """Refuse a change to the project the batch is of, where it cannot be
@@ -611,7 +661,8 @@ class BatchService:
         batch: UUID | Batch | DatabaseBatch,
         session: Session | None = None,
     ) -> Batch:
-        """Finish curating a batch: everything in it is valid, and now locked.
+        """Finish curating a batch: everything in it is valid and, where its
+        project verifies batches, verified, and now locked.
 
         Nothing is written to the outbox yet — that happens when the project is
         completed, so that a batch reopened before then leaves nothing behind in
@@ -640,6 +691,13 @@ class BatchService:
                     f"{BatchStatus.LOCKED.name}: "
                     f"{len(validation.non_valid_items)} items are not valid "
                     f"({named}). Curate them, or take them out of the project."
+                )
+                raise NotAllowedActionError(error)
+            unverified = self._verification_service.blocking(batch, session)
+            if unverified:
+                error = (
+                    f"Can not set batch {batch.uid} as {BatchStatus.LOCKED.name}: "
+                    + " ".join(unverified)
                 )
                 raise NotAllowedActionError(error)
             self._lock_contents(batch, True, session)

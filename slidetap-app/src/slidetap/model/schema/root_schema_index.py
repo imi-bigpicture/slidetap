@@ -281,10 +281,16 @@ class RootSchemaIndex:
 
     @property
     def _review_panels(self) -> Iterable[AnyReviewPanelLayout]:
-        if self.schema.review_unit is None:
+        unit = self.schema.review_unit
+        if unit is None:
             return ()
+        # The verification layout as well: what it nests is laid out nowhere
+        # else, and would not be found when a panel of it asks.
+        layouts = [unit.layout]
+        if unit.verification is not None and unit.verification.layout is not None:
+            layouts.append(unit.verification.layout)
         return chain.from_iterable(
-            tab.panels for tab in self.schema.review_unit.layout.tabs
+            tab.panels for layout in layouts for tab in layout.tabs
         )
 
     @cached_property

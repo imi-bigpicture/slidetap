@@ -13,18 +13,11 @@
 //    limitations under the License.
 
 import type { Dzi } from 'src/models/dzi'
-import type { Image } from 'src/models/item'
 import type { Size } from 'src/models/setting'
 
 import { get, parseJsonResponse } from 'src/services/api/api_methods'
 
 const imageApi = {
-  getImagesWithThumbnail: async (datasetUid: string, batchUid?: string) => {
-    const query = new Map<string, string | undefined>([['batchUid', batchUid]])
-    const response = await get('images/thumbnails/' + datasetUid, query)
-    return await parseJsonResponse<Image[]>(response)
-  },
-
   getThumbnail: async (imageUid: string, size: Size) => {
     const path = 'images/image/' + imageUid + '/thumbnail'
     const args = new Map<string, string>()

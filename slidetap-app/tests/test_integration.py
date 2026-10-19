@@ -424,16 +424,15 @@ class TestIntegration:
             assert image.get("status") == ImageStatus.POST_PROCESSED.value
 
         # Get thumbnails
-        response = test_client.get(f"/api/images/thumbnails/{project_uid}")
-        images_with_thumbnail = self.assert_status_ok_and_parse_list_json(response)
-
-        for image in images_with_thumbnail:
+        for image in images:
+            assert isinstance(image, Mapping)
             image_uid = image["uid"]
             response = test_client.get(f"/api/images/image/{image_uid}/thumbnail")
             assert response.status_code == HTTPStatus.OK
 
         # Get dzi and tile
-        for image in images_with_thumbnail:
+        for image in images:
+            assert isinstance(image, Mapping)
             image_uid = image["uid"]
             response = test_client.get(f"/api/images/image/{image_uid}")
             assert response.status_code == HTTPStatus.OK

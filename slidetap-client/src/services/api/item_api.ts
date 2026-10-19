@@ -28,6 +28,7 @@ import type {
 } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
 import { ExportNotices } from 'src/models/export_notice'
+import type { ExportPreview } from 'src/models/export_preview'
 import { Preview } from 'src/models/preview'
 import { ReviewQueueItem } from 'src/models/review_queue_item'
 import { ReviewStatus } from 'src/models/review_status'
@@ -234,6 +235,11 @@ const itemApi = {
   getPreview: async (itemUid: string) => {
     const response = await get(`items/item/${itemUid}/preview`)
     return await parseJsonResponse<Preview>(response)
+  },
+
+  getExportPreview: async (itemUid: string) => {
+    const response = await get(`items/item/${itemUid}/export-preview`)
+    return await parseJsonResponse<ExportPreview>(response)
   },
 
   getExportNotices: async (itemUid: string) => {

@@ -36,10 +36,7 @@
  * queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectUid) })
  */
 
-import {
-  ColumnFiltersState,
-  SortingState,
-} from '@tanstack/react-table'
+import { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import type { BatchStatus } from 'src/models/batch_status'
 import type { ProjectStatus } from 'src/models/project_status'
 import { Size } from 'src/models/setting'
@@ -75,6 +72,10 @@ export const queryKeys = {
     detail: (batchUid: string) => [...queryKeys.batch.details(), batchUid] as const,
     validation: (batchUid: string) =>
       [...queryKeys.batch.detail(batchUid), 'validation'] as const,
+    storing: (batchUid: string) =>
+      [...queryKeys.batch.detail(batchUid), 'storing'] as const,
+    verification: (batchUid: string) =>
+      [...queryKeys.batch.detail(batchUid), 'verification'] as const,
   },
 
   // Datasets
@@ -139,6 +140,8 @@ export const queryKeys = {
       [...queryKeys.item.detail(itemUid), 'hierarchy', hierarchyLayoutUid] as const,
     preview: (itemUid: string) =>
       [...queryKeys.item.detail(itemUid), 'preview'] as const,
+    exportPreview: (itemUid: string) =>
+      [...queryKeys.item.detail(itemUid), 'exportPreview'] as const,
     exportNotices: (itemUid: string) =>
       [...queryKeys.item.detail(itemUid), 'exportNotices'] as const,
     images: (
@@ -194,10 +197,6 @@ export const queryKeys = {
     ) => [...queryKeys.image.lists(), schemaUid, { datasetUid, batchUid }] as const,
     thumbnail: (imageUid: string, size: Size) =>
       [...queryKeys.image.all, 'thumbnail', imageUid, size] as const,
-    withThumbnails: (
-      datasetUid: string | null = null,
-      batchUid: string | null = null,
-    ) => [...queryKeys.image.all, 'withThumbnails', { datasetUid, batchUid }] as const,
     dzi: (imageUid: string) => [...queryKeys.image.all, 'dzi', imageUid] as const,
     forItem: (itemUid: string, groupBySchemaUid: string, imagesLayoutUid?: string) =>
       [

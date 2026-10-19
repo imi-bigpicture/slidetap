@@ -21,6 +21,7 @@ from slidetap.model.schema.metadata_import_completeness import (
     MetadataImportCompleteness,
 )
 from slidetap.model.schema.review_layout import ReviewLayout
+from slidetap.model.schema.verification_policy import VerificationPolicy
 
 
 class ReviewUnitSchema(FrozenBaseModel):
@@ -39,3 +40,7 @@ class ReviewUnitSchema(FrozenBaseModel):
     None holds them to plain validity, which is what an application whose
     importer produces complete units wants.
     """
+
+    verification: VerificationPolicy | None = None
+    """How a sample of the units of a batch is checked by hand before the batch
+    is completed. None where batches are not verified."""

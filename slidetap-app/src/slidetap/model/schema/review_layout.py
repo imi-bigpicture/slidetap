@@ -74,12 +74,23 @@ class NonValidItemsPanelLayout(ReviewPanelLayout):
     kind: Literal["non_valid_items"] = "non_valid_items"
 
 
+class ExportPreviewPanelLayout(ReviewPanelLayout):
+    """A panel showing the item as the metadata export would write it.
+
+    Nothing to lay out: what is shown is whatever the export makes of it, which
+    is what is checked when verifying what a batch will hand over.
+    """
+
+    kind: Literal["export_preview"] = "export_preview"
+
+
 AnyReviewPanelLayout = Annotated[
     OverviewPanelLayout
     | HierarchyPanelLayout
     | ImagesPanelLayout
     | NonValidItemsPanelLayout
-    | ReviewIssuesPanelLayout,
+    | ReviewIssuesPanelLayout
+    | ExportPreviewPanelLayout,
     Field(discriminator="kind"),
 ]
 

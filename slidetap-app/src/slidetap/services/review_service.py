@@ -772,6 +772,36 @@ class ReviewService:
             self.clear_flag_if_nothing_open(issue.review_unit_uid, session=session)
             return model
 
+    def settle_raised_by(
+        self,
+        unit_uid: UUID,
+        source: ReviewIssueSource,
+        session: Session | None = None,
+    ) -> int:
+        """Settle what one source raised on a review unit, and take the unit
+        out of the queue if that was the last of what was open on it.
+
+        For a source that settles what it raised itself, as verifying does when
+        a unit it failed passes again.
+
+        Returns
+        -------
+        int
+            How many were settled.
+        """
+        with self._database_service.get_session(session) as session:
+            settled = 0
+            for issue in list(
+                self._database_service.get_review_issues(session, unit_uid)
+            ):
+                if issue.source != source:
+                    continue
+                self._settle(session, issue)
+                settled += 1
+            if settled > 0:
+                self.clear_flag_if_nothing_open(unit_uid, session=session)
+            return settled
+
     @staticmethod
     def _settle(session: Session, issue: DatabaseReviewIssue) -> None:
         """Mark an issue settled, keeping when it was settled the first time.

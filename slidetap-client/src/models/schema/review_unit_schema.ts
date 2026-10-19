@@ -14,6 +14,7 @@
 
 import { MetadataImportCompleteness } from './metadata_import_completeness'
 import { ReviewLayout } from './review_layout'
+import { VerificationPolicy } from './verification_policy'
 
 /** The item schema that is reviewed. */
 export interface ReviewUnitSchema {
@@ -24,4 +25,7 @@ export interface ReviewUnitSchema {
   /** What to exclude when validating the unit and the items under it, while
    * the batch is still being imported. Acted on by the server. */
   completeness: MetadataImportCompleteness | null
+  /** How a sample of the units of a batch is checked before the batch is
+   * completed. Null where batches are not verified. */
+  verification: VerificationPolicy | null
 }

@@ -48,19 +48,11 @@ import {
   type ReactNode,
 } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import HierarchyView from 'src/components/hierarchy/hierarchy_view'
-import ImagesForItem from 'src/components/image/images_for_item_page'
 import ItemViewHeader from 'src/components/item/item_view_header'
 import { useDetailDock } from 'src/components/item/detail_dock'
-import OverviewView from 'src/components/overview/overview_view'
-import type { OverviewEditState } from 'src/components/overview/overview_view'
 import SplitPanel from 'src/components/split_panel'
-import NonValidItems from 'src/components/project/non_valid_items'
-import ReviewIssues from 'src/components/project/review_issues'
-import type {
-  AnyReviewPanelLayout,
-  ReviewTabLayout,
-} from 'src/models/schema/review_layout'
+import ReviewPanels from 'src/components/project/review_panels'
+import { tabLabel, tabsFor, usePanelEdits } from 'src/components/project/review_tabs'
 import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
@@ -114,14 +106,6 @@ function queueLabel(displayName: string, count: number): string {
   }
   const name = displayName.toLocaleLowerCase()
   return count === 1 ? name : `${name}s`
-}
-
-/** How much of the tab a panel asked for, out of twelve. */
-function panelWidth(panel: AnyReviewPanelLayout): number | undefined {
-  if (panel.width === null) {
-    return undefined
-  }
-  return panel.width.lg ?? panel.width.md ?? panel.width.xs
 }
 
 /**
@@ -199,10 +183,6 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   // Undefined is all of them.
   const [typeFilter, setTypeFilter] = useState<string>()
   const [sortBy, setSortBy] = useState(Sort.Identifier)
-  // The overviews own the edits; this is only what the save and revert buttons
-  // need to be drawn up here beside the rest of the review commands. One entry
-  // per panel that can be edited, since a tab can hold more than one.
-  const [editStates, setEditStates] = useState<Record<string, OverviewEditState>>({})
   // One panel for the whole view rather than one per tab: an item opened from
   // the case beside the tab and an item opened from the tab itself are the
   // same gesture, and two panels would be two places to look.
@@ -265,64 +245,6 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     return items.sort((a, b) => (b.lastSaved ?? '').localeCompare(a.lastSaved ?? ''))
   }, [queueQueries.items, sortBy])
 
-  /** What the reviewer is shown of an item of this schema, tab by tab, as the
-   * schema lays it out. A model that says nothing gets a tab per layout it
-   * defined, so an application gains the view without having to describe it
-   * first. */
-  const tabsFor = useCallback(
-    (schemaUid: string | undefined): ReviewTabLayout[] => {
-      const declared = rootSchema.reviewUnit
-      if (
-        declared !== null &&
-        declared.schemaUid === schemaUid &&
-        declared.layout.tabs.length > 0
-      ) {
-        return declared.layout.tabs
-      }
-      return [
-        ...rootSchema.overviewLayouts
-          .filter((layout) => layout.schemaUid === schemaUid)
-          .map((layout) => ({
-            displayName: null,
-            panels: [{ kind: 'overview' as const, layout, width: null }],
-          })),
-        ...rootSchema.hierarchyLayouts
-          .filter((layout) => layout.schemaUid === schemaUid)
-          .map((layout) => ({
-            displayName: null,
-            panels: [{ kind: 'hierarchy' as const, layout, width: null }],
-          })),
-      ]
-    },
-    [rootSchema],
-  )
-
-  /** What to call a tab: what it was named, or what its first panel shows. */
-  const tabLabel = useCallback((tab: ReviewTabLayout): string => {
-    if (tab.displayName !== null) {
-      return tab.displayName
-    }
-    const panel = tab.panels[0]
-    if (panel === undefined || panel.kind === 'images') {
-      return 'Images'
-    }
-    if (panel.kind === 'non_valid_items') {
-      return 'Not valid'
-    }
-    if (panel.kind === 'review_issues') {
-      return 'Raised'
-    }
-    return panel.layout.displayName
-  }, [])
-
-  // Only the panels of the tab being shown: the others are unmounted, and what
-  // they last reported says nothing about what is on screen.
-  const edits = Object.entries(editStates)
-    .filter(([key]) => key.startsWith(`${tabIndex}:`))
-    .map(([, state]) => state)
-  const isDirty = edits.some((state) => state.isDirty)
-  const saving = edits.some((state) => state.saving)
-
   // Falls back to the first rather than to nothing: a reviewed item leaves the
   // queue, and landing on the top of what is left beats landing on an empty
   // view.
@@ -347,43 +269,24 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
 
   // Of whatever is being reviewed right now: a queue holding more than one
   // kind of item is shown by whichever layout that kind has.
-  // Kept, so that the callbacks built from its panels below can be too.
-  const currentSchemaUid = current?.schemaUid
-  const tabs = useMemo(() => tabsFor(currentSchemaUid), [tabsFor, currentSchemaUid])
+  const tabs = tabsFor(rootSchema, current?.schemaUid)
   // Kept in range when stepping from one kind to another, which need not have
   // the same tabs.
   const shownTabIndex = Math.min(tabIndex, Math.max(tabs.length - 1, 0))
   const tab = tabs[shownTabIndex]
 
-  // One callback per panel of the tab, kept: a panel reports its edit state
-  // from an effect that watches the callback, so handing it a new one every
-  // render would have the report cause the render that causes the next report.
-  const panelCount = tab?.panels.length ?? 0
-  const editReporters = useMemo(
-    () =>
-      Array.from({ length: panelCount }, (_, panelIndex) => {
-        const key = `${tabIndex}:${panelIndex}`
-        return (state: OverviewEditState): void => {
-          setEditStates((previous) => ({ ...previous, [key]: state }))
-        }
-      }),
-    [tabIndex, panelCount],
-  )
+  // The overviews own the edits; this is only what the save and revert buttons
+  // need to be drawn up here beside the rest of the review commands.
+  const panelEdits = usePanelEdits(tabIndex, tab?.panels.length ?? 0, current?.uid)
 
   // Why the last attempt to mark something reviewed was turned down. Held
   // here rather than read off the mutation, which forgets it as soon as the
   // reviewer flags something else, and dropped when they move on: it is about
   // the item in front of them, and says nothing about the next one.
   const [refusal, setRefusal] = useState<string | undefined>(undefined)
-
-  // The edit states are dropped with the item rather than left to be written
-  // over: the panels of the next item report as they mount, but an item whose
-  // tabs hold no editable panel reports nothing, and the buttons would go on
-  // offering to save what the last one had.
   const [shownUid, setShownUid] = useState(current?.uid)
   if (current?.uid !== shownUid) {
     setShownUid(current?.uid)
-    setEditStates({})
     setRefusal(undefined)
   }
 
@@ -703,16 +606,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
               onNext={() => step(1)}
               hasPrevious={index > 0}
               hasNext={index !== -1 && index < queue.length - 1}
-              edit={
-                canEdit
-                  ? {
-                      isDirty,
-                      saving,
-                      save: () => edits.forEach((state) => state.save()),
-                      revert: () => edits.forEach((state) => state.revert()),
-                    }
-                  : undefined
-              }
+              edit={canEdit ? panelEdits : undefined}
             >
               {/* The icon is the action, not the state, and its colour is the
                   state it moves the item into: red to flag, green to mark
@@ -787,75 +681,19 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
             <Box sx={{ flexGrow: 1, minHeight: 0, pt: 1 }}>
               <SplitPanel fillHeight panel={dock.panel}>
                 <Box sx={{ height: '100%', minHeight: 0, display: 'flex', gap: 1 }}>
-                  {tab === undefined || tab.panels.length === 0 ? (
-                    <Typography sx={{ p: 2 }}>
-                      Nothing is laid out for reviewing{' '}
-                      {reviewSchemas.find((schema) => schema.uid === current.schemaUid)
-                        ?.displayName ?? 'this'}
-                      .
-                    </Typography>
-                  ) : (
-                    tab.panels.map((panel, panelIndex) => (
-                      <Box
-                        key={panelIndex}
-                        sx={{
-                          // What it asked for out of twelve, or an equal share
-                          // of what the ones that asked have left.
-                          ...(panelWidth(panel) === undefined
-                            ? { flex: '1 1 0' }
-                            : {
-                                width: `${(panelWidth(panel) ?? 0) * (100 / 12)}%`,
-                                flexShrink: 0,
-                              }),
-                          minWidth: 0,
-                          height: '100%',
-                          minHeight: 0,
-                          overflowY: panel.kind === 'overview' ? 'auto' : undefined,
-                        }}
-                      >
-                        {panel.kind === 'review_issues' ? (
-                          <ReviewIssues
-                            key={`${current.uid}-issues-${panelIndex}`}
-                            reviewUnitUid={current.uid}
-                            openedItemUid={dock.openedUid}
-                            onOpenItem={dock.open}
-                          />
-                        ) : panel.kind === 'non_valid_items' ? (
-                          <NonValidItems
-                            key={`${current.uid}-non-valid-${panelIndex}`}
-                            itemUid={current.uid}
-                            openedItemUid={dock.openedUid}
-                            onOpenItem={dock.open}
-                          />
-                        ) : panel.kind === 'images' ? (
-                          <ImagesForItem
-                            key={`${current.uid}-images-${panelIndex}`}
-                            itemUid={current.uid}
-                            layout={panel.layout}
-                          />
-                        ) : panel.kind === 'hierarchy' ? (
-                          <HierarchyView
-                            key={`${current.uid}-${panel.layout.uid}`}
-                            projectUid={project.uid}
-                            itemUid={current.uid}
-                            layout={panel.layout}
-                            batchUid={batch?.uid}
-                          />
-                        ) : (
-                          <OverviewView
-                            key={`${current.uid}-${panel.layout.uid}`}
-                            itemUid={current.uid}
-                            batchUid={batch?.uid}
-                            overviewLayout={panel.layout}
-                            hideHeader
-                            openedItemUid={dock.openedUid}
-                            onOpenItem={dock.open}
-                            onEditStateChange={editReporters[panelIndex]}
-                          />
-                        )}
-                      </Box>
-                    ))
-                  )}
+                  <ReviewPanels
+                    projectUid={project.uid}
+                    batchUid={batch?.uid}
+                    itemUid={current.uid}
+                    tab={tab}
+                    displayName={`reviewing ${
+                      reviewSchemas.find((schema) => schema.uid === current.schemaUid)
+                        ?.displayName ?? 'this'
+                    }`}
+                    openedItemUid={dock.openedUid}
+                    onOpenItem={dock.open}
+                    editReporters={panelEdits.editReporters}
+                  />
                 </Box>
               </SplitPanel>
             </Box>

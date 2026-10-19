@@ -84,6 +84,7 @@ from slidetap.services import (
     StorageService,
     TagService,
     ValidationService,
+    VerificationService,
 )
 from slidetap.task import Scheduler, SlideTapTaskAppFactory
 from slidetap.task.tasks import (
@@ -550,7 +551,13 @@ class TestProjectList:
             schema_service, validation_service, stored_database_service, review_service
         )
         batch_service = BatchService(
-            schema_service, validation_service, stored_database_service, review_service
+            schema_service,
+            validation_service,
+            stored_database_service,
+            review_service,
+            VerificationService(
+                schema_service, stored_database_service, review_service
+            ),
         )
         metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
         dataset = Dataset(
@@ -1105,6 +1112,34 @@ class TestViewOnlyRoot:
             metadata_export_interface.export_notices(matchers.Anything()), times=0
         )
 
+    def test_there_is_no_export_preview(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+        other: StoredProject,
+    ):
+        # Arrange
+        image_uid = self._image(stored_database_service, schema, other)
+        metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
+        metadata_export_service = MetadataExportService(
+            decoy.mock(cls=Scheduler),
+            decoy.mock(cls=ProjectService),
+            stored_database_service,
+            schema_service,
+            metadata_export_interface,
+        )
+
+        # Act
+        files = metadata_export_service.preview_export(image_uid)
+
+        # Assert
+        assert files == []
+        decoy.verify(
+            metadata_export_interface.preview_export(matchers.Anything()), times=0
+        )
+
     def test_a_refused_remap_task_is_not_failed(self, decoy: Decoy):
         """A remap scheduled before the project became view only leaves it as
         it is, rather than fail and be retried."""
@@ -1197,5 +1232,9 @@ class TestViewOnlyRoot:
             schema_service, validation_service, database_service
         )
         return BatchService(
-            schema_service, validation_service, database_service, review_service
+            schema_service,
+            validation_service,
+            database_service,
+            review_service,
+            VerificationService(schema_service, database_service, review_service),
         )
