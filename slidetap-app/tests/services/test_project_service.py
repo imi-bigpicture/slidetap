@@ -17,6 +17,7 @@ from uuid import uuid4
 
 import pytest
 from decoy import Decoy, matchers
+from sqlalchemy import ScalarResult
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseProject
@@ -24,6 +25,7 @@ from slidetap.model import (
     NotAllowedActionError,
     Project,
     ProjectStatus,
+    SeedClearedError,
 )
 from slidetap.services import (
     AttributeService,
@@ -234,7 +236,7 @@ class TestProjectService:
         # Assert
         assert result == seed
 
-    def test_get_seed_of_dataset(
+    def test_get_export_seed(
         self,
         decoy: Decoy,
         project_service: ProjectService,
@@ -243,15 +245,40 @@ class TestProjectService:
     ):
         # Arrange
         session = decoy.mock(cls=Session)
+        result = decoy.mock(cls=ScalarResult[DatabaseProject])
+        database_project = decoy.mock(cls=DatabaseProject)
         seed = uuid4()
         decoy.when(database_service.get_session()).then_enter_with(session)
-        decoy.when(session.scalar(matchers.Anything())).then_return(seed)
+        decoy.when(session.scalars(matchers.Anything())).then_return(result)
+        decoy.when(result.one()).then_return(database_project)
+        decoy.when(database_project.seed).then_return(seed)
 
         # Act
-        result = project_service.get_seed_of_dataset(project.dataset_uid)
+        export_seed = project_service.get_export_seed(project.dataset_uid)
 
         # Assert
-        assert result == seed
+        assert export_seed == seed
+
+    def test_get_export_seed_is_refused_once_the_seed_is_cleared(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        result = decoy.mock(cls=ScalarResult[DatabaseProject])
+        database_project = decoy.mock(cls=DatabaseProject)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(session.scalars(matchers.Anything())).then_return(result)
+        decoy.when(result.one()).then_return(database_project)
+        decoy.when(database_project.seed).then_return(None)
+        decoy.when(database_project.uid).then_return(project.uid)
+
+        # Act & Assert
+        with pytest.raises(SeedClearedError):
+            project_service.get_export_seed(project.dataset_uid)
 
     def test_clear_seed(
         self,

@@ -31,6 +31,7 @@ from slidetap.model import (
     Project,
     ProjectActions,
     ProjectStatus,
+    SeedClearedError,
 )
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services import AttributeService
@@ -176,19 +177,27 @@ class ProjectService:
         with self._database_service.get_session() as session:
             return self._database_service.get_project(session, uid).seed
 
-    def get_seed_of_dataset(self, dataset_uid: UUID) -> UUID | None:
-        """The importer seed of the project the dataset is of, None where it
-        has been cleared, see `get_seed`.
+    def get_export_seed(self, dataset_uid: UUID) -> UUID:
+        """The seed of the project of the dataset, for an export that derives
+        what it writes from it, see `get_seed`.
 
-        For an export that derives what it writes from the seed, so that what
-        it writes cannot be derived again once the seed is cleared.
+        So that once the seed is cleared, see `clear_seed`, nothing exported
+        can be derived again, and the project is not exported again.
+
+        Raises
+        ------
+        SeedClearedError
+            If the seed of the project has been cleared.
         """
         with self._database_service.get_session() as session:
-            return session.scalar(
-                select(DatabaseProject.seed).where(
+            project = session.scalars(
+                select(DatabaseProject).where(
                     DatabaseProject.dataset_uid == dataset_uid
                 )
-            )
+            ).one()
+            if project.seed is None:
+                raise SeedClearedError(project.uid)
+            return project.seed
 
     def clear_seed(
         self,

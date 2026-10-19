@@ -47,6 +47,23 @@ class ProjectNotEditableError(NotAllowedActionError):
         super().__init__(f"The project cannot be changed: {reason}.")
 
 
+class SeedClearedError(NotAllowedActionError):
+    """Raised for an export of a project whose seed has been cleared.
+
+    What an export derives from the seed cannot be derived again once it is
+    cleared, which is what clearing it is for, so the project is not exported
+    again: that would write something else under the same items.
+    """
+
+    def __init__(self, project_uid: UUID):
+        self.project_uid = project_uid
+        super().__init__(
+            f"The seed of project {project_uid} has been cleared, which cuts "
+            "what was exported from the items. It cannot be exported again, as "
+            "what it exported can no longer be derived."
+        )
+
+
 class MigrationError(Exception):
     """Raised where a migration returns what it may not.
 

@@ -44,6 +44,7 @@ from slidetap.model.errors import (
     NotAllowedActionError,
     NotFoundError,
     ProjectNotEditableError,
+    SeedClearedError,
 )
 from slidetap.model.export_notice import ExportNotice, ExportNoticeKind
 from slidetap.model.file import File
@@ -314,6 +315,7 @@ __all__ = [
     "RootSchemaSummary",
     "Sample",
     "SampleSchema",
+    "SeedClearedError",
     "Cardinality",
     "SampleToSampleRelation",
     "StringAttribute",
