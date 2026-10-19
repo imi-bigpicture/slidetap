@@ -14,7 +14,7 @@
 
 """Models for attributes that can be assigned to items."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import datetime
 from enum import Enum, IntFlag
 from typing import (
@@ -176,6 +176,27 @@ class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
         if self.mapping_item_uid is not None and removed(self.mapping_item_uid):
             update["mapping_item_uid"] = None
         return self.model_copy(update=update)
+
+    def mapping_item_uids(self) -> Iterator[UUID]:
+        """Iterate the mapping items the attribute refers to, its own and
+        those of the attributes nested in its values, as `without_mapping_items`
+        clears them."""
+        if self.mapping_item_uid is not None:
+            yield self.mapping_item_uid
+        for key in ("original_value", "updated_value", "mapped_value"):
+            yield from self._value_mapping_item_uids(getattr(self, key))
+
+    @staticmethod
+    def _value_mapping_item_uids(value: Any) -> Iterator[UUID]:
+        """Iterate the mapping items the attributes a value nests refer to."""
+        if isinstance(value, Attribute):
+            yield from value.mapping_item_uids()
+        elif isinstance(value, Mapping):
+            for nested in value.values():
+                yield from Attribute._value_mapping_item_uids(nested)
+        elif isinstance(value, list | tuple):
+            for nested in value:
+                yield from Attribute._value_mapping_item_uids(nested)
 
     @staticmethod
     def _value_without_mapping_items(

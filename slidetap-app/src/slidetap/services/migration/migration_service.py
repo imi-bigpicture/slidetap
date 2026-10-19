@@ -16,7 +16,8 @@
 """Moving projects from one root schema to another, in steps."""
 
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
+from dataclasses import dataclass
 from typing import ClassVar
 from uuid import UUID
 
@@ -35,6 +36,7 @@ from slidetap.model import (
     Item,
     MetadataSearchItem,
     MigrationStatus,
+    MigrationStep,
     NotAllowedActionError,
     NotFoundError,
     Project,
@@ -42,13 +44,26 @@ from slidetap.model import (
     ProjectStatus,
 )
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.migration.migration_progress import (
+    MigrationProgressReporter,
+)
 from slidetap.services.migration.project_migration_executor import (
     ProjectMigrationExecutor,
 )
 from slidetap.services.migration.project_migration_planner import (
+    ProjectMigrationPlan,
     ProjectMigrationPlanner,
 )
 from slidetap.services.schema_service import SchemaService
+
+
+@dataclass(frozen=True)
+class PlannedEntity:
+    """An entity with attribute issues, planned, and where it goes among the
+    entities of the plan."""
+
+    order: tuple[int, str]
+    database_entity: DatabaseMigrationEntity
 
 
 class MigrationService:
@@ -87,6 +102,10 @@ class MigrationService:
 
     BUSY_REFUSAL: ClassVar[str] = "batches are being searched or processed"
     """Why a project with busy batches cannot be migrated."""
+
+    CHUNK_SIZE: ClassVar[int] = 2000
+    """How many items are loaded at a time, and planned at a time: what
+    planning holds of the project at once."""
 
     def __init__(
         self,
@@ -195,26 +214,32 @@ class MigrationService:
                 )
                 return
             self.assert_can_migrate(database_project, session, started=True)
-            # The search items are planned too, as one the migration cannot
-            # move would fail the completion.
-            plan = self._planner.plan(
-                database_project.root_schema_uid,
-                database_migration.target_root_schema_uid,
-                self._get_entities(session, database_project),
-                self._get_search_items(session, database_project),
-            )
-            for entity in sorted(plan.entities, key=lambda entity: entity.order):
-                database_issues = plan.attribute_issues[entity.source.uid]
-                if database_issues:
-                    database_migration.entities.append(
+            # Planned a chunk at a time, keeping only the entities with
+            # attribute issues, so that what is held is a chunk and the issues
+            # rather than the whole project.
+            with_issues: list[PlannedEntity] = []
+            for plan in self._plan_in_chunks(
+                session, database_project, database_migration
+            ):
+                with_issues.extend(
+                    PlannedEntity(
+                        entity.order,
                         DatabaseMigrationEntity(
                             entity.source.uid,
                             entity.target_schema.uid,
                             entity.identifier,
-                            len(database_migration.entities),
-                            database_issues,
-                        )
+                            0,
+                            plan.attribute_issues[entity.source.uid],
+                        ),
                     )
+                    for entity in plan.entities
+                    if plan.attribute_issues[entity.source.uid]
+                )
+            for index, entity in enumerate(
+                sorted(with_issues, key=lambda entity: entity.order)
+            ):
+                entity.database_entity.position = index
+                database_migration.entities.append(entity.database_entity)
             database_migration.set_status(MigrationStatus.CURATING)
             count = sum(
                 len(database_entity.attribute_issues)
@@ -430,11 +455,10 @@ class MigrationService:
                 )
                 return
             self.assert_can_migrate(database_project, session, started=True)
-            plan = self._planner.plan(
-                database_project.root_schema_uid,
-                database_migration.target_root_schema_uid,
-                self._get_entities(session, database_project),
-                self._get_search_items(session, database_project),
+            plan = self._planner.combine(
+                list(
+                    self._plan_in_chunks(session, database_project, database_migration)
+                )
             )
             self._planner.refuse_changed_plan(
                 plan, database_project.name, database_migration.entities
@@ -448,11 +472,35 @@ class MigrationService:
                 for database_issue in database_entity.attribute_issues
                 if database_issue.target_attribute_schema_uid is not None
             }
-            self._executor.execute(session, database_project, plan, resolutions)
+            writing = MigrationProgressReporter(
+                self._database_service,
+                database_migration.uid,
+                MigrationStep.WRITING,
+                len(plan.entities),
+            )
+            self._executor.execute(
+                session, database_project, plan, resolutions, writing.advance
+            )
             database_project.status = database_migration.previous_project_status
+            session.flush()
+            changed_items = [
+                entity.source.uid
+                for entity in plan.entities
+                if isinstance(entity.source, Item)
+            ]
+            validating = MigrationProgressReporter(
+                self._database_service,
+                database_migration.uid,
+                MigrationStep.VALIDATING,
+                len(changed_items),
+            )
+            self._executor.revalidate(
+                session, database_project, changed_items, validating.advance
+            )
+            # Deleted last: the progress is written to it from transactions of
+            # their own, which would wait for this one on a deleted row.
             session.delete(database_migration)
             session.flush()
-            self._executor.revalidate(session, database_project)
             self._logger.info(
                 f"Project {database_project.uid} migrated to root schema "
                 f"{database_project.root_schema_uid}."
@@ -667,11 +715,64 @@ class MigrationService:
                 f"{status.value}."
             )
 
-    def _get_entities(
+    def _plan_in_chunks(
+        self,
+        session: Session,
+        database_project: DatabaseProject,
+        database_migration: DatabaseProjectMigration,
+    ) -> Iterator[ProjectMigrationPlan]:
+        """Plan the migration of a project a chunk of its entities at a time,
+        writing how far it has come.
+
+        Parameters
+        ----------
+        session: Session
+            The session to read the project in.
+        database_project: DatabaseProject
+            The project.
+        database_migration: DatabaseProjectMigration
+            Its migration.
+
+        Returns
+        -------
+        Iterator[ProjectMigrationPlan]
+            The plan of each chunk, the search items with the first.
+        """
+        progress = MigrationProgressReporter(
+            self._database_service,
+            database_migration.uid,
+            MigrationStep.PLANNING,
+            # The project and the dataset, and the items.
+            2
+            + self._database_service.count_items_in_dataset(
+                session,
+                database_project.dataset_uid,
+                self._get_migrated_item_schemas(database_project),
+            ),
+        )
+        # The search items are planned too, as one the migration cannot move
+        # would fail the completion.
+        search_items = self._get_search_items(session, database_project)
+        for entities in self._get_entity_chunks(session, database_project):
+            yield self._planner.plan(
+                database_project.root_schema_uid,
+                database_migration.target_root_schema_uid,
+                entities,
+                search_items,
+            )
+            search_items = []
+            progress.advance(len(entities))
+            self._logger.info(
+                f"Planned {progress.done} of {progress.total} entities of the "
+                f"migration of project {database_project.uid}."
+            )
+
+    def _get_entity_chunks(
         self, session: Session, database_project: DatabaseProject
-    ) -> list[Project | Dataset | Item]:
+    ) -> Iterator[list[Project | Dataset | Item]]:
         """Get the project, its dataset, and its items on the item schemas the
-        migration of its root migrates, with their attributes.
+        migration of its root migrates, with their attributes, in chunks: the
+        project and the dataset, then the items, `CHUNK_SIZE` at a time.
 
         Parameters
         ----------
@@ -682,25 +783,20 @@ class MigrationService:
 
         Returns
         -------
-        list[Project | Dataset | Item]
-            The project, the dataset, and the items to migrate.
+        Iterator[list[Project | Dataset | Item]]
+            The project and the dataset, then chunks of the items to migrate.
         """
         database_dataset = self._database_service.get_dataset(
             session, database_project.dataset_uid
         )
-        return [
-            database_project.model,
-            database_dataset.model,
-            *(
-                database_item.model
-                for database_item in self._database_service.get_items_in_dataset(
-                    session,
-                    database_dataset.uid,
-                    load_attributes=True,
-                    schema_uids=self._get_migrated_item_schemas(database_project),
-                )
-            ),
-        ]
+        yield [database_project.model, database_dataset.model]
+        for database_items in self._database_service.get_item_chunks_in_dataset(
+            session,
+            database_dataset.uid,
+            self._get_migrated_item_schemas(database_project),
+            self.CHUNK_SIZE,
+        ):
+            yield [database_item.model for database_item in database_items]
 
     def _get_search_items(
         self, session: Session, database_project: DatabaseProject

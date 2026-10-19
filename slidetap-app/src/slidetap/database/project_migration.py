@@ -38,7 +38,9 @@ from slidetap.model import (
     AnyAttribute,
     AttributeMigrationIssue,
     EntityMigrationIssues,
+    MigrationProgress,
     MigrationStatus,
+    MigrationStep,
     ProjectMigration,
     ProjectStatus,
 )
@@ -299,6 +301,18 @@ class DatabaseProjectMigration(Base):
     error: Mapped[str | None] = mapped_column(Text)
     """Why planning or completing failed."""
 
+    progress_step: Mapped[MigrationStep | None] = mapped_column(
+        Enum(MigrationStep, native_enum=False, length=32)
+    )
+    """The step planning or completing is on, None until it has started and
+    once the status changes."""
+
+    progress_done: Mapped[int | None] = mapped_column(Integer)
+    """How many entities of the step are done."""
+
+    progress_total: Mapped[int | None] = mapped_column(Integer)
+    """How many entities the step has."""
+
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
     updated: Mapped[datetime.datetime] = mapped_column(DateTime)
 
@@ -342,7 +356,8 @@ class DatabaseProjectMigration(Base):
         )
 
     def set_status(self, status: MigrationStatus, error: str | None = None) -> None:
-        """Set the status of the migration, and when it was updated.
+        """Set the status of the migration, and when it was updated, clearing
+        the progress of the status it had.
 
         Parameters
         ----------
@@ -353,7 +368,26 @@ class DatabaseProjectMigration(Base):
         """
         self.status = status
         self.error = error
+        self.progress_step = None
+        self.progress_done = None
+        self.progress_total = None
         self.updated = datetime.datetime.now()
+
+    @property
+    def progress(self) -> MigrationProgress | None:
+        """How far planning or completing has come, None where it has not
+        started."""
+        if (
+            self.progress_step is None
+            or self.progress_done is None
+            or self.progress_total is None
+        ):
+            return None
+        return MigrationProgress(
+            step=self.progress_step,
+            done=self.progress_done,
+            total=self.progress_total,
+        )
 
     @property
     def model(self) -> ProjectMigration:
@@ -366,6 +400,7 @@ class DatabaseProjectMigration(Base):
             previous_project_status=self.previous_project_status,
             status=self.status,
             error=self.error,
+            progress=self.progress,
             created=self.created,
             updated=self.updated,
             issues=[entity.model for entity in self.entities],

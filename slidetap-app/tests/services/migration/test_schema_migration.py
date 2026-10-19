@@ -33,7 +33,7 @@ from uuid import UUID, uuid4
 import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from slidetap.cli.mappers import MapperSetUp
 from slidetap.database import (
@@ -46,6 +46,7 @@ from slidetap.database import (
     DatabaseReviewIssue,
     DatabaseUnmappedValue,
 )
+from slidetap.database.change_tracking import stamp_with_ancestors
 from slidetap.external_interfaces import MapperInjectorInterface, SchemaInterface
 from slidetap.model import (
     AnyAttribute,
@@ -64,7 +65,9 @@ from slidetap.model import (
     MapperGroup,
     MetadataImportStatus,
     MigrationError,
+    MigrationProgress,
     MigrationStatus,
+    MigrationStep,
     NotAllowedActionError,
     NotFoundError,
     Observation,
@@ -290,23 +293,31 @@ def migration(schema: ExampleSchema, other_schema: RootSchema) -> _SexMigration:
 
 
 @pytest.fixture()
-def migration_service(
-    schema_service: SchemaService,
+def executor(
     stored_database_service: DatabaseService,
     attribute_service: AttributeService,
     validation_service: ValidationService,
     review_service: ReviewService,
+) -> ProjectMigrationExecutor:
+    return ProjectMigrationExecutor(
+        stored_database_service,
+        attribute_service,
+        validation_service,
+        review_service,
+    )
+
+
+@pytest.fixture()
+def migration_service(
+    schema_service: SchemaService,
+    stored_database_service: DatabaseService,
+    executor: ProjectMigrationExecutor,
 ) -> MigrationService:
     return MigrationService(
         schema_service,
         stored_database_service,
         ProjectMigrationPlanner(schema_service),
-        ProjectMigrationExecutor(
-            stored_database_service,
-            attribute_service,
-            validation_service,
-            review_service,
-        ),
+        executor,
     )
 
 
@@ -708,6 +719,47 @@ class TestMigratingAProject:
         sex = item_service.get(stored.other_patient.uid).attributes["sex"]
         assert sex.schema_uid == schema.patient.attributes["sex"].uid
 
+    def test_planning_in_chunks_stores_the_issues_of_every_chunk_in_order(
+        self,
+        migration_service: MigrationService,
+        migration: _SexMigration,
+        stored: _StoredProject,
+    ):
+        # Arrange — one item a chunk, so that the issues come from several.
+        migration.dropped_tags = {"report"}
+        migration_service.CHUNK_SIZE = 1
+
+        # Act
+        planned = self._plan(migration_service, stored)
+
+        # Assert
+        assert [entity.uid for entity in planned.issues] == [
+            stored.observation.uid,
+            stored.other_patient.uid,
+        ]
+        assert [len(entity.attribute_issues) for entity in planned.issues] == [1, 1]
+
+    def test_completing_in_chunks_moves_every_entity(
+        self,
+        stored_database_service: DatabaseService,
+        migration_service: MigrationService,
+        executor: ProjectMigrationExecutor,
+        item_service: ItemService,
+        stored: _StoredProject,
+    ):
+        # Arrange — planned and written an entity at a time.
+        migration_service.CHUNK_SIZE = 1
+        executor.CHUNK_SIZE = 1
+
+        # Act
+        self._migrate(stored_database_service, migration_service, stored)
+
+        # Assert
+        patient = item_service.get(stored.patient.uid)
+        assert patient.attributes["sex"].schema_uid == OTHER_SEX_SCHEMA_UID
+        other_patient = item_service.get(stored.other_patient.uid)
+        assert other_patient.attributes["sex"].schema_uid == OTHER_SEX_SCHEMA_UID
+
     def test_an_attribute_issue_is_resolved_on_its_attribute_schema(
         self,
         migration_service: MigrationService,
@@ -1034,6 +1086,57 @@ class TestMigratingAProject:
             )
         patient = item_service.get(stored.patient.uid)
         assert patient.attributes["sex"].schema_uid == OTHER_SEX_SCHEMA_UID
+
+    def test_only_the_items_the_migration_changes_are_validated_again(
+        self,
+        stored_database_service: DatabaseService,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+        attribute_service: AttributeService,
+        validation_service: ValidationService,
+        review_service: ReviewService,
+        stored: _StoredProject,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        # Arrange — the patients migrated, the rest left as they are.
+        migration = _SexMigration(schema, other_schema, {schema.patient_schema_uid})
+        schema_service = schema_service_of(
+            other_schema, schema, migrations={schema.uid: migration}
+        )
+        migration_service = MigrationService(
+            schema_service,
+            stored_database_service,
+            ProjectMigrationPlanner(schema_service),
+            ProjectMigrationExecutor(
+                stored_database_service,
+                attribute_service,
+                validation_service,
+                review_service,
+            ),
+        )
+        self._plan(migration_service, stored)
+        self._resolve_all(migration_service, stored)
+        migration_service.submit(stored.project.uid)
+        validated: list[UUID] = []
+        validate_item = validation_service.validate_item
+
+        def recording_validate_item(item, session, visited=None):
+            validated.append(item if isinstance(item, UUID) else item.uid)
+            return validate_item(item, session, visited)
+
+        monkeypatch.setattr(
+            validation_service, "validate_item", recording_validate_item
+        )
+
+        # Act
+        with stored_database_service.get_session() as session:
+            migration_service.complete(stored.project.uid, session=session)
+
+        # Assert
+        assert sorted(validated) == sorted(
+            [stored.patient.uid, stored.other_patient.uid]
+        )
 
     def test_the_locks_and_read_only_flags_of_attributes_are_kept(
         self,
@@ -1643,6 +1746,304 @@ class TestMigratingAProject:
 GRADE_SCHEMA_UID = UUID("7e3f1b2a-5c4d-4e6f-8a9b-0c1d2e3f4a5b")
 
 
+class ProgressRecorder:
+    """Records the progress a migration writes, and writes it."""
+
+    def __init__(self, database_service: DatabaseService):
+        self.written: list[MigrationProgress] = []
+        self._write = database_service.set_project_migration_progress
+
+    def __call__(self, migration_uid: UUID, progress: MigrationProgress) -> None:
+        self.written.append(progress)
+        self._write(migration_uid, progress)
+
+    def last_of(self, step: MigrationStep) -> MigrationProgress:
+        return [progress for progress in self.written if progress.step == step][-1]
+
+    @property
+    def steps(self) -> list[MigrationStep]:
+        """The steps written, each once, in the order they started."""
+        return list(dict.fromkeys(progress.step for progress in self.written))
+
+
+@pytest.fixture()
+def progress(
+    stored_database_service: DatabaseService, monkeypatch: pytest.MonkeyPatch
+) -> ProgressRecorder:
+    recorder = ProgressRecorder(stored_database_service)
+    monkeypatch.setattr(
+        stored_database_service, "set_project_migration_progress", recorder
+    )
+    return recorder
+
+
+@pytest.mark.integration
+class TestMigrationProgress:
+    def test_planning_writes_its_progress_up_to_every_entity(
+        self,
+        migration_service: MigrationService,
+        migration: _SexMigration,
+        stored: _StoredProject,
+        progress: ProgressRecorder,
+    ):
+        # Arrange — one item a chunk, so that progress is made more than once.
+        migration_service.CHUNK_SIZE = 1
+        migrated = [
+            item
+            for item in (
+                stored.patient,
+                stored.other_patient,
+                stored.case,
+                stored.slide,
+                stored.observation,
+            )
+            if item.schema_uid in migration.migrated_item_schemas
+        ]
+
+        # Act
+        migration_service.create(stored.project.uid)
+        migration_service.plan(stored.project.uid)
+
+        # Assert — the project and the dataset, and the items.
+        assert progress.steps == [MigrationStep.PLANNING]
+        assert progress.written[0].done == 0
+        assert progress.last_of(MigrationStep.PLANNING) == MigrationProgress(
+            step=MigrationStep.PLANNING, done=2 + len(migrated), total=2 + len(migrated)
+        )
+
+    def test_completing_writes_its_progress_through_every_step(
+        self,
+        stored_database_service: DatabaseService,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+        progress: ProgressRecorder,
+    ):
+        # Arrange
+        TestMigratingAProject._plan(migration_service, stored)
+        TestMigratingAProject._resolve_all(migration_service, stored)
+        migration_service.submit(stored.project.uid)
+        progress.written.clear()
+
+        # Act
+        with stored_database_service.get_session() as session:
+            migration_service.complete(stored.project.uid, session=session)
+
+        # Assert — every item of the project is validated.
+        assert progress.steps == [
+            MigrationStep.PLANNING,
+            MigrationStep.WRITING,
+            MigrationStep.VALIDATING,
+        ]
+        for step in progress.steps:
+            last = progress.last_of(step)
+            assert last.done == last.total
+        assert progress.last_of(MigrationStep.VALIDATING).total == 5
+
+    def test_progress_written_is_seen_while_the_migration_is_open(
+        self,
+        stored_database_service: DatabaseService,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        # Arrange — the project locked and an item changed, as completing has.
+        if stored_database_service._engine.dialect.name == "sqlite":
+            pytest.skip("SQLite has one writer at a time: progress is not written.")
+        migration = migration_service.create(stored.project.uid)
+        with stored_database_service.get_session() as session:
+            migration_uid = stored_database_service.get_project_migration(
+                session, stored.project.uid
+            ).uid
+        expected = MigrationProgress(step=MigrationStep.WRITING, done=3, total=7)
+        with stored_database_service.get_session(commit=False) as open_session:
+            stored_database_service.get_optional_project_for_update(
+                open_session, stored.project.uid
+            )
+            stored_database_service.get_item(
+                open_session, stored.slide.uid
+            ).name = "changed"
+            open_session.flush()
+
+            # Act
+            stored_database_service.set_project_migration_progress(
+                migration_uid, expected
+            )
+
+            # Assert
+            assert migration_service.get(stored.project.uid).progress == expected
+            open_session.rollback()
+        assert migration.progress is None
+
+    def test_a_new_status_clears_the_progress(
+        self,
+        stored_database_service: DatabaseService,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        # Arrange
+        migration_service.create(stored.project.uid)
+        with stored_database_service.get_session() as session:
+            database_migration = stored_database_service.get_project_migration(
+                session, stored.project.uid
+            )
+            database_migration.progress_step = MigrationStep.PLANNING
+            database_migration.progress_done = 1
+            database_migration.progress_total = 2
+
+        # Act
+        migration_service.plan(stored.project.uid)
+
+        # Assert
+        planned = migration_service.get(stored.project.uid)
+        assert planned.status == MigrationStatus.CURATING
+        assert planned.progress is None
+
+
+@pytest.mark.integration
+class TestLoadingItemsInChunks:
+    """The items of a project are loaded for its migration in chunks, each
+    with everything the models of its items read."""
+
+    @staticmethod
+    def _load(
+        database_service: DatabaseService,
+        stored: _StoredProject,
+        schema: ExampleSchema,
+        chunk_size: int,
+    ) -> tuple[list[list[UUID]], int]:
+        """The uids of the items of every chunk, and how many statements
+        reading the models of the items ran."""
+        statements = 0
+
+        def count(*args) -> None:
+            nonlocal statements
+            statements += 1
+
+        schema_uids = [
+            schema.patient_schema_uid,
+            schema.case_schema_uid,
+            schema.slide_schema_uid,
+            schema.observation_schema_uid,
+        ]
+        chunks: list[list[UUID]] = []
+        with database_service.get_session() as session:
+            for chunk in database_service.get_item_chunks_in_dataset(
+                session, stored.dataset.uid, schema_uids, chunk_size
+            ):
+                event.listen(database_service._engine, "before_cursor_execute", count)
+                chunks.append([item.model.uid for item in chunk])
+                event.remove(database_service._engine, "before_cursor_execute", count)
+        return chunks, statements
+
+    def test_every_item_is_loaded_once_in_chunks_of_at_most_the_size(
+        self,
+        stored_database_service: DatabaseService,
+        stored: _StoredProject,
+        schema: ExampleSchema,
+    ):
+        # Act
+        chunks, _ = self._load(stored_database_service, stored, schema, 2)
+
+        # Assert
+        assert [len(chunk) for chunk in chunks] == [2, 2, 1]
+        assert sorted(uid for chunk in chunks for uid in chunk) == sorted(
+            [
+                stored.patient.uid,
+                stored.other_patient.uid,
+                stored.case.uid,
+                stored.slide.uid,
+                stored.observation.uid,
+            ]
+        )
+
+    def test_the_models_of_a_chunk_are_read_without_further_queries(
+        self,
+        stored_database_service: DatabaseService,
+        stored: _StoredProject,
+        schema: ExampleSchema,
+    ):
+        # Act
+        _, statements = self._load(stored_database_service, stored, schema, 10)
+
+        # Assert
+        assert statements == 0
+
+    @staticmethod
+    def _count_statements(
+        database_service: DatabaseService, read: Callable[[], object]
+    ) -> int:
+        """How many statements reading something runs."""
+        statements = 0
+
+        def count(*args) -> None:
+            nonlocal statements
+            statements += 1
+
+        event.listen(database_service._engine, "before_cursor_execute", count)
+        try:
+            read()
+        finally:
+            event.remove(database_service._engine, "before_cursor_execute", count)
+        return statements
+
+    def test_walking_up_from_items_reads_nothing_once_their_ancestors_are_loaded(
+        self,
+        stored_database_service: DatabaseService,
+        stored: _StoredProject,
+    ):
+        # Arrange — the observation hangs under the case, under the patient.
+        with stored_database_service.get_session() as session:
+            items = stored_database_service.get_items_with_models_loaded(
+                session, [stored.observation.uid]
+            )
+            observation = items[stored.observation.uid]
+
+            # Act
+            ancestors = stored_database_service.load_ancestors(session, [observation])
+            statements = self._count_statements(
+                stored_database_service,
+                lambda: stamp_with_ancestors(
+                    observation, datetime.datetime.now(), set()
+                ),
+            )
+
+            # Assert
+            assert statements == 0
+            assert {ancestor.uid for ancestor in ancestors} == {
+                stored.case.uid,
+                stored.patient.uid,
+            }
+
+    def test_walking_down_from_items_reads_nothing_once_their_descendants_are_loaded(
+        self,
+        stored_database_service: DatabaseService,
+        stored: _StoredProject,
+    ):
+        # Arrange — the patient has the case under it, which has the
+        # observation under it.
+        with stored_database_service.get_session() as session:
+            patient = stored_database_service.get_item(session, stored.patient.uid)
+
+            # Act
+            loaded = stored_database_service.load_descendants(session, [patient])
+            walked: list[UUID] = []
+            statements = self._count_statements(
+                stored_database_service,
+                lambda: walked.extend(
+                    item.uid
+                    for item in stored_database_service.walk_item_descendants(patient)
+                ),
+            )
+
+            # Assert
+            assert statements == 0
+            assert set(walked) == {
+                stored.patient.uid,
+                stored.case.uid,
+                stored.observation.uid,
+            }
+            assert {item.uid for item in loaded} == set(walked)
+
+
 @pytest.mark.integration
 class TestMigratingIntoNewRequirements:
     """The second root with a grade the case requires, which the example root
@@ -2029,3 +2430,27 @@ class TestAttributeWithoutMappingItems:
             "mapped",
             "mapped",
         ]
+
+    def test_the_mapping_items_referred_to_are_listed_nested_as_well(self):
+        # Arrange
+        own, first, second = uuid4(), uuid4(), uuid4()
+        attribute = ListAttribute(
+            uid=uuid4(),
+            schema_uid=uuid4(),
+            mapping_item_uid=own,
+            original_value=[
+                StringAttribute(
+                    uid=uuid4(),
+                    schema_uid=uuid4(),
+                    mapping_item_uid=mapping_item_uid,
+                    mapped_value="mapped",
+                )
+                for mapping_item_uid in (first, second, None)
+            ],
+        )
+
+        # Act
+        listed = list(attribute.mapping_item_uids())
+
+        # Assert
+        assert sorted(listed) == sorted([own, first, second])

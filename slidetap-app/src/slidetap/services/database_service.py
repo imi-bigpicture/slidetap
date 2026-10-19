@@ -15,6 +15,7 @@
 """Service for accessing attributes."""
 
 import datetime
+import logging
 import re
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -47,16 +48,19 @@ from sqlalchemy import (
     not_,
     or_,
     select,
+    text,
     true,
     union_all,
     update,
 )
 from sqlalchemy.engine import CursorResult, ScalarResult
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import (
     InstrumentedAttribute,
     Mapped,
     Session,
     aliased,
+    selectin_polymorphic,
     selectinload,
     sessionmaker,
 )
@@ -92,6 +96,7 @@ from slidetap.database import (
     DatabaseUnionAttribute,
     DatabaseUnmappedValue,
 )
+from slidetap.database.change_tracking import direct_parents, stamp_with_ancestors
 from slidetap.database.item import DatabaseTag
 from slidetap.model import (
     Annotation,
@@ -127,6 +132,7 @@ from slidetap.model import (
     MeasurementAttribute,
     MeasurementAttributeSchema,
     MetadataImportStatus,
+    MigrationProgress,
     NumericAttribute,
     NumericAttributeSchema,
     ObjectAttribute,
@@ -659,6 +665,386 @@ class DatabaseService:
             query = query.options(selectinload(DatabaseItem.attributes))
         return session.scalars(query)
 
+    def get_item_chunks_in_dataset(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+        schema_uids: Collection[UUID],
+        chunk_size: int,
+    ) -> Iterator[list[DatabaseItem]]:
+        """Yield the items of some item schemas in a dataset in chunks, with
+        everything their `model` reads loaded up front.
+
+        Each chunk costs a fixed number of queries whatever its size, rather
+        than several per item. A chunk the caller no longer refers to can be
+        garbage collected, as long as nothing in it was changed.
+
+        Parameters
+        ----------
+        session: Session
+            The session to read the items in.
+        dataset_uid: UUID
+            The uid of the dataset.
+        schema_uids: Collection[UUID]
+            The uids of the item schemas of the items.
+        chunk_size: int
+            The most items in a chunk.
+
+        Returns
+        -------
+        Iterator[list[DatabaseItem]]
+            The items, in chunks ordered by uid.
+        """
+        query = (
+            select(DatabaseItem)
+            .where(
+                DatabaseItem.dataset_uid == dataset_uid,
+                DatabaseItem.schema_uid.in_(schema_uids),
+            )
+            .order_by(DatabaseItem.uid)
+            .limit(chunk_size)
+            .options(*self._item_model_load_options())
+        )
+        last_uid: UUID | None = None
+        while True:
+            chunk_query = (
+                query if last_uid is None else query.where(DatabaseItem.uid > last_uid)
+            )
+            chunk = list(session.scalars(chunk_query))
+            if not chunk:
+                return
+            yield chunk
+            last_uid = chunk[-1].uid
+            if len(chunk) < chunk_size:
+                return
+
+    IN_LIST_SIZE: ClassVar[int] = 5000
+    """The most values a single IN list is given, well within what a statement
+    takes in parameters on Postgres and SQLite."""
+
+    def get_items_with_models_loaded(
+        self, session: Session, item_uids: Collection[UUID]
+    ) -> dict[UUID, DatabaseItem]:
+        """Get items by uid, with everything their `model` reads, and what
+        changing their attributes reads, loaded up front.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get them in.
+        item_uids: Collection[UUID]
+            The uids of the items.
+
+        Returns
+        -------
+        dict[UUID, DatabaseItem]
+            The items found, by uid.
+        """
+        uids = list(item_uids)
+        items: dict[UUID, DatabaseItem] = {}
+        for start in range(0, len(uids), self.IN_LIST_SIZE):
+            query = (
+                select(DatabaseItem)
+                .where(DatabaseItem.uid.in_(uids[start : start + self.IN_LIST_SIZE]))
+                .options(*self._item_model_load_options())
+            )
+            items.update((item.uid, item) for item in session.scalars(query))
+        return items
+
+    def load_ancestors(
+        self, session: Session, items: Iterable[DatabaseItem]
+    ) -> list[DatabaseItem]:
+        """Load everything items hang under, all the way up, a level at a
+        time, so that walking up from them reads nothing more.
+
+        Change tracking walks up from every item changed in a flush, and would
+        otherwise load the parents of each item it reaches on its own. The
+        items must be loaded with their direct relations, as
+        `get_items_with_models_loaded` loads them. What the session already
+        holds of an ancestor is kept, and only what it has not loaded is.
+
+        Parameters
+        ----------
+        session: Session
+            The session to load them in.
+        items: Iterable[DatabaseItem]
+            The items.
+
+        Returns
+        -------
+        list[DatabaseItem]
+            The ancestors, to hold on to while they are walked: the session
+            holds an unchanged item only while something else does.
+        """
+        ancestors: list[DatabaseItem] = []
+        seen = {item.uid for item in items}
+        level = list(items)
+        while level:
+            above = {
+                parent.uid
+                for item in level
+                for parent in direct_parents(item)
+                if parent.uid not in seen
+            }
+            seen.update(above)
+            level = []
+            uids = list(above)
+            for start in range(0, len(uids), self.IN_LIST_SIZE):
+                query = (
+                    select(DatabaseItem)
+                    .where(
+                        DatabaseItem.uid.in_(uids[start : start + self.IN_LIST_SIZE])
+                    )
+                    .options(*self._item_parent_load_options())
+                )
+                level.extend(session.scalars(query))
+            ancestors.extend(level)
+        return ancestors
+
+    def load_descendants(
+        self, session: Session, items: Iterable[DatabaseItem]
+    ) -> list[DatabaseItem]:
+        """Load everything under items, all the way down, a level at a time,
+        so that walking down from them, as `walk_item_descendants` does, reads
+        nothing more.
+
+        What the session already holds of an item is kept, and only what it
+        has not loaded is.
+
+        Parameters
+        ----------
+        session: Session
+            The session to load them in.
+        items: Iterable[DatabaseItem]
+            The items.
+
+        Returns
+        -------
+        list[DatabaseItem]
+            The items and their descendants, to hold on to while they are
+            walked: the session holds an unchanged item only while something
+            else does.
+        """
+        loaded: list[DatabaseItem] = []
+        seen: set[UUID] = set()
+        level = {item.uid for item in items}
+        while level:
+            seen.update(level)
+            uids = list(level)
+            found: list[DatabaseItem] = []
+            for start in range(0, len(uids), self.IN_LIST_SIZE):
+                query = (
+                    select(DatabaseItem)
+                    .where(
+                        DatabaseItem.uid.in_(uids[start : start + self.IN_LIST_SIZE])
+                    )
+                    .options(*self._item_child_load_options())
+                )
+                found.extend(session.scalars(query))
+            loaded.extend(found)
+            level = {
+                child.uid
+                for item in found
+                for child in self.get_children(item)
+                if child.uid not in seen
+            }
+        return loaded
+
+    @staticmethod
+    def _item_child_load_options():
+        """The loader options that load what hangs directly under an item."""
+        return (
+            selectin_polymorphic(
+                DatabaseItem,
+                (
+                    DatabaseSample,
+                    DatabaseImage,
+                    DatabaseObservation,
+                    DatabaseAnnotation,
+                ),
+            ),
+            selectinload(DatabaseSample.children),
+            selectinload(DatabaseSample.images),
+            selectinload(DatabaseSample.observations),
+            selectinload(DatabaseImage.annotations),
+            selectinload(DatabaseImage.observations),
+            selectinload(DatabaseAnnotation.observations),
+        )
+
+    @staticmethod
+    def _item_parent_load_options():
+        """The loader options that load what an item directly hangs under."""
+        return (
+            selectin_polymorphic(
+                DatabaseItem,
+                (
+                    DatabaseSample,
+                    DatabaseImage,
+                    DatabaseObservation,
+                    DatabaseAnnotation,
+                ),
+            ),
+            selectinload(DatabaseSample.parents),
+            selectinload(DatabaseImage.samples),
+            selectinload(DatabaseObservation.sample),
+            selectinload(DatabaseObservation.image),
+            selectinload(DatabaseObservation.annotation),
+            selectinload(DatabaseAnnotation.image),
+        )
+
+    def get_existing_mapping_uids(
+        self, session: Session, mapping_uids: Collection[UUID]
+    ) -> set[UUID]:
+        """Get which of some mapping items exist.
+
+        Parameters
+        ----------
+        session: Session
+            The session to look in.
+        mapping_uids: Collection[UUID]
+            The uids of the mapping items.
+
+        Returns
+        -------
+        set[UUID]
+            The uids of those that exist.
+        """
+        uids = list(mapping_uids)
+        existing: set[UUID] = set()
+        for start in range(0, len(uids), self.IN_LIST_SIZE):
+            existing.update(
+                session.scalars(
+                    select(DatabaseMappingItem.uid).where(
+                        DatabaseMappingItem.uid.in_(
+                            uids[start : start + self.IN_LIST_SIZE]
+                        )
+                    )
+                )
+            )
+        return existing
+
+    def count_items_in_dataset(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+        schema_uids: Collection[UUID] | None = None,
+    ) -> int:
+        """Count the items in a dataset, or those of some item schemas.
+
+        Parameters
+        ----------
+        session: Session
+            The session to count them in.
+        dataset_uid: UUID
+            The uid of the dataset.
+        schema_uids: Collection[UUID] | None = None
+            The uids of the item schemas to count the items of, None for all.
+
+        Returns
+        -------
+        int
+            How many items there are.
+        """
+        query = select(func.count(DatabaseItem.uid)).where(
+            DatabaseItem.dataset_uid == dataset_uid
+        )
+        if schema_uids is not None:
+            query = query.where(DatabaseItem.schema_uid.in_(schema_uids))
+        return session.scalar(query) or 0
+
+    PROGRESS_LOCK_TIMEOUT: ClassVar[str] = "2s"
+    """How long writing the progress of a migration waits for the row."""
+
+    def set_project_migration_progress(
+        self, migration_uid: UUID, progress: MigrationProgress
+    ) -> None:
+        """Write how far planning or completing a migration has come, in a
+        transaction of its own, so that it is seen while the transaction of the
+        migration is still open.
+
+        Best effort: progress is never worth failing or holding up the
+        migration for. A write that cannot get the row in time is logged and
+        left out. SQLite allows one writer at a time, which completing a
+        migration is, so nothing is written there.
+
+        Parameters
+        ----------
+        migration_uid: UUID
+            The uid of the migration.
+        progress: MigrationProgress
+            How far it has come.
+        """
+        if self._engine.dialect.name == "sqlite":
+            return
+        try:
+            with self.get_session() as session:
+                session.execute(
+                    text(f"SET LOCAL lock_timeout = '{self.PROGRESS_LOCK_TIMEOUT}'")
+                )
+                session.execute(
+                    update(DatabaseProjectMigration)
+                    .where(DatabaseProjectMigration.uid == migration_uid)
+                    .values(
+                        progress_step=progress.step,
+                        progress_done=progress.done,
+                        progress_total=progress.total,
+                    )
+                )
+        except OperationalError:
+            logging.getLogger(__name__).warning(
+                f"The progress of migration {migration_uid} could not be written.",
+                exc_info=True,
+            )
+
+    @staticmethod
+    def _item_model_load_options():
+        """The loader options that load everything the `model` of an item
+        reads: the columns of its subclass, its attributes with the columns
+        of theirs, its tags, and the items it relates to."""
+        attribute_subclasses = (
+            DatabaseStringAttribute,
+            DatabaseEnumAttribute,
+            DatabaseDatetimeAttribute,
+            DatabaseNumericAttribute,
+            DatabaseMeasurementAttribute,
+            DatabaseCodeAttribute,
+            DatabaseBooleanAttribute,
+            DatabaseObjectAttribute,
+            DatabaseListAttribute,
+            DatabaseUnionAttribute,
+        )
+        return (
+            selectin_polymorphic(
+                DatabaseItem,
+                (
+                    DatabaseSample,
+                    DatabaseImage,
+                    DatabaseObservation,
+                    DatabaseAnnotation,
+                ),
+            ),
+            selectinload(DatabaseItem.attributes).selectin_polymorphic(
+                attribute_subclasses
+            ),
+            selectinload(DatabaseItem.private_attributes).selectin_polymorphic(
+                attribute_subclasses
+            ),
+            selectinload(DatabaseItem.tags),
+            selectinload(DatabaseSample.children),
+            selectinload(DatabaseSample.parents),
+            selectinload(DatabaseSample.images),
+            selectinload(DatabaseSample.observations),
+            selectinload(DatabaseImage.samples),
+            selectinload(DatabaseImage.annotations),
+            selectinload(DatabaseImage.observations),
+            selectinload(DatabaseImage.files),
+            selectinload(DatabaseObservation.image),
+            selectinload(DatabaseObservation.sample),
+            selectinload(DatabaseObservation.annotation),
+            selectinload(DatabaseAnnotation.image),
+            selectinload(DatabaseAnnotation.observations),
+        )
+
     def count_items_without_pseudonym(
         self,
         session: Session,
@@ -752,6 +1138,22 @@ class DatabaseService:
             visited.add(item.uid)
             yield item
             stack.extend(self.get_children(item))
+
+    @classmethod
+    def get_related(cls, item: DatabaseItem) -> Iterable[DatabaseItem]:
+        """Everything ``item`` hangs under or has hanging under it.
+
+        Parameters
+        ----------
+        item: DatabaseItem
+            The item.
+
+        Returns
+        -------
+        Iterable[DatabaseItem]
+            What it hangs directly under, and what hangs directly under it.
+        """
+        return [*direct_parents(item), *cls.get_children(item)]
 
     @staticmethod
     def get_children(item: DatabaseItem) -> Iterable[DatabaseItem]:
@@ -2064,11 +2466,14 @@ class DatabaseService:
         root_attribute_uids: Sequence[UUID]
             The uids of the top-level attributes.
         """
-        session.execute(
-            delete(DatabaseUnmappedValue).where(
-                DatabaseUnmappedValue.root_attribute_uid.in_(root_attribute_uids)
+        for start in range(0, len(root_attribute_uids), self.IN_LIST_SIZE):
+            session.execute(
+                delete(DatabaseUnmappedValue).where(
+                    DatabaseUnmappedValue.root_attribute_uid.in_(
+                        root_attribute_uids[start : start + self.IN_LIST_SIZE]
+                    )
+                )
             )
-        )
 
     def record_unmapped_values(
         self,

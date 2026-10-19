@@ -89,6 +89,31 @@ class MigrationStatus(Enum):
     can only be reverted."""
 
 
+class MigrationStep(Enum):
+    """What planning or completing a migration is doing."""
+
+    PLANNING = "planning"
+    """Running the migration without saving, an item at a time. Completing
+    does it again, to have what it saves."""
+
+    WRITING = "writing"
+    """Writing the entities the migration changes."""
+
+    VALIDATING = "validating"
+    """Validating every item of the project on the target root."""
+
+
+class MigrationProgress(CamelCaseBaseModel):
+    """How far the step that planning or completing is on has come."""
+
+    step: MigrationStep
+    done: int
+    """How many entities of the step are done."""
+
+    total: int
+    """How many entities the step has."""
+
+
 class AttributeMigrationIssue(CamelCaseBaseModel):
     """A top-level attribute of an entity that the migration could not
     convert, left invalid, or dropped, and how the curator resolved it.
@@ -155,6 +180,10 @@ class ProjectMigration(CamelCaseBaseModel):
 
     error: str | None = None
     """Why planning or completing failed."""
+
+    progress: MigrationProgress | None = None
+    """How far planning or completing has come, None until it has started and
+    once it is done."""
 
     created: datetime
     updated: datetime

@@ -61,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Endpoints for the steps of migrating a project.
 - The actions of a project say whether its root has a migration, and why the project cannot be migrated.
 - A Convert view in the client, listed only where a root has a migration, that starts a conversion and goes through what it could not convert, item by item.
+- Planning and completing a migration write how far they have come, the step and how many of its entities are done, and the Convert view shows it as a progress bar.
+- A migration is planned and completed in chunks of 2000 items, each loaded with everything the planning reads, and completing validates again only the items the migration changed, with the other side of their relations.
 - A `NotFoundError` raised by a service is answered with 404 on every endpoint.
 - `ProjectService.get_completed()` and `get_exportable()` give a project where it is completed, or can be exported.
 - `Attribute.effective_layer` says which value of an attribute is in effect, as an `AttributeValueLayer`, and `values_below_effective` which values are below it.
@@ -70,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Batch and project deletion run as background tasks. `DELETE /api/batches/batch/{uid}` and `DELETE /api/projects/project/{uid}` mark the row as deleting, answer `{"status": "scheduled"}` and refuse with `409` while a worker holds the batch.
 - A batch that is locked, storing images or completed can no longer be deleted; a locked batch is reopened first.
 - Items in a batch are deleted with set-based statements instead of one at a time.
+- Flagging the review units holding something invalid loads what is under 500 units at a time, instead of an item at a time as it walks down.
 - `BatchStatus.DELETED` is now `13` and `ProjectStatus.DELETED` is `12` on the wire; client and server are deployed together.
 - `BaseProvider` takes any factory of the `SchemaInterface`, not only its class.
 - Every operation on a project reads its item schemas from the root schema the project was created with.

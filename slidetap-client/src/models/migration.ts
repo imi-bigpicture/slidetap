@@ -23,6 +23,25 @@ export enum MigrationStatus {
   FAILED = 'failed',
 }
 
+/** What planning or completing a migration is doing. */
+export enum MigrationStep {
+  /** Running the migration without saving. Completing does it again. */
+  PLANNING = 'planning',
+  /** Writing the entities the migration changes. */
+  WRITING = 'writing',
+  /** Validating every item of the project on the target root. */
+  VALIDATING = 'validating',
+}
+
+/** How far the step that planning or completing is on has come. */
+export interface MigrationProgress {
+  readonly step: MigrationStep
+  /** How many entities of the step are done. */
+  readonly done: number
+  /** How many entities the step has. */
+  readonly total: number
+}
+
 /** A top-level attribute of an entity that the migration could not convert,
  * left invalid, or dropped, and how the curator resolved it. Its tag and
  * display name are in the attribute schema in the target root, or in that of
@@ -67,6 +86,9 @@ export interface ProjectMigration {
   readonly status: MigrationStatus
   /** Why planning or completing failed. */
   readonly error: string | null
+  /** How far planning or completing has come, null until it has started and
+   * once it is done. */
+  readonly progress: MigrationProgress | null
   readonly created: string
   readonly updated: string
   /** The issues of each entity that has any: the project, the dataset, then

@@ -62,11 +62,32 @@ class ValidationService:
         self._attribute_validator = AttributeValidator()
         self._relation_validator = RelationValidator(schema_service, database_service)
 
-    def validate_item(self, item: UUID | Item | DatabaseItem, session: Session):
+    def validate_item(
+        self,
+        item: UUID | Item | DatabaseItem,
+        session: Session,
+        visited: set[UUID] | None = None,
+    ):
+        """Validate the attributes, the pseudonym, and the relations of an item,
+        and the other side of each of its relations.
+
+        Parameters
+        ----------
+        item: UUID | Item | DatabaseItem
+            The item.
+        session: Session
+            The session to validate it in.
+        visited: set[UUID] | None = None
+            Items whose relations are already validated in this pass, added
+            to as it goes, as for `validate_relations_for`. None for a pass of
+            its own.
+        """
         item = self._database_service.get_item(session, item)
         self._validate_item_attributes(item)
         self._validate_item_pseudonym(item)
-        return self._relation_validator.validate_item_relations(item, session)
+        return self._relation_validator.validate_item_relations(
+            item, session, visited=visited
+        )
 
     def validate_item_relations(
         self,

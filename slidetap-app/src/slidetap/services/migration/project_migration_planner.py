@@ -17,7 +17,7 @@ the curator has to resolve."""
 
 import contextlib
 import dataclasses
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -297,6 +297,32 @@ class ProjectMigrationPlanner:
                     self._create_attribute_issues(source_root, target_root, entity)
                 )
                 for entity in entities_in_migration
+            },
+        )
+
+    @staticmethod
+    def combine(plans: Sequence[ProjectMigrationPlan]) -> ProjectMigrationPlan:
+        """Combine the plans of the chunks of a project into one.
+
+        Parameters
+        ----------
+        plans: Sequence[ProjectMigrationPlan]
+            The plans of the chunks, at least one, of the same target root.
+
+        Returns
+        -------
+        ProjectMigrationPlan
+            The entities, the search items, and the attribute issues of every
+            chunk, in the order of the chunks.
+        """
+        return ProjectMigrationPlan(
+            plans[0].target_root,
+            [entity for plan in plans for entity in plan.entities],
+            [search_item for plan in plans for search_item in plan.search_items],
+            {
+                uid: issues
+                for plan in plans
+                for uid, issues in plan.attribute_issues.items()
             },
         )
 

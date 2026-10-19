@@ -17,6 +17,7 @@
 import logging
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
+from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -51,6 +52,10 @@ class ReviewService:
     A review unit answers for the items under it, so most of this is asked of
     a unit and answered by looking at what it holds.
     """
+
+    SWEEP_CHUNK_SIZE: ClassVar[int] = 500
+    """How many review units `flag_invalid_review_units` loads everything under
+    at a time."""
 
     def __init__(
         self,
@@ -360,15 +365,24 @@ class ReviewService:
             review_unit = root.review_unit
             if review_unit is None:
                 return 0
-            units = self._database_service.get_items(
-                session,
-                root.items[review_unit.schema_uid],
-                dataset_uid,
-                batch_uid,
+            units = list(
+                self._database_service.get_items(
+                    session,
+                    root.items[review_unit.schema_uid],
+                    dataset_uid,
+                    batch_uid,
+                )
             )
-            for unit in units:
-                if self._raise_on_invalid_under(unit, session):
-                    flagged += 1
+            # Swept a chunk at a time, with everything under the units of the
+            # chunk loaded first, rather than an item at a time as the sweep
+            # walks down.
+            for start in range(0, len(units), self.SWEEP_CHUNK_SIZE):
+                chunk = units[start : start + self.SWEEP_CHUNK_SIZE]
+                loaded = self._database_service.load_descendants(session, chunk)
+                for unit in chunk:
+                    if self._raise_on_invalid_under(unit, session):
+                        flagged += 1
+                del loaded
         return flagged
 
     def _raise_on_invalid_under(self, unit: DatabaseItem, session: Session) -> bool:

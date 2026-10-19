@@ -41,6 +41,10 @@ import React, { type ReactElement } from 'react'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
+import {
+  progressPercent,
+  progressText,
+} from 'src/components/project/conversion_progress'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
 import { ItemDetailAction } from 'src/models/action'
 import {
@@ -52,6 +56,7 @@ import {
   MigrationStatus,
   type AttributeMigrationIssue,
   type EntityMigrationIssues,
+  type MigrationProgress,
   type ProjectMigration,
 } from 'src/models/migration'
 import type { Project } from 'src/models/project'
@@ -240,16 +245,18 @@ function MigrationInProgress({
         project until the conversion is completed or reverted.
       </Typography>
       {migration.status === MigrationStatus.PLANNING && (
-        <>
-          <Typography>Planning the conversion.</Typography>
-          <LinearProgress />
-        </>
+        <ConversionProgress
+          title="Planning the conversion"
+          progress={migration.progress}
+          completing={false}
+        />
       )}
       {migration.status === MigrationStatus.COMPLETING && (
-        <>
-          <Typography>Completing the conversion.</Typography>
-          <LinearProgress />
-        </>
+        <ConversionProgress
+          title="Completing the conversion"
+          progress={migration.progress}
+          completing={true}
+        />
       )}
       {migration.status === MigrationStatus.FAILED && (
         <Alert severity="error">
@@ -290,6 +297,31 @@ function MigrationInProgress({
         <Alert severity="error">{refusal(revertMutation.error)}</Alert>
       )}
     </Stack>
+  )
+}
+
+/** How far planning or completing a conversion has come: the step it is on
+ * and how many of its entities are done, or a running bar until it has
+ * started. */
+function ConversionProgress({
+  title,
+  progress,
+  completing,
+}: {
+  title: string
+  progress: MigrationProgress | null
+  completing: boolean
+}): ReactElement {
+  const percent = progressPercent(progress)
+  return (
+    <>
+      <Typography>{progressText(title, progress, completing)}</Typography>
+      {percent === null ? (
+        <LinearProgress />
+      ) : (
+        <LinearProgress variant="determinate" value={percent} />
+      )}
+    </>
   )
 }
 
