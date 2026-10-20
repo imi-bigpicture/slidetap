@@ -32,51 +32,43 @@ class LoginService:
     KEEP_ALIVE_TIMEOUT_CLAIM = "kat"
     """Claim of the access token holding the keep alive timeout, in seconds, of
     the auth interface session."""
-    KEEP_ALIVES_PER_LIFETIME = 3
+    KEEP_ALIVES_PER_TIMEOUT = 3
     """How many keep alives the client is asked to send within the lifetime of
-    an access token. The client only sends a keep alive if the user was active
-    since the last one, so up to two intervals can pass between keep alives of
-    an active user; three per lifetime keeps that within it."""
+    an access token, and within the keep alive timeout of the auth interface
+    session. The access token is only renewed by a keep alive of an active
+    user, so up to two intervals can pass between renewals while the user is
+    active; three per lifetime keeps that within it, and leaves a margin for a
+    late keep alive of the auth interface session."""
 
     def __init__(self, config: LoginConfig):
         self._secret_key = config.secret_key
         self._access_token_expiration_seconds = config.access_token_expiration_seconds
         self._keep_alive_interval_seconds = config.keep_alive_seconds
 
-    def _create_jwt_token(self, data: dict, lifetime_seconds: int) -> str:
-        """Create a JWT token with the given data, valid for the given time."""
+    def _create_jwt_token(self, data: dict) -> str:
+        """Create a JWT token with the given data."""
         to_encode = data.copy()
-        expire = int(time.time()) + lifetime_seconds
+        expire = int(time.time()) + self._access_token_expiration_seconds
         to_encode.update({"exp": expire})
         return jwt.encode(to_encode, self._secret_key, algorithm=self.ALGORITHM)
 
-    def access_token_lifetime_seconds(self, session: UserSession | None) -> int:
-        """How long an access token for the session is valid.
-
-        The configured access token expiration, shortened to the keep alive
-        timeout of the auth interface session, so that the access token expires
-        no later than the session it carries.
-        """
-        if session is None or session.keep_alive_timeout_seconds is None:
-            return self._access_token_expiration_seconds
-        return min(
-            self._access_token_expiration_seconds, session.keep_alive_timeout_seconds
-        )
-
     def keep_alive_interval_seconds(self, session: UserSession | None) -> int:
-        """How often the client should keep the session alive while in use.
+        """How often the client should send a keep alive while logged in.
 
         The configured keep alive interval, shortened so that an active user
-        keeps both the access token and the auth interface session alive.
+        keeps the access token alive, and so that the auth interface session
+        is kept alive within its keep alive timeout.
         """
-        return max(
-            1,
-            min(
-                self._keep_alive_interval_seconds,
-                self.access_token_lifetime_seconds(session)
-                // self.KEEP_ALIVES_PER_LIFETIME,
-            ),
+        interval = min(
+            self._keep_alive_interval_seconds,
+            self._access_token_expiration_seconds // self.KEEP_ALIVES_PER_TIMEOUT,
         )
+        if session is not None and session.keep_alive_timeout_seconds is not None:
+            interval = min(
+                interval,
+                session.keep_alive_timeout_seconds // self.KEEP_ALIVES_PER_TIMEOUT,
+            )
+        return max(1, interval)
 
     def _verify_jwt_token(self, token: str) -> dict[str, Any]:
         """Verify a JWT token and return the payload."""
@@ -119,8 +111,9 @@ class LoginService:
 
         The access token names the user and carries the token of the session
         the auth interface gave, so that the session can be checked and ended
-        with the auth interface while the access token is valid. The access
-        token expires no later than the auth interface times out the session.
+        with the auth interface while the access token is valid, and its keep
+        alive timeout, so that the client can be told how often to keep the
+        session alive.
         """
         claims: dict[str, Any] = {
             "sub": session.username,
@@ -128,9 +121,7 @@ class LoginService:
         }
         if session.keep_alive_timeout_seconds is not None:
             claims[self.KEEP_ALIVE_TIMEOUT_CLAIM] = session.keep_alive_timeout_seconds
-        jwt_token = self._create_jwt_token(
-            claims, self.access_token_lifetime_seconds(session)
-        )
+        jwt_token = self._create_jwt_token(claims)
         crsf_token = secrets.token_urlsafe(32)
         response.set_cookie(
             key="access_token",

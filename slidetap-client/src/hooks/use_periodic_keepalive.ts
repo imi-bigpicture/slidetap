@@ -15,18 +15,20 @@
 /**
  * Periodic Keep-Alive Hook
  *
- * Periodically calls the keep-alive endpoint to refresh the user session
- * while the user is actively using the application. This prevents session
- * timeout for active users.
+ * Periodically calls the keep-alive endpoint while the user is logged in. The
+ * server keeps the auth interface session alive on every call, and renews the
+ * login only if the user has been active, so an idle user is logged out when
+ * the login expires, not when the auth interface session would time out.
  *
  * The hook:
- * - Checks as often as the session status asks (keep_alive_interval_seconds),
- *   which the server fits to how long the session lasts without a keep alive
+ * - Calls keepAlive as often as the session status asks
+ *   (keep_alive_interval_seconds), which the server fits to both the login
+ *   and the auth interface session
  * - Only runs while the user is logged in, starting on login
- * - Calls keepAlive only if the user has used the page (pointer, keyboard or
- *   wheel) since the last check, so an idle session still times out
- * - Refetches the session status after a keep alive, so the expiration shown
- *   follows the new access token
+ * - Tells keepAlive if the user has used the page (pointer, keyboard or
+ *   wheel) since the last call
+ * - Refetches the session status after a renewed login, so the expiration
+ *   shown follows the new access token
  */
 
 import { useQueryClient } from '@tanstack/react-query'
@@ -74,15 +76,17 @@ export function usePeriodicKeepAlive(): void {
       return
     }
     const performKeepAlive = (): void => {
-      if (!activeSinceLastCheck.current) {
-        return
-      }
+      const active = activeSinceLastCheck.current
       activeSinceLastCheck.current = false
       loginApi
-        .keepAlive()
+        .keepAlive(active)
         .then(async () => {
           console.debug('Keep-alive successful')
-          await queryClient.invalidateQueries({ queryKey: SESSION_STATUS_QUERY_KEY })
+          if (active) {
+            await queryClient.invalidateQueries({
+              queryKey: SESSION_STATUS_QUERY_KEY,
+            })
+          }
         })
         .catch((error) => {
           console.error('Keep-alive failed:', error)

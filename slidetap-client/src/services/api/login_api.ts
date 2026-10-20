@@ -17,7 +17,7 @@ import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 export interface SessionStatus {
   exp: number
   user: string
-  /** How often to keep the session alive while in use, in seconds. */
+  /** How often to send a keep alive while logged in, in seconds. */
   keep_alive_interval_seconds: number
 }
 
@@ -36,8 +36,10 @@ const loginApi = {
     return await post('auth/logout')
   },
 
-  keepAlive: async () => {
-    return await post('auth/keepAlive')
+  /** Keeps the session alive, renewing the login only if the user has been
+   * active since the last keep alive. */
+  keepAlive: async (active = true) => {
+    return await post('auth/keepAlive', { active })
   },
 
   getSessionStatus: async () => {

@@ -58,7 +58,7 @@ describe('usePeriodicKeepAlive', () => {
     vi.resetAllMocks()
   })
 
-  it('keeps an active session alive at the interval the session status gives', async () => {
+  it('renews the login of an active user at the interval the session status gives', async () => {
     // Arrange
     renderPeriodicKeepAlive()
     await advanceSeconds(1)
@@ -69,9 +69,10 @@ describe('usePeriodicKeepAlive', () => {
 
     // Assert
     expect(loginApi.keepAlive).toHaveBeenCalledTimes(1)
+    expect(loginApi.keepAlive).toHaveBeenCalledWith(true)
   })
 
-  it('does not keep an idle session alive', async () => {
+  it('keeps the session of an idle user alive without renewing the login', async () => {
     // Arrange
     renderPeriodicKeepAlive()
 
@@ -79,6 +80,20 @@ describe('usePeriodicKeepAlive', () => {
     await advanceSeconds(301)
 
     // Assert
-    expect(loginApi.keepAlive).not.toHaveBeenCalled()
+    expect(loginApi.keepAlive).toHaveBeenCalledTimes(3)
+    expect(loginApi.keepAlive).not.toHaveBeenCalledWith(true)
+  })
+
+  it('tells only the first keep alive after activity that the user was active', async () => {
+    // Arrange
+    renderPeriodicKeepAlive()
+    await advanceSeconds(1)
+    window.dispatchEvent(new Event('keydown'))
+
+    // Act
+    await advanceSeconds(200)
+
+    // Assert
+    expect(vi.mocked(loginApi.keepAlive).mock.calls).toEqual([[true], [false]])
   })
 })

@@ -78,13 +78,12 @@ class TestLoginService:
     def test_a_payload_without_a_session_gives_none(self, payload: dict):
         assert LoginService.session_from_payload(payload) is None
 
-    @pytest.mark.parametrize(
-        ("keep_alive_timeout_seconds", "expected_lifetime"),
-        [(None, 3600), (300, 300), (7200, 3600)],
-    )
-    def test_the_access_token_expires_no_later_than_the_session(
-        self, keep_alive_timeout_seconds: int | None, expected_lifetime: int
+    @pytest.mark.parametrize("keep_alive_timeout_seconds", [None, 300, 7200])
+    def test_the_access_token_lasts_the_configured_expiration(
+        self, keep_alive_timeout_seconds: int | None
     ):
+        """The keep alive timeout of the auth interface session does not
+        shorten how long a user can be idle."""
         # Arrange
         login_service = LoginService(
             LoginConfig(SECRET_KEY, access_token_expiration_seconds=3600)
@@ -104,8 +103,8 @@ class TestLoginService:
         )
 
         # Assert
-        assert issued_at + expected_lifetime <= payload["exp"]
-        assert payload["exp"] <= int(time.time()) + expected_lifetime
+        assert issued_at + 3600 <= payload["exp"]
+        assert payload["exp"] <= int(time.time()) + 3600
 
     @pytest.mark.parametrize(
         ("keep_alive_timeout_seconds", "expected_keep_alive_interval_seconds"),

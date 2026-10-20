@@ -49,6 +49,13 @@ class LogoutResponse(BaseModel):
     msg: str = "logout successful"
 
 
+class KeepAliveRequest(BaseModel):
+    """Request model for keep alive."""
+
+    active: bool = True
+    """If the user has been active since the last keep alive."""
+
+
 class KeepAliveResponse(BaseModel):
     """Response model for keep alive."""
 
@@ -61,7 +68,7 @@ class SessionStatusResponse(BaseModel):
     exp: int
     user: str
     keep_alive_interval_seconds: int
-    """How often the client should keep the session alive while in use."""
+    """How often the client should send a keep alive while logged in."""
 
 
 login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRoute)
@@ -140,14 +147,23 @@ def keep_alive(
     auth_interface: FromDishka[AuthInterface],
     login_service: FromDishka[LoginService],
     logger: Logger,
+    keep_alive_request: KeepAliveRequest | None = None,
     user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> KeepAliveResponse:
     """Keep user session alive.
 
-    Issues new login cookies, but only for a session the auth interface still
-    holds as valid and keeps alive. A session that has been logged out, or
-    whose user the auth interface no longer accepts, is answered with
-    unauthorized.
+    Keeps the auth interface session alive while the access token is valid,
+    and issues new login cookies if the user has been active, so that how
+    long a user can be idle is set by the access token expiration, not by
+    the keep alive timeout of the auth interface. A session that has been
+    logged out, or whose user the auth interface no longer accepts, is
+    answered with unauthorized.
+
+    Parameters
+    ----------
+    keep_alive_request: KeepAliveRequest | None
+        If the user has been active since the last keep alive. Active if not
+        given.
 
     Returns
     ----------
@@ -166,7 +182,8 @@ def keep_alive(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail="Session is no longer valid",
         )
-    login_service.set_login_cookies(response, session)
+    if keep_alive_request is None or keep_alive_request.active:
+        login_service.set_login_cookies(response, session)
     return KeepAliveResponse()
 
 

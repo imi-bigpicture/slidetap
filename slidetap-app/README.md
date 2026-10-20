@@ -283,11 +283,13 @@ task:
   stalled_worker_timeout: 30
 ```
 
-`access_token_expiration` is how long, in seconds, a login lasts without a keep
-alive, and `keep_alive` is how often, in seconds, the client keeps an active
-user's login alive. If the auth interface gives a session a shorter keep alive
-timeout, the access token expires with the session and the client keeps it
-alive three times within that timeout.
+`access_token_expiration` is how long, in seconds, a user can be idle before
+the login expires, and `keep_alive` is how often, in seconds, the client sends
+a keep alive while logged in. A keep alive renews the login only if the user
+has been active, but always keeps the auth interface session alive. If the auth
+interface gives a session a keep alive timeout, the client sends a keep alive
+at least three times within that timeout, so the auth interface session lasts
+as long as the login.
 
 ### To run webserver
 

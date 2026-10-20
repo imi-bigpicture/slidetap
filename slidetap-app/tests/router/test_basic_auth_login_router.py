@@ -216,13 +216,21 @@ class TestSlideTapBasicAuthLoginRouter:
         # Assert
         assert response.status_code == status_code
 
+    @pytest.mark.parametrize(
+        ("body", "renewed"),
+        [(None, True), ({"active": True}, True), ({"active": False}, False)],
+    )
     def test_keep_alive_logged_in(
         self,
         decoy: Decoy,
         auth_interface: AuthInterface,
         login_service: LoginService,
         test_client: TestClient,
+        body: dict | None,
+        renewed: bool,
     ):
+        """The auth interface session is kept alive, and the login renewed only
+        for an active user."""
         # Arrange
         session = UserSession(username="user", token="token")
         decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
@@ -232,11 +240,14 @@ class TestSlideTapBasicAuthLoginRouter:
         decoy.when(auth_interface.keep_alive(session)).then_return(True)
 
         # Act
-        response = test_client.post("/api/auth/keepAlive")
+        response = test_client.post("/api/auth/keepAlive", json=body)
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        decoy.verify(login_service.set_login_cookies(Anything(), session), times=1)
+        decoy.verify(
+            login_service.set_login_cookies(Anything(), session),
+            times=1 if renewed else 0,
+        )
 
     @pytest.mark.parametrize(("valid", "kept_alive"), [(False, True), (True, False)])
     def test_keep_alive_of_a_session_the_auth_interface_ended_is_refused(

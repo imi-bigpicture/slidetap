@@ -23,8 +23,8 @@ export const DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS = 5 * 60
 /**
  * The status of the logged in session, checked every minute.
  *
- * The status gives when the access token expires and how often the session
- * should be kept alive while in use.
+ * The status gives when the access token expires and how often to send a
+ * keep alive while logged in.
  */
 export function useSessionStatus(enabled = true): UseQueryResult<SessionStatus> {
   return useQuery({
