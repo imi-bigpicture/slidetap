@@ -85,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every operation on a project reads its item schemas from the root schema the project was created with.
 - The project list shows the projects of every root, and the root each is on.
 - Mappers are unique by name within a family of root schemas (database migration).
-- Injecting a mapping again with another attribute updates the mapping and the values it was applied to, so the injected sheet wins.
+- Injecting a mapping again with another attribute updates the mapping and the values it was applied to, so the injected sheet wins. Only the attributes the changed mappings of a mapper mapped are read, and they are mapped again in one pass once the sheet is stored, without counting as hits again.
+- Mapping from the mapping items held for an import looks a value up by an index of the items, instead of reading through every item of the mapper.
 - A changed or deleted mapping leaves what it mapped in projects that cannot be changed or were exported.
 - Requires pydantic 2.10 or later.
 - A root schema provided more than once is refused.

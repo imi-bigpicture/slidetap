@@ -16,7 +16,7 @@
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from re import Pattern
@@ -100,6 +100,45 @@ class MapperCache:
     items_by_mapper: dict[UUID, list[DatabaseMappingItem]] = field(default_factory=dict)
     """A mapper's mapping items, hits-ordered as first read. Membership is also
     what says a mapper has been primed."""
+
+    count_hits: bool = True
+    """Whether a value mapped counts as a hit of its mapping item. Not when
+    mapping again what was counted when it was first mapped."""
+
+    indexes: dict[UUID, "MapperIndex"] = field(default_factory=dict)
+    """The mapping items of a primed mapper by what they are looked up by,
+    made on the first lookup. A mapper is primed once, so the items an index
+    is made of do not change after."""
+
+    def index(self, mapper_uid: UUID) -> "MapperIndex":
+        """The index of the items of a primed mapper."""
+        index = self.indexes.get(mapper_uid)
+        if index is None:
+            index = MapperIndex.of(self.items_by_mapper[mapper_uid])
+            self.indexes[mapper_uid] = index
+        return index
+
+
+@dataclass
+class MapperIndex:
+    """The mapping items of a mapper by literal and by expression, and those
+    that are regular expressions, so that a lookup reads only the items it can
+    match rather than every item of the mapper."""
+
+    by_literal: dict[str, list[DatabaseMappingItem]]
+    by_expression: dict[str, DatabaseMappingItem]
+    regex: list[DatabaseMappingItem]
+
+    @classmethod
+    def of(cls, items: Iterable[DatabaseMappingItem]) -> "MapperIndex":
+        index = cls(by_literal={}, by_expression={}, regex=[])
+        for item in items:
+            index.by_expression[item.expression] = item
+            if item.literal is None:
+                index.regex.append(item)
+            else:
+                index.by_literal.setdefault(item.literal, []).append(item)
+        return index
 
 
 class MapperService:
@@ -248,6 +287,15 @@ class MapperService:
                         session=session,
                     )
                     group_mappers.append(mapper)
+                    # Read at once rather than asked for one expression at a
+                    # time, as a sheet can hold tens of thousands.
+                    existing = {
+                        mapping.expression: mapping
+                        for mapping in self._database_service.get_mappings_for_mapper(
+                            session, mapper.uid
+                        )
+                    }
+                    changed: set[UUID] = set()
                     for item in items:
                         if (mapper.uid, item.expression) in injected_expressions:
                             self._logger.warning(
@@ -257,12 +305,25 @@ class MapperService:
                             )
                             continue
                         injected_expressions.add((mapper.uid, item.expression))
-                        self.get_or_create_mapping(
+                        mapping, stored = self._store_mapping(
+                            session,
                             mapper.uid,
                             item.expression,
                             item.attribute,
-                            session=session,
+                            existing.get(item.expression),
                         )
+                        if stored == "changed":
+                            changed.add(mapping.uid)
+                    session.flush()
+                    if changed:
+                        self._logger.info(
+                            f"Updated what {len(changed)} mappings of mapper "
+                            f"{mapper.name} map to, as the sheet gives them "
+                            f"other attributes."
+                        )
+                    # What the changed mappings mapped is mapped again once
+                    # they are all stored, rather than once per mapping.
+                    self._reapply_mapping_items(session, mapper.uid, changed)
                 session.flush()
                 self.add_mappers_to_group(group, group_mappers, session=session)
 
@@ -465,36 +526,163 @@ class MapperService:
         set back to what the sheet says the next time the sheet is injected.
         """
         with self._database_service.get_session(session) as session:
-            existing_mapping = (
+            mapping, stored = self._store_mapping(
+                session,
+                mapper_uid,
+                expression,
+                attribute,
                 self._database_service.get_optional_mapping_for_expression(
                     session, mapper_uid, expression
-                )
+                ),
             )
-            if existing_mapping is not None:
-                if self._mapping_content(existing_mapping.attribute) != (
-                    self._mapping_content(attribute)
-                ):
-                    self._logger.info(
-                        f"Updating what {expression!r} of mapper {mapper_uid} "
-                        f"maps to, as it was given another attribute."
-                    )
-                    self._attribute_service.set_display_value(attribute)
-                    existing_mapping.update(expression, attribute)
-                    session.flush()
-                    # Applied again to what it has mapped already, whether or
-                    # not asked to apply new mappings: the value they hold is
-                    # the one the sheet has now corrected.
-                    self._apply_mapping_item_to_all_attributes(
-                        session, mapper_uid, existing_mapping
-                    )
-                return existing_mapping.model
+            session.flush()
+            if stored == "changed":
+                # Applied again to what it has mapped already, whether or not
+                # asked to apply new mappings: the value they hold is the one
+                # the sheet has now corrected.
+                self._reapply_mapping_items(session, mapper_uid, {mapping.uid})
+            elif stored == "created" and apply:
+                self._apply_mapping_item_to_all_attributes(session, mapper_uid, mapping)
+            return mapping.model
+
+    def _store_mapping(
+        self,
+        session: Session,
+        mapper_uid: UUID,
+        expression: str,
+        attribute: AnyAttribute,
+        existing_mapping: DatabaseMappingItem | None,
+    ) -> tuple[DatabaseMappingItem, Literal["created", "changed", "unchanged"]]:
+        """Store what the expression of the mapper maps to.
+
+        Returns the mapping, and whether it was created, was an existing one
+        given another attribute, which has to be applied again to what it has
+        mapped, or was left as it was. Not flushed, which is left to the caller
+        storing a sheet of them.
+
+        Parameters
+        ----------
+        existing_mapping: DatabaseMappingItem | None
+            The stored mapping of the expression, if there is one.
+        """
+        if existing_mapping is None:
             self._attribute_service.set_display_value(attribute)
             mapping = self._database_service.add_mapping(
                 session, mapper_uid, expression, attribute
             )
-            if apply:
-                self._apply_mapping_item_to_all_attributes(session, mapper_uid, mapping)
-            return mapping.model
+            return mapping, "created"
+        if self._mapping_content(existing_mapping.attribute) == (
+            self._mapping_content(attribute)
+        ):
+            return existing_mapping, "unchanged"
+        self._attribute_service.set_display_value(attribute)
+        existing_mapping.update(expression, attribute)
+        return existing_mapping, "changed"
+
+    def _reapply_mapping_items(
+        self, session: Session, mapper_uid: UUID, mapping_uids: Collection[UUID]
+    ) -> None:
+        """Map again what the mapping items have mapped, as what they map to has
+        changed.
+
+        Only the attribute rows that name one of them are read, rather than
+        every row the mapper could map, and they are all mapped again in one
+        pass, from mapping items held in memory. The expressions are the same
+        as before, so what the mappings match is too: what one of them did not
+        map has nothing to take from its change.
+        """
+        if not mapping_uids:
+            return
+        mapper = self._database_service.get_mapper(session, mapper_uid)
+        projects = self._database_service.get_projects_of_attributes(
+            session, mapper.root_attribute_schema_uid
+        )
+        editable = {
+            project_uid: self._remappable(
+                self._database_service.get_project(session, project_uid), session
+            )
+            for project_uid in set(projects.values())
+        }
+        # Not the projects that cannot be changed or were exported, which keep
+        # what they were mapped to.
+        row_uids = [
+            uid
+            for uid in self._database_service.get_attribute_uids_mapped_by(
+                session, mapper.root_attribute_schema_uid, mapping_uids
+            )
+            if uid not in projects or editable[projects[uid]]
+        ]
+        self._logger.info(
+            f"Mapping {len(row_uids)} attributes again with {len(mapping_uids)} "
+            f"changed mappings of mapper {mapper.name}."
+        )
+        if not row_uids:
+            return
+        cache = MapperCache(
+            mappers_for_root={mapper.root_attribute_schema_uid: [mapper]},
+            items_by_mapper={
+                mapper.uid: list(
+                    self._database_service.get_mapping_items_for_mappers(
+                        session, [mapper.uid]
+                    )
+                )
+            },
+            # Counted when they were first mapped.
+            count_hits=False,
+        )
+        for start in range(0, len(row_uids), self.REAPPLY_CHUNK):
+            self._reapply_to_rows(
+                session,
+                mapper,
+                self._database_service.get_attributes_with_values(
+                    session, row_uids[start : start + self.REAPPLY_CHUNK]
+                ),
+                cache,
+            )
+
+    REAPPLY_CHUNK = 1000
+    """How many attribute rows are mapped again at a time, which is how many
+    are held in the session at once."""
+
+    def _reapply_to_rows(
+        self,
+        session: Session,
+        mapper: DatabaseMapper,
+        rows: Sequence[DatabaseAttribute],
+        cache: MapperCache,
+    ) -> None:
+        """Map the rows again with the mapper, and write down what changed."""
+        changed: list[DatabaseAttribute] = []
+        with session.no_autoflush:
+            for row in rows:
+                # Nor what a locked batch holds, which is what its bundle holds.
+                if row.locked:
+                    continue
+                mapped = self._apply_mappers_to_root_attribute(
+                    session, [mapper], row.model, validate=False, cache=cache
+                )
+                if (
+                    mapped.mapped_value == row.mapped_value
+                    and mapped.mapping_item_uid == row.mapping_item_uid
+                ):
+                    continue
+                row.mapped_value = mapped.mapped_value
+                row.mapping_item_uid = mapped.mapping_item_uid
+                row.display_value = mapped.display_value
+                changed.append(row)
+        if not changed:
+            return
+        # What they had waiting for a mapping is replaced in one statement,
+        # rather than in one per row.
+        self._database_service.delete_unmapped_values_of(
+            session, [row.uid for row in changed]
+        )
+        for row in changed:
+            self._database_service.record_unmapped_values(row, session, replacing=False)
+            self._validation_service.validate_attribute(row, session)
+        session.flush()
+        for row in rows:
+            session.expunge(row)
 
     _NOT_MAPPED_CONTENT = frozenset(
         {"uid", "valid", "displayValue", "mappingItemUid", "rejected"}
@@ -913,12 +1101,7 @@ class MapperService:
         if cache is None or mapper_uid not in cache.items_by_mapper:
             return self._database_service.get_regex_mapping_items(session, mapper_uid)
         return sorted(
-            (
-                item
-                for item in cache.items_by_mapper[mapper_uid]
-                if item.literal is None
-            ),
-            key=lambda item: (-item.hits, item.uid),
+            cache.index(mapper_uid).regex, key=lambda item: (-item.hits, item.uid)
         )
 
     def _cached_literal_item(
@@ -934,9 +1117,7 @@ class MapperService:
             return self._database_service.get_literal_mapping_candidate(
                 session, mapper_uid, value
             )
-        candidates = [
-            item for item in cache.items_by_mapper[mapper_uid] if item.literal == value
-        ]
+        candidates = cache.index(mapper_uid).by_literal.get(value)
         if not candidates:
             return None
         return min(candidates, key=lambda item: (-item.hits, item.uid))
@@ -950,9 +1131,9 @@ class MapperService:
     ) -> DatabaseMappingItem:
         """The mapping item for an expression."""
         if cache is not None and mapper_uid in cache.items_by_mapper:
-            for item in cache.items_by_mapper[mapper_uid]:
-                if item.expression == expression:
-                    return item
+            item = cache.index(mapper_uid).by_expression.get(expression)
+            if item is not None:
+                return item
         return self._database_service.get_mapping_for_expression(
             session, mapper_uid, expression
         )
@@ -1198,7 +1379,8 @@ class MapperService:
                     )
                     self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
-                    mapping.increment_hits()
+                    if cache is None or cache.count_hits:
+                        mapping.increment_hits()
         # An attribute holding other attributes maps what it was imported with
         # into its mapped value, leaving the imported one as it came, the same
         # as an attribute mapping a value of its own does. What comes out is
@@ -1285,7 +1467,8 @@ class MapperService:
                         f"{mapping.attribute.original_value} "
                         f"to attribute {attribute.uid}"
                     )
-                    mapping.increment_hits()
+                    if cache is None or cache.count_hits:
+                        mapping.increment_hits()
                     self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     attribute.display_value = mapping.attribute.display_value

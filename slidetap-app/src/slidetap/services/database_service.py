@@ -20,6 +20,7 @@ import re
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
+    Any,
     ClassVar,
     NamedTuple,
     Optional,
@@ -63,6 +64,7 @@ from sqlalchemy.orm import (
     selectin_polymorphic,
     selectinload,
     sessionmaker,
+    with_polymorphic,
 )
 
 from slidetap.config import DatabaseConfig
@@ -537,6 +539,94 @@ class DatabaseService:
             attribute_schema = attribute_schema.uid
         return session.scalars(
             select(DatabaseAttribute).filter_by(schema_uid=attribute_schema)
+        )
+
+    _NESTED_MAPPING_ITEM_UID = re.compile(
+        r'"mappingItemUid"\s*:\s*"([0-9a-fA-F-]{36})"'
+    )
+    """A mapping item uid named in the JSON of the attributes a row holds."""
+
+    def get_attribute_uids_mapped_by(
+        self,
+        session: Session,
+        attribute_schema_uid: UUID,
+        mapping_item_uids: Collection[UUID],
+    ) -> list[UUID]:
+        """The attribute rows of a schema that any of the mapping items mapped.
+
+        A row mapped as a whole names its mapping item in a column. A row
+        holding other attributes names the mapping items of those in its mapped
+        value, which is JSON, and is read as text for their uids. The rows are
+        read once, whatever the number of mapping items, and only for the
+        columns that name them.
+        """
+        attribute = cast_type(Table, DatabaseAttribute.__table__)
+        holding = [
+            cast_type(Table, model.__table__)
+            for model in (
+                DatabaseObjectAttribute,
+                DatabaseListAttribute,
+                DatabaseUnionAttribute,
+            )
+        ]
+        joined: FromClause = attribute
+        for table in holding:
+            joined = joined.outerjoin(table, table.c.uid == attribute.c.uid)
+        wanted = {str(uid) for uid in mapping_item_uids}
+        query = (
+            select(
+                attribute.c.uid,
+                attribute.c.mapping_item_uid,
+                *(
+                    cast(table.c.mapped_value, String).label(f"held_{index}")
+                    for index, table in enumerate(holding)
+                ),
+            )
+            .select_from(joined)
+            .where(attribute.c.schema_uid == attribute_schema_uid)
+        )
+        found: list[UUID] = []
+        for row in session.execute(query):
+            values: tuple[Any, ...] = tuple(row)
+            mapping_item_uid: UUID | None = values[1]
+            texts: Sequence[str | None] = values[2:]
+            if (
+                mapping_item_uid is not None and str(mapping_item_uid) in wanted
+            ) or any(
+                named.lower() in wanted
+                for text in texts
+                if text
+                for named in self._NESTED_MAPPING_ITEM_UID.findall(text)
+            ):
+                found.append(values[0])
+        return found
+
+    def get_attributes_with_values(
+        self, session: Session, attribute_uids: Collection[UUID]
+    ) -> list[DatabaseAttribute]:
+        """The attribute rows, loaded with the columns of every attribute type,
+        so that reading their models asks the database for nothing more."""
+        attribute = with_polymorphic(DatabaseAttribute, "*")
+        return list(
+            session.scalars(
+                select(attribute).where(attribute.uid.in_(list(attribute_uids)))
+            )
+        )
+
+    def delete_unmapped_values_of(
+        self, session: Session, attribute_uids: Collection[UUID]
+    ) -> None:
+        """Delete what the attribute rows had waiting for a mapping, before it
+        is written down again with ``record_unmapped_values(replacing=False)``.
+
+        The session is not searched for the rows deleted, which would be a
+        search of every object it holds; what is waiting for a mapping is
+        written and counted rather than read back in the session.
+        """
+        session.execute(
+            delete(DatabaseUnmappedValue)
+            .where(DatabaseUnmappedValue.root_attribute_uid.in_(list(attribute_uids)))
+            .execution_options(synchronize_session=False)
         )
 
     def get_item(
