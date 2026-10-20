@@ -17,18 +17,19 @@
  *
  * Monitors user session expiration and provides warnings before timeout.
  *
- * Important: The backend automatically refreshes the session on EVERY authenticated
- * API call. This means:
- * - Active users (making API requests) will never be timed out
- * - The timeout dialog only appears after genuine inactivity (no API calls)
- * - No explicit keepAlive polling is needed
- *
- * This hook checks session status every minute to detect when the session is
- * expiring soon (< 5 minutes remaining) and shows a warning dialog.
+ * The session is extended only by keep alives: periodically while the user is
+ * active (see usePeriodicKeepAlive) or when the user extends it from the
+ * warning. The session status is checked every minute, and the warning shown
+ * when the session expires within five minutes, or within one keep alive
+ * interval if that is shorter, so that a session kept alive more often than
+ * every five minutes does not warn while it is in use.
  */
 
-import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import {
+  DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS,
+  useSessionStatus,
+} from 'src/hooks/use_session_status'
 import loginApi from 'src/services/api/login_api'
 
 interface SessionManagementState {
@@ -40,7 +41,7 @@ interface SessionManagementState {
   dismissWarning: () => void
 }
 
-const WARNING_THRESHOLD_MINUTES = 5 // Show warning when < 5 minutes remaining
+const WARNING_THRESHOLD_SECONDS = 5 * 60
 
 function getTimeRemaining(expirationTimestamp: number): number {
   const now = Math.floor(Date.now() / 1000)
@@ -55,15 +56,11 @@ export function useSessionManagement(): SessionManagementState {
    * comes back only for a later expiration, not on the next tick. */
   const [handledExpiration, setHandledExpiration] = useState<number | null>(null)
 
-  // Fetch session status
-  const sessionQuery = useQuery({
-    queryKey: ['sessionStatus'],
-    queryFn: async () => {
-      return await loginApi.getSessionStatus()
-    },
-    refetchInterval: 60 * 1000, // Check every minute
-    retry: 1,
-  })
+  const sessionQuery = useSessionStatus()
+  const warningThresholdSeconds = Math.min(
+    WARNING_THRESHOLD_SECONDS,
+    sessionQuery.data?.keep_alive_interval_seconds ?? DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS,
+  )
 
   // Follow the expiration the session status gives, keeping the last one known
   // while there is none
@@ -115,7 +112,7 @@ export function useSessionManagement(): SessionManagementState {
   }
 
   const isExpiringSoon =
-    timeRemaining > 0 && timeRemaining <= WARNING_THRESHOLD_MINUTES * 60
+    timeRemaining > 0 && timeRemaining <= warningThresholdSeconds
   const showWarning = isExpiringSoon && handledExpiration !== sessionExpiration
 
   return {

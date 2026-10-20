@@ -17,6 +17,8 @@ import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 export interface SessionStatus {
   exp: number
   user: string
+  /** How often to keep the session alive while in use, in seconds. */
+  keep_alive_interval_seconds: number
 }
 
 const loginApi = {

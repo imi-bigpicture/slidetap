@@ -12,6 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import time
+
 import pytest
 from fastapi import Response
 from starlette.requests import Request
@@ -47,10 +49,17 @@ def _request_with_cookies(response: Response) -> Request:
 
 @pytest.mark.unittest
 class TestLoginService:
-    def test_the_access_token_carries_the_session_it_was_issued_for(self):
+    @pytest.mark.parametrize("keep_alive_timeout_seconds", [None, 300])
+    def test_the_access_token_carries_the_session_it_was_issued_for(
+        self, keep_alive_timeout_seconds: int | None
+    ):
         # Arrange
         login_service = LoginService(LoginConfig(SECRET_KEY))
-        session = UserSession(username="user", token="session token")
+        session = UserSession(
+            username="user",
+            token="session token",
+            keep_alive_timeout_seconds=keep_alive_timeout_seconds,
+        )
         response = Response()
 
         # Act
@@ -68,6 +77,80 @@ class TestLoginService:
     )
     def test_a_payload_without_a_session_gives_none(self, payload: dict):
         assert LoginService.session_from_payload(payload) is None
+
+    @pytest.mark.parametrize(
+        ("keep_alive_timeout_seconds", "expected_lifetime"),
+        [(None, 3600), (300, 300), (7200, 3600)],
+    )
+    def test_the_access_token_expires_no_later_than_the_session(
+        self, keep_alive_timeout_seconds: int | None, expected_lifetime: int
+    ):
+        # Arrange
+        login_service = LoginService(
+            LoginConfig(SECRET_KEY, access_token_expiration_seconds=3600)
+        )
+        session = UserSession(
+            username="user",
+            token="session token",
+            keep_alive_timeout_seconds=keep_alive_timeout_seconds,
+        )
+        response = Response()
+
+        # Act
+        issued_at = int(time.time())
+        login_service.set_login_cookies(response, session)
+        payload = login_service.verify_access_and_csrf_tokens(
+            _request_with_cookies(response)
+        )
+
+        # Assert
+        assert issued_at + expected_lifetime <= payload["exp"]
+        assert payload["exp"] <= int(time.time()) + expected_lifetime
+
+    @pytest.mark.parametrize(
+        ("keep_alive_timeout_seconds", "expected_keep_alive_interval_seconds"),
+        [(None, 900), (7200, 900), (1800, 600), (300, 100), (2, 1)],
+    )
+    def test_the_keep_alive_interval_keeps_an_active_session_alive(
+        self,
+        keep_alive_timeout_seconds: int | None,
+        expected_keep_alive_interval_seconds: int,
+    ):
+        # Arrange
+        login_service = LoginService(
+            LoginConfig(
+                SECRET_KEY,
+                access_token_expiration_seconds=3600,
+                keep_alive_seconds=900,
+            )
+        )
+        session = UserSession(
+            username="user",
+            token="session token",
+            keep_alive_timeout_seconds=keep_alive_timeout_seconds,
+        )
+
+        # Act
+        keep_alive_interval_seconds = login_service.keep_alive_interval_seconds(session)
+
+        # Assert
+        assert keep_alive_interval_seconds == expected_keep_alive_interval_seconds
+
+    def test_the_keep_alive_interval_fits_the_access_token_lifetime(self):
+        # Arrange
+        login_service = LoginService(
+            LoginConfig(
+                SECRET_KEY,
+                access_token_expiration_seconds=600,
+                keep_alive_seconds=900,
+            )
+        )
+
+        # Act
+        keep_alive_interval_seconds = login_service.keep_alive_interval_seconds(None)
+
+        # Assert
+        assert keep_alive_interval_seconds == 200
 
 
 @pytest.mark.unittest

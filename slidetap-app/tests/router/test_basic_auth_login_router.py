@@ -283,6 +283,37 @@ class TestSlideTapBasicAuthLoginRouter:
         assert response.status_code == HTTPStatus.UNAUTHORIZED
         decoy.verify(login_service.set_login_cookies(Anything(), Anything()), times=0)
 
+    def test_session_status_gives_expiration_and_keep_alive_interval(
+        self,
+        decoy: Decoy,
+        login_service: LoginService,
+        test_client: TestClient,
+    ):
+        # Arrange
+        session = UserSession(
+            username="user", token="token", keep_alive_timeout_seconds=300
+        )
+        decoy.when(login_service.verify_access_and_csrf_tokens(Anything())).then_return(
+            {
+                "sub": "user",
+                "exp": 1234,
+                LoginService.SESSION_CLAIM: "token",
+                LoginService.KEEP_ALIVE_TIMEOUT_CLAIM: 300,
+            }
+        )
+        decoy.when(login_service.keep_alive_interval_seconds(session)).then_return(100)
+
+        # Act
+        response = test_client.get("/api/auth/session_status")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {
+            "exp": 1234,
+            "user": "user",
+            "keep_alive_interval_seconds": 100,
+        }
+
     @pytest.mark.parametrize(
         "status_code", [HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED]
     )

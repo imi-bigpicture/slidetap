@@ -43,5 +43,9 @@ class AuthInterface(metaclass=ABCMeta):
     @abstractmethod
     def login(self, username: str, password: str) -> UserSession | None:
         """Login user by username and password. Return Session if login
-        successful."""
+        successful.
+
+        If the auth interface times out a session that is not kept alive, the
+        session should give the timeout in `keep_alive_timeout_seconds`, so that
+        the client keeps it alive often enough."""
         raise NotImplementedError()

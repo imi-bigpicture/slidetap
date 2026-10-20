@@ -283,6 +283,12 @@ task:
   stalled_worker_timeout: 30
 ```
 
+`access_token_expiration` is how long, in seconds, a login lasts without a keep
+alive, and `keep_alive` is how often, in seconds, the client keeps an active
+user's login alive. If the auth interface gives a session a shorter keep alive
+timeout, the access token expires with the session and the client keeps it
+alive three times within that timeout.
+
 ### To run webserver
 
 ```console

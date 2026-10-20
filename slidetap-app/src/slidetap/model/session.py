@@ -22,4 +22,6 @@ class UserSession(FrozenBaseModel):
 
     username: str
     token: str
-    keep_alive_interval: str | None = None
+    keep_alive_timeout_seconds: int | None = None
+    """How long the auth interface keeps the session without a keep alive, or
+    None if the auth interface does not time out the session."""

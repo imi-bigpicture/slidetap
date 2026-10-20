@@ -60,6 +60,8 @@ class SessionStatusResponse(BaseModel):
 
     exp: int
     user: str
+    keep_alive_interval_seconds: int
+    """How often the client should keep the session alive while in use."""
 
 
 login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRoute)
@@ -170,6 +172,7 @@ def keep_alive(
 
 @login_router.get("/session_status")
 async def get_session_status(
+    login_service: FromDishka[LoginService],
     logger: Logger,
     user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> SessionStatusResponse:
@@ -178,13 +181,15 @@ async def get_session_status(
     Returns
     ----------
     SessionStatusResponse
-        Session status with expiration timestamp
+        Session status with expiration timestamp and keep alive interval
 
     The session is not extended, so the expiration is when the access token
     will actually expire unless it is kept alive.
     """
     logger.debug(f"Session status for user {user_payload['sub']}.")
+    session = LoginService.session_from_payload(user_payload)
     return SessionStatusResponse(
         exp=user_payload["exp"],
         user=user_payload["sub"],
+        keep_alive_interval_seconds=login_service.keep_alive_interval_seconds(session),
     )

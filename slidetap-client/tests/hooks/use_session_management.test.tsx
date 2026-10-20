@@ -45,6 +45,7 @@ describe('useSessionManagement', () => {
     vi.mocked(loginApi.getSessionStatus).mockResolvedValue({
       exp: expiresIn(120),
       user: 'user',
+      keep_alive_interval_seconds: 900,
     })
 
     // Act
@@ -59,6 +60,7 @@ describe('useSessionManagement', () => {
     vi.mocked(loginApi.getSessionStatus).mockResolvedValue({
       exp: expiresIn(3600),
       user: 'user',
+      keep_alive_interval_seconds: 900,
     })
 
     // Act
@@ -69,12 +71,44 @@ describe('useSessionManagement', () => {
     expect(result.current.showWarning).toBe(false)
   })
 
+  it('does not warn of a session kept alive before it expires', async () => {
+    // Arrange
+    vi.mocked(loginApi.getSessionStatus).mockResolvedValue({
+      exp: expiresIn(120),
+      user: 'user',
+      keep_alive_interval_seconds: 100,
+    })
+
+    // Act
+    const { result } = renderSessionManagement(new QueryClient())
+
+    // Assert
+    await waitFor(() => expect(result.current.sessionExpiration).not.toBeNull())
+    expect(result.current.showWarning).toBe(false)
+  })
+
+  it('warns of a session expiring within its keep alive interval', async () => {
+    // Arrange
+    vi.mocked(loginApi.getSessionStatus).mockResolvedValue({
+      exp: expiresIn(90),
+      user: 'user',
+      keep_alive_interval_seconds: 100,
+    })
+
+    // Act
+    const { result } = renderSessionManagement(new QueryClient())
+
+    // Assert
+    await waitFor(() => expect(result.current.showWarning).toBe(true))
+  })
+
   it('keeps a dismissed warning away for the same expiration', async () => {
     // Arrange
     const expiration = expiresIn(120)
     vi.mocked(loginApi.getSessionStatus).mockResolvedValue({
       exp: expiration,
       user: 'user',
+      keep_alive_interval_seconds: 900,
     })
     const queryClient = new QueryClient()
     const { result } = renderSessionManagement(queryClient)
@@ -82,7 +116,7 @@ describe('useSessionManagement', () => {
 
     // Act
     act(() => result.current.dismissWarning())
-    act(() => queryClient.setQueryData(['sessionStatus'], { exp: expiration, user: 'user' }))
+    act(() => queryClient.setQueryData(['sessionStatus'], { exp: expiration, user: 'user', keep_alive_interval_seconds: 900 }))
 
     // Assert
     expect(result.current.isExpiringSoon).toBe(true)
@@ -94,6 +128,7 @@ describe('useSessionManagement', () => {
     vi.mocked(loginApi.getSessionStatus).mockResolvedValue({
       exp: expiresIn(120),
       user: 'user',
+      keep_alive_interval_seconds: 900,
     })
     const queryClient = new QueryClient()
     const { result } = renderSessionManagement(queryClient)
@@ -101,7 +136,7 @@ describe('useSessionManagement', () => {
     act(() => result.current.dismissWarning())
 
     // Act
-    act(() => queryClient.setQueryData(['sessionStatus'], { exp: expiresIn(180), user: 'user' }))
+    act(() => queryClient.setQueryData(['sessionStatus'], { exp: expiresIn(180), user: 'user', keep_alive_interval_seconds: 900 }))
 
     // Assert
     await waitFor(() => expect(result.current.showWarning).toBe(true))

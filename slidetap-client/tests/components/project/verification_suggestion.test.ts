@@ -17,7 +17,7 @@ import {
   VerificationSuggestionBasis,
   type VerificationSuggestion,
 } from 'src/models/verification'
-import { suggestionReason } from './verification_suggestion'
+import { suggestionReason } from 'src/components/project/verification_suggestion'
 
 const targets: VerificationSuggestion = {
   size: 59,

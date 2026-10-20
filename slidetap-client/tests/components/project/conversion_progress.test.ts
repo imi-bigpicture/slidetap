@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { MigrationStep } from 'src/models/migration'
-import { progressPercent, progressText } from './conversion_progress'
+import { progressPercent, progressText } from 'src/components/project/conversion_progress'
 
 describe('progressText', () => {
   it('says the conversion is starting until it has progress', () => {

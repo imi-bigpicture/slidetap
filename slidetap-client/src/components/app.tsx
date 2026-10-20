@@ -20,6 +20,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { Outlet, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import ProtectedRoute from 'src/components/auth/protected_route'
+import SessionKeepAlive from 'src/components/auth/session_keep_alive'
 import SessionTimeoutDialog from 'src/components/auth/session_timeout_dialog'
 import ErrorBoundary from 'src/components/error/error_boundary'
 import Login from 'src/components/login/basic_login'
@@ -30,7 +31,6 @@ import { PseudonymProvider } from 'src/contexts/pseudonym/pseudonym_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
 import { ExtensionsContext, type AppExtensions } from 'src/extensions'
 import { useIsLoggedIn } from 'src/hooks/use_is_logged_in'
-import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
 import MappingPage from 'src/pages/mapper'
 import MappersPage from 'src/pages/mappers'
 import ProjectPage from 'src/pages/project'
@@ -86,9 +86,6 @@ function App({ extensions = {} }: AppProps): ReactElement {
     auth.initCrossTabSync()
   }, [])
 
-  // Enable periodic keep-alive to maintain session for active users
-  usePeriodicKeepAlive()
-
   const isLoggedIn = useIsLoggedIn()
 
   return (
@@ -120,6 +117,7 @@ function App({ extensions = {} }: AppProps): ReactElement {
                         <Route path="/tasks" element={<TasksPage />} />
                       </Route>
                     </Routes>
+                    {isLoggedIn && <SessionKeepAlive />}
                     {isLoggedIn && <SessionTimeoutDialog />}
                   </ErrorBoundary>
                 </Router>

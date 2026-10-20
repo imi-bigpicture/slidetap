@@ -20,68 +20,78 @@
  * timeout for active users.
  *
  * The hook:
- * - Checks every KEEPALIVE_INTERVAL_MS (default: 5 minutes)
+ * - Checks as often as the session status asks (keep_alive_interval_seconds),
+ *   which the server fits to how long the session lasts without a keep alive
  * - Only runs while the user is logged in, starting on login
  * - Calls keepAlive only if the user has used the page (pointer, keyboard or
  *   wheel) since the last check, so an idle session still times out
+ * - Refetches the session status after a keep alive, so the expiration shown
+ *   follows the new access token
  */
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { useIsLoggedIn } from 'src/hooks/use_is_logged_in'
+import {
+  DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS,
+  SESSION_STATUS_QUERY_KEY,
+  useSessionStatus,
+} from 'src/hooks/use_session_status'
 import loginApi from 'src/services/api/login_api'
-
-// Check for activity every 5 minutes
-const KEEPALIVE_INTERVAL_MS = 5 * 60 * 1000
 
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel'] as const
 
 export function usePeriodicKeepAlive(): void {
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isLoggedIn = useIsLoggedIn()
+  const queryClient = useQueryClient()
+  const sessionQuery = useSessionStatus(isLoggedIn)
+  const keepAliveIntervalSeconds =
+    sessionQuery.data?.keep_alive_interval_seconds ??
+    DEFAULT_KEEP_ALIVE_INTERVAL_SECONDS
+  /** If the user has used the page since the last check. Kept outside the
+   * interval, so that a changed interval does not forget activity. */
+  const activeSinceLastCheck = useRef(false)
 
   useEffect(() => {
     if (!isLoggedIn) {
       return
     }
-
-    let activeSinceLastCheck = false
     const markActive = (): void => {
-      activeSinceLastCheck = true
+      activeSinceLastCheck.current = true
     }
     for (const eventName of ACTIVITY_EVENTS) {
       window.addEventListener(eventName, markActive, { passive: true })
     }
+    return () => {
+      for (const eventName of ACTIVITY_EVENTS) {
+        window.removeEventListener(eventName, markActive)
+      }
+    }
+  }, [isLoggedIn])
 
+  useEffect(() => {
+    if (!isLoggedIn) {
+      return
+    }
     const performKeepAlive = (): void => {
-      if (!activeSinceLastCheck) {
+      if (!activeSinceLastCheck.current) {
         return
       }
-      activeSinceLastCheck = false
+      activeSinceLastCheck.current = false
       loginApi
         .keepAlive()
-        .then(() => {
+        .then(async () => {
           console.debug('Keep-alive successful')
+          await queryClient.invalidateQueries({ queryKey: SESSION_STATUS_QUERY_KEY })
         })
         .catch((error) => {
           console.error('Keep-alive failed:', error)
           // If keep-alive fails (e.g., 401), the interceptor will handle logout
         })
     }
-
-    // Start periodic keep-alive
-    intervalRef.current = setInterval(performKeepAlive, KEEPALIVE_INTERVAL_MS)
-
-    // Cleanup on unmount or when user logs out
+    const interval = setInterval(performKeepAlive, keepAliveIntervalSeconds * 1000)
     return () => {
-      for (const eventName of ACTIVITY_EVENTS) {
-        window.removeEventListener(eventName, markActive)
-      }
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      clearInterval(interval)
     }
-  }, [isLoggedIn])
-
-  // No return value needed - this hook just manages the side effect
+  }, [isLoggedIn, keepAliveIntervalSeconds, queryClient])
 }
