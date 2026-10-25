@@ -1,7 +1,7 @@
 services:
   dbservice:
     # Pinned to an exact tag; Dependabot's docker-compose ecosystem bumps it.
-    image: postgres:17.11-trixie
+    image: postgres:18.4-trixie
     volumes:
       - slidetap_postgres_data:/var/lib/postgresql/data/
     # Credentials come from .env, written by prepare-example-config.py.
