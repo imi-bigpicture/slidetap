@@ -62,7 +62,7 @@ export function ErrorProvider({ children }: ErrorProviderProps): React.ReactElem
   }
 
   const handleClose = (
-    _event?: React.SyntheticEvent | Event,
+    _event?: React.SyntheticEvent | Event | null,
     reason?: string,
   ): void => {
     if (reason === 'clickaway') {
