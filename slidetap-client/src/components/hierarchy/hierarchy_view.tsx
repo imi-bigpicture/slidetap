@@ -26,8 +26,14 @@ import {
   Undo,
 } from '@mui/icons-material'
 import {
+  Alert,
   Box,
+  Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputAdornment,
   LinearProgress,
@@ -62,7 +68,9 @@ import type { AttributeValueLayout } from 'src/models/schema/attribute_value_lay
 import type {
   HierarchyLayout,
   HierarchyLevelLayout,
+  SampleForImageLayout,
 } from 'src/models/schema/hierarchy_layout'
+import { ApiError } from 'src/services/api/api_methods'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 
@@ -80,6 +88,20 @@ interface HierarchyViewProps {
 interface Dragged {
   itemUid: string
   schemaUid: string
+  /** Parked for want of anywhere better, which is what may be given a sample
+   * of its own by dropping it on what the sample would hang under. */
+  orphan: boolean
+}
+
+/** A parked image dropped on what a sample made for it would hang under,
+ * waiting for the curator to confirm what the sample is to be. */
+interface SampleForImageDraft {
+  image: HierarchyNode
+  parent: HierarchyNode
+  made: SampleForImageLayout
+  identifier: string
+  /** By the tag of the sample's attribute, as the image has them. */
+  values: Record<string, string>
 }
 
 /**
@@ -340,6 +362,101 @@ export default function HierarchyView({
     },
   })
 
+  // The sample a parked image of each schema may be given, where the layout
+  // offers one.
+  const sampleFor = useMemo(
+    () =>
+      new Map(
+        layout.levels.flatMap((level) =>
+          level.sampleForImage === null || level.sampleForImage === undefined
+            ? []
+            : [[level.schemaUid, level.sampleForImage] as const],
+        ),
+      ),
+    [layout],
+  )
+
+  /**
+   * Whether dropping the dragged item here makes a sample for it under this
+   * one, rather than moving it.
+   *
+   * Only for a parked image: one already on a sample has somewhere to be, and
+   * a drag that makes a sample when it was meant to move one is a slide
+   * nobody registered. Only where a move would not be taken instead.
+   */
+  const makesSampleOn = useCallback(
+    (dragging: Dragged, node: HierarchyNode): boolean =>
+      dragging.orphan &&
+      sampleFor.get(dragging.schemaUid)?.parentSchemaUid === node.schemaUid &&
+      !accepts(dragging, node),
+    [sampleFor, accepts],
+  )
+
+  const nodesByUid = useMemo(() => {
+    const found = new Map<string, HierarchyNode>()
+    const walk = (node: HierarchyNode): void => {
+      found.set(node.uid, node)
+      node.children.forEach(walk)
+    }
+    if (hierarchyQuery.data !== undefined) walk(hierarchyQuery.data)
+    return found
+  }, [hierarchyQuery.data])
+
+  const [sampleDraft, setSampleDraft] = useState<SampleForImageDraft | null>(null)
+
+  const sampleMutation = useMutation({
+    mutationFn: async (draft: SampleForImageDraft) =>
+      await itemApi.createSampleForImage(
+        draft.image.uid,
+        layout.uid,
+        draft.parent.uid,
+        // Left to the server in pseudonym mode, where the identifier is not
+        // shown and so cannot have been checked: it takes the image's own.
+        pseudonymMode ? '' : draft.identifier.trim(),
+        // What was left empty is left to the server too, which fills it from
+        // the image where the image has anything.
+        Object.fromEntries(
+          Object.entries(draft.values)
+            .map(([tag, value]) => [tag, value.trim()] as const)
+            .filter(([, value]) => value !== ''),
+        ),
+      ),
+    onSuccess: () => {
+      setSampleDraft(null)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+  })
+
+  /** Open the confirm for a parked image dropped on what its sample would
+   * hang under, filled in with what the image itself says. */
+  const draftSampleFor = (imageUid: string, parent: HierarchyNode): void => {
+    const image = nodesByUid.get(imageUid)
+    const made = image === undefined ? undefined : sampleFor.get(image.schemaUid)
+    if (image === undefined || made === undefined) return
+    const values = Object.fromEntries(
+      Object.entries(made.mappableValues).map(([sampleTag, imageTag]) => {
+        const attribute = image.attributes[imageTag]
+        return [
+          sampleTag,
+          attribute?.mappableValue ?? attribute?.displayValue ?? '',
+        ] as const
+      }),
+    )
+    sampleMutation.reset()
+    setSampleDraft({ image, parent, made, identifier: image.identifier, values })
+  }
+
+  /** A sample of that schema in the tree that already has the identifier.
+   * Asked of what is on screen only, so the server still has the last word;
+   * what it catches here is the usual case, an image parked because the
+   * slide with its id was stained with something else. */
+  const takenIn = (draft: SampleForImageDraft): HierarchyNode | undefined =>
+    [...nodesByUid.values()].find(
+      (node) =>
+        node.schemaUid === draft.made.sampleSchemaUid &&
+        node.identifier === draft.identifier.trim(),
+    )
+
   /** Taking an item out of the project, and putting it back.
    *
    * The same call either way, since taking something out is only a flag: what
@@ -494,10 +611,112 @@ export default function HierarchyView({
     }),
   )
 
+  /** What the drag handle says it does. Where a parked image may also be
+   * given a sample, that is said too, since nothing else on the row says
+   * dropping it there does anything. */
+  const dragHintOf = (node: HierarchyNode): string => {
+    const made = sampleFor.get(node.schemaUid)
+    if (!node.orphan || made === undefined) {
+      return 'Drag to move this to another item'
+    }
+    const sampleName = schemaOf(made.sampleSchemaUid)?.displayName ?? 'sample'
+    const parentName = schemaOf(made.parentSchemaUid)?.displayName ?? 'parent'
+    return (
+      `Drag onto a ${sampleName.toLowerCase()} to move it there, or onto a ` +
+      `${parentName.toLowerCase()} to make a new ${sampleName.toLowerCase()} for it`
+    )
+  }
+
+  const sampleSchema =
+    sampleDraft === null ? undefined : schemaOf(sampleDraft.made.sampleSchemaUid)
+  const taken = sampleDraft === null || pseudonymMode ? undefined : takenIn(sampleDraft)
+
   return (
     <SplitPanel fillHeight panel={dock.panel}>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {selectWithPreview.dialog}
+        <Dialog
+          open={sampleDraft !== null}
+          onClose={() => setSampleDraft(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          {sampleDraft !== null && (
+            <>
+              <DialogTitle>
+                New {sampleSchema?.displayName.toLowerCase() ?? 'sample'} in{' '}
+                {labelOf(sampleDraft.parent, pseudonymMode)}
+              </DialogTitle>
+              <DialogContent>
+                <Stack spacing={2} sx={{ pt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    For {getDisplayIdentifier(sampleDraft.image, pseudonymMode)}, which
+                    is moved onto it.
+                  </Typography>
+                  {/* Not offered in pseudonym mode, where the identifier is
+                      not to be shown: the image's own is used. */}
+                  {!pseudonymMode && (
+                    <TextField
+                      autoFocus
+                      size="small"
+                      label="Identifier"
+                      value={sampleDraft.identifier}
+                      onChange={(event) =>
+                        setSampleDraft({
+                          ...sampleDraft,
+                          identifier: event.target.value,
+                        })
+                      }
+                      error={taken !== undefined}
+                      helperText={
+                        taken === undefined
+                          ? undefined
+                          : `There is already a ${sampleSchema?.displayName.toLowerCase() ?? 'sample'} ${taken.identifier}`
+                      }
+                    />
+                  )}
+                  {/* Filled from the image, and given to the sample as the
+                      value for mapping to resolve, as an import would. */}
+                  {Object.keys(sampleDraft.made.mappableValues).map((tag) => (
+                    <TextField
+                      key={tag}
+                      size="small"
+                      label={sampleSchema?.attributes[tag]?.displayName ?? tag}
+                      value={sampleDraft.values[tag] ?? ''}
+                      onChange={(event) =>
+                        setSampleDraft({
+                          ...sampleDraft,
+                          values: { ...sampleDraft.values, [tag]: event.target.value },
+                        })
+                      }
+                    />
+                  ))}
+                  {sampleMutation.error !== null && (
+                    <Alert severity="error">
+                      {sampleMutation.error instanceof ApiError
+                        ? (sampleMutation.error.body ?? sampleMutation.error.message)
+                        : sampleMutation.error.message}
+                    </Alert>
+                  )}
+                </Stack>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setSampleDraft(null)}>Cancel</Button>
+                <Button
+                  variant="contained"
+                  disabled={
+                    sampleMutation.isPending ||
+                    taken !== undefined ||
+                    (!pseudonymMode && sampleDraft.identifier.trim() === '')
+                  }
+                  onClick={() => sampleMutation.mutate(sampleDraft)}
+                >
+                  Create
+                </Button>
+              </DialogActions>
+            </>
+          )}
+        </Dialog>
         <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
           <TextField
             size="small"
@@ -654,15 +873,24 @@ export default function HierarchyView({
                                 stacked={span.span > 1}
                                 labelWidth={labelWidths[column]}
                                 movable={canEdit && movable.has(span.node.schemaUid)}
-                                deletable={canEdit && deletable.has(span.node.schemaUid)}
+                                deletable={
+                                  canEdit && deletable.has(span.node.schemaUid)
+                                }
                                 dragged={dragged}
                                 accepts={accepts}
+                                makesSampleOn={makesSampleOn}
+                                dragHint={dragHintOf(span.node)}
                                 pseudonymMode={pseudonymMode}
                                 onDrag={setDragged}
                                 onDrop={(movedUid, targetUid) =>
                                   moveMutation.mutate({ movedUid, targetUid })
                                 }
-                                onSelect={(_, select) => requestSelect(span.node, select)}
+                                onDropForSample={(imageUid) =>
+                                  draftSampleFor(imageUid, span.node)
+                                }
+                                onSelect={(_, select) =>
+                                  requestSelect(span.node, select)
+                                }
                                 onOpen={() => dock.open(span.node.uid, siblings)}
                               />
                             )}
@@ -703,10 +931,15 @@ export default function HierarchyView({
                             deletable={canEdit && deletable.has(image.schemaUid)}
                             dragged={dragged}
                             accepts={accepts}
+                            makesSampleOn={makesSampleOn}
+                            dragHint={dragHintOf(image)}
                             pseudonymMode={pseudonymMode}
                             onDrag={setDragged}
                             onDrop={(movedUid, targetUid) =>
                               moveMutation.mutate({ movedUid, targetUid })
+                            }
+                            onDropForSample={(imageUid) =>
+                              draftSampleFor(imageUid, image)
                             }
                             onSelect={(_, select) => requestSelect(image, select)}
                             onOpen={() => dock.open(image.uid, siblings)}
@@ -739,9 +972,15 @@ interface ItemCellProps {
   deletable: boolean
   dragged: Dragged | null
   accepts: (dragged: Dragged, node: HierarchyNode) => boolean
+  /** Whether dropping the dragged item here makes a sample for it under this
+   * one, rather than moving it. */
+  makesSampleOn: (dragged: Dragged, node: HierarchyNode) => boolean
+  /** What the drag handle says dragging does. */
+  dragHint: string
   pseudonymMode: boolean
   onDrag: (dragged: Dragged | null) => void
   onDrop: (itemUid: string, targetUid: string) => void
+  onDropForSample: (imageUid: string) => void
   onSelect: (itemUid: string, select: boolean) => void
   onOpen: () => void
 }
@@ -757,9 +996,12 @@ function ItemCell({
   deletable,
   dragged,
   accepts,
+  makesSampleOn,
+  dragHint,
   pseudonymMode,
   onDrag,
   onDrop,
+  onDropForSample,
   onSelect,
   onOpen,
 }: ItemCellProps): ReactElement {
@@ -770,6 +1012,7 @@ function ItemCell({
     rootSchema.observations[node.schemaUid] ??
     rootSchema.annotations[node.schemaUid]
   const takesDrop = dragged !== null && accepts(dragged, node)
+  const takesSample = dragged !== null && makesSampleOn(dragged, node)
   const label = labelOf(node, pseudonymMode)
   // Only where nothing hangs under it: a slide with an image is a slide that
   // was scanned, and taking it out would take the image with it. What this is
@@ -785,12 +1028,21 @@ function ItemCell({
         if (takesDrop) {
           event.preventDefault()
           event.dataTransfer.dropEffect = 'move'
+        } else if (takesSample) {
+          // Still a move as far as the drag goes: the image ends up on the
+          // sample made for it, and the drag allows only moving.
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
         }
       }}
       onDrop={(event) => {
-        if (!takesDrop || dragged === null) return
+        if (dragged === null || !(takesDrop || takesSample)) return
         event.preventDefault()
-        onDrop(dragged.itemUid, node.uid)
+        if (takesDrop) {
+          onDrop(dragged.itemUid, node.uid)
+        } else {
+          onDropForSample(dragged.itemUid)
+        }
         onDrag(null)
       }}
       sx={{
@@ -815,17 +1067,29 @@ function ItemCell({
           outlineColor: 'primary.main',
           borderRadius: 1,
         }),
+        // In another colour where the drop makes something rather than moves
+        // it: the two are offered side by side, a slide and the block above
+        // it, and what happens on letting go should be told apart before.
+        ...(takesSample && {
+          outline: '1px dashed',
+          outlineColor: 'secondary.main',
+          borderRadius: 1,
+        }),
       }}
     >
       {/* The same handle the overview uses to move a whole entry, so the
           gesture is learned once. The handle is what is dragged rather than
           the cell, which leaves the chip free to be hovered and clicked. */}
       {movable && (
-        <Tooltip title="Drag to move this to another item">
+        <Tooltip title={dragHint}>
           <Box
             draggable
             onDragStart={(event) => {
-              const payload: Dragged = { itemUid: node.uid, schemaUid: node.schemaUid }
+              const payload: Dragged = {
+                itemUid: node.uid,
+                schemaUid: node.schemaUid,
+                orphan: node.orphan,
+              }
               event.dataTransfer.setData(HIERARCHY_DRAG_MIME, JSON.stringify(payload))
               event.dataTransfer.effectAllowed = 'move'
               onDrag(payload)

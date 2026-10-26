@@ -978,6 +978,80 @@ class TestSlideTapItemRouter:
         assert response.status_code == HTTPStatus.BAD_REQUEST
         assert response.json()["detail"] == "Parent is of the wrong schema"
 
+    def test_a_sample_is_made_for_a_parked_image(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        item_service: ItemService,
+        sample: Sample,
+    ):
+        # Arrange
+        image_uid = uuid4()
+        layout_uid = uuid4()
+        parent_uid = uuid4()
+        decoy.when(
+            item_service.create_sample_for_image(
+                image_uid,
+                layout_uid,
+                parent_uid,
+                identifier="PL-1-3",
+                mappable_values={"staining": "HE"},
+            )
+        ).then_return(sample)
+
+        # Act
+        response = test_client.post(
+            f"api/items/item/{image_uid}/sample-for-image",
+            json={
+                "hierarchyLayoutUid": str(layout_uid),
+                "parentUid": str(parent_uid),
+                "identifier": "PL-1-3",
+                "mappableValues": {"staining": "HE"},
+            },
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["uid"] == str(sample.uid)
+
+    @pytest.mark.parametrize(
+        ("refusal", "status_code"),
+        [
+            (
+                NotAllowedActionError("There is already a Slide PL-1-3."),
+                HTTPStatus.CONFLICT,
+            ),
+            (ValueError("block_2 is not in case_1"), HTTPStatus.BAD_REQUEST),
+        ],
+    )
+    def test_a_sample_for_an_image_that_is_refused_says_why(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        item_service: ItemService,
+        refusal: Exception,
+        status_code: HTTPStatus,
+    ):
+        # Arrange
+        image_uid = uuid4()
+        layout_uid = uuid4()
+        parent_uid = uuid4()
+        decoy.when(
+            item_service.create_sample_for_image(
+                image_uid, layout_uid, parent_uid, identifier=None, mappable_values={}
+            )
+        ).then_raise(refusal)
+
+        # Act
+        response = test_client.post(
+            f"api/items/item/{image_uid}/sample-for-image",
+            json={"hierarchyLayoutUid": str(layout_uid), "parentUid": str(parent_uid)},
+        )
+
+        # Assert
+        assert response.status_code == status_code
+        assert response.json()["detail"] == str(refusal)
+
     def test_an_attribute_is_moved_between_items(
         self, decoy: Decoy, test_client: TestClient, item_service: ItemService
     ):

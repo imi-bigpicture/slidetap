@@ -42,6 +42,7 @@ from slidetap.model import (
     ReviewQueueItem,
     ReviewRequest,
     ReviewStatus,
+    SampleForImageRequest,
     TableRequest,
 )
 from slidetap.model.hierarchy import HierarchyNode
@@ -839,6 +840,41 @@ def move_item(
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=str(exception),
+        ) from exception
+
+
+@item_router.post("/item/{image_uid}/sample-for-image")
+def create_sample_for_image(
+    image_uid: UUID,
+    request: SampleForImageRequest,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> AnyItem:
+    """Make a sample for a parked image and move the image onto it.
+
+    What sample, and under what, is the layout's, see `SampleForImageLayout`.
+    Refused with 409 where the image is not parked, its batch is locked, the
+    layout makes no sample for it, or the identifier is taken; with 400 where
+    the parent is not one the sample can be made under.
+    """
+    logger.debug(f"Make a sample for image {image_uid} under {request.parent_uid}.")
+    try:
+        return item_service.create_sample_for_image(
+            image_uid,
+            request.hierarchy_layout_uid,
+            request.parent_uid,
+            identifier=request.identifier,
+            mappable_values=request.mappable_values,
+        )
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to make a sample for image {image_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    except ValueError as exception:
+        logger.info(f"Cannot make a sample for image {image_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
         ) from exception
 
 

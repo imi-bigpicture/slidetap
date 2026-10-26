@@ -313,6 +313,24 @@ const itemApi = {
     const response = await post(`items/item/${itemUid}/move`, undefined, query)
     return await parseJsonResponse<Item>(response)
   },
+
+  /** Make a sample for a parked image under the item it was dropped on, and
+   * move the image onto it. What sample is the layout's. */
+  createSampleForImage: async (
+    imageUid: string,
+    hierarchyLayoutUid: string,
+    parentUid: string,
+    identifier: string,
+    mappableValues: Record<string, string>,
+  ) => {
+    const response = await post(`items/item/${imageUid}/sample-for-image`, {
+      hierarchyLayoutUid,
+      parentUid,
+      identifier,
+      mappableValues,
+    })
+    return await parseJsonResponse<Item>(response)
+  },
 }
 
 export default itemApi

@@ -14,6 +14,18 @@
 
 import type { AttributeValueLayout } from 'src/models/schema/attribute_value_layout'
 
+/** A sample a curator may make for a parked image, by dropping the image on
+ * the item the new sample is to hang under. */
+export interface SampleForImageLayout {
+  sampleSchemaUid: string
+  /** Schema of the item the image is dropped on. */
+  parentSchemaUid: string
+  /** Which attribute of the image fills which attribute of the sample, by
+   * tag: the sample's at the key, the image's at the value. Given to the
+   * sample as the value for mapping to resolve. */
+  mappableValues: Record<string, string>
+}
+
 /** One kind of item in the tree, and what to say about it. */
 export interface HierarchyLevelLayout {
   schemaUid: string
@@ -31,6 +43,9 @@ export interface HierarchyLevelLayout {
    * tree, and put back the same way. Offered only for an item nothing hangs
    * under. */
   deletable: boolean
+  /** For a level of images: the sample a parked image of it may be given.
+   * Null where no sample is made from the tree. */
+  sampleForImage: SampleForImageLayout | null
 }
 
 /**

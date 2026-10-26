@@ -67,6 +67,7 @@ from slidetap.model.item import (
     ReviewQueueItem,
     ReviewRequest,
     Sample,
+    SampleForImageRequest,
     item_factory,
 )
 from slidetap.model.item_identity import ItemIdentity
@@ -124,6 +125,7 @@ from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLayout,
     HierarchyLevelLayout,
+    SampleForImageLayout,
 )
 from slidetap.model.schema.images_layout import (
     ImageAttributeLayout,
@@ -287,6 +289,7 @@ __all__ = [
     "MetadataSearchResult",
     "ReviewIssueToRaise",
     "MoveAttributeRequest",
+    "SampleForImageRequest",
     "ReviewQueueItem",
     "ReviewRequest",
     "NumericAttribute",
@@ -306,6 +309,7 @@ __all__ = [
     "ImagesLayout",
     "HierarchyLayout",
     "HierarchyLevelLayout",
+    "SampleForImageLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
     "EntityMigrationResult",

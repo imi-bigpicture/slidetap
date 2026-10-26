@@ -234,3 +234,18 @@ class MoveAttributeRequest(CamelCaseBaseModel):
     source_item_uid: UUID
     attribute_tag: str
     target_item_uid: UUID
+
+
+class SampleForImageRequest(CamelCaseBaseModel):
+    """Make a sample for a parked image and move the image onto it, see
+    `SampleForImageLayout`."""
+
+    hierarchy_layout_uid: UUID
+    """The layout the image was dropped in, which says what to make."""
+    parent_uid: UUID
+    """What the image was dropped on, which the sample hangs under."""
+    identifier: str | None = None
+    """Identifier of the sample. The image's own where not given."""
+    mappable_values: dict[str, str] = Field(default_factory=dict)
+    """Values in place of those taken from the image, by the tag of the
+    sample's attribute."""

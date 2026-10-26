@@ -22,6 +22,34 @@ from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 
 
+class SampleForImageLayout(FrozenBaseModel):
+    """A sample a curator may make for an image that is parked, by dropping
+    the image on the item the new sample is to hang under.
+
+    For an image the import found nothing to put it on: a scan the laboratory
+    never registered a slide for has no slide to be moved to, and making one
+    is the only way to put it where it belongs. Offered only for a parked
+    image, since one already on a sample has somewhere to be.
+    """
+
+    sample_schema_uid: UUID
+    """Schema of the sample to make. The image's schema has to relate to it."""
+
+    parent_schema_uid: UUID
+    """Schema of the item the image is dropped on, which the new sample hangs
+    under. The sample's schema has to relate to it."""
+
+    mappable_values: dict[str, str] = Field(default_factory=dict)
+    """Which attribute of the image fills which attribute of the sample, by
+    tag: the sample's attribute at the key, the image's at the value.
+
+    Given to the sample as its mappable value, which mapping then resolves as
+    it would what an import left: what the image was filed under elsewhere is
+    usually spelled the way the sample's own value would have been. The
+    image's attribute is looked up in both its attributes and its private
+    attributes."""
+
+
 class HierarchyLevelLayout(FrozenBaseModel):
     """One kind of item in the tree, and what to say about it."""
 
@@ -56,6 +84,11 @@ class HierarchyLevelLayout(FrozenBaseModel):
     registered and nobody scanned is what this is for -- it is in the tree
     because LIS says so, and only a curator can say it is not part of the
     dataset."""
+
+    sample_for_image: SampleForImageLayout | None = None
+    """For a level of images: the sample a parked image of it may be given, by
+    dropping it on an item of the sample's parent schema. None where no sample
+    is made from the tree."""
 
 
 class HierarchyLayout(FrozenBaseModel):

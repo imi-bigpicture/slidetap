@@ -91,6 +91,7 @@ from slidetap.model.private_attribute_summary import (
 )
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLevelLayout,
+    SampleForImageLayout,
 )
 from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
@@ -1527,8 +1528,20 @@ class ItemService:
         target_parent_uids: Sequence[UUID] | None = None,
         identifier: str | None = None,
         session: Session | None = None,
+        name: str | None = None,
+        mappable_values: Mapping[str, str] | None = None,
     ) -> AnyItem | None:
-        """Create a new item and persist it in one atomic ``add()`` call."""
+        """Create a new item and persist it in one atomic ``add()`` call.
+
+        Parameters
+        ----------
+        name: str | None
+            Name to give the item. Falls back to the configured
+            ``ItemNamingFactoryInterface`` when not provided.
+        mappable_values: Mapping[str, str] | None
+            Values for mapping to resolve, by the tag of the top-level
+            attribute each is given to, as an import would leave them.
+        """
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -1551,11 +1564,22 @@ class ItemService:
             new_item = self._build_new_item_model(
                 item_schema, batch.project.dataset_uid, batch.uid, parents
             )
+            for tag, value in (mappable_values or {}).items():
+                attribute = new_item.attributes.get(tag)
+                if attribute is None:
+                    raise ValueError(
+                        f"Schema '{item_schema.name}' has no attribute '{tag}'."
+                    )
+                new_item.attributes[tag] = attribute.model_copy(
+                    update={"mappable_value": value}
+                )
             # The project can be changed, as asserted above.
             new_item.identifier = self._resolve_identifier(
                 True, root, new_item, identifier
             )
-            new_item.name = self._resolve_name(True, new_item)
+            new_item.name = (
+                name if name is not None else self._resolve_name(True, new_item)
+            )
             new_item.pseudonym = self._resolve_pseudonym(True, new_item)
             return self.add(new_item, mappers, session=session)
 
@@ -2116,6 +2140,187 @@ class ItemService:
                     session=session,
                 )
             return moved.model
+
+    def create_sample_for_image(
+        self,
+        image_uid: UUID,
+        hierarchy_layout_uid: UUID,
+        parent_uid: UUID,
+        identifier: str | None = None,
+        mappable_values: Mapping[str, str] | None = None,
+        session: Session | None = None,
+    ) -> AnyItem:
+        """Make a sample for a parked image under ``parent_uid``, and move the
+        image onto it.
+
+        For a scan the laboratory never registered: an image parked for want
+        of a sample to be on has nowhere to be moved to until somebody makes
+        one. What sample, under what, and filled from which of the image's
+        attributes is the layout's `SampleForImageLayout`, so a tree offers it
+        only where its application says the sample can be made from the image.
+
+        One step rather than a create and then a move: a sample made and left
+        empty, because the move after it failed, is a sample nobody scanned
+        that the laboratory never registered either.
+
+        Parameters
+        ----------
+        image_uid: UUID
+            The parked image.
+        hierarchy_layout_uid: UUID
+            The layout the image was dropped in, which says what to make.
+        parent_uid: UUID
+            What the image was dropped on, which the sample hangs under. Has to
+            be in the item the image is parked on.
+        identifier: str | None
+            Identifier of the sample. The image's own where not given, which
+            for an image parked for want of its sample is usually the sample's.
+        mappable_values: Mapping[str, str] | None
+            Values to give the sample in place of those taken from the image,
+            by the tag of the sample's attribute. Only for the attributes the
+            layout fills from the image.
+
+        Raises
+        ------
+        NotAllowedActionError
+            Where the image is not parked, its batch is locked, the layout does
+            not make a sample for it, or the identifier is taken.
+        ValueError
+            Where the parent is of the wrong schema or outside the item the
+            image is parked on, or a value is given for an attribute the layout
+            does not fill.
+        """
+        with self._database_service.get_session(session) as session:
+            image = self._database_service.get_item(session, image_uid)
+            if not isinstance(image, DatabaseImage):
+                raise NotAllowedActionError(f"{image.identifier} is not an image.")
+            if image.locked:
+                raise NotAllowedActionError(
+                    f"Cannot make a sample for {image.identifier}: its batch is locked."
+                )
+            self._schema_service.assert_can_change(image, session)
+            root = self._schema_service.root_of(image, session)
+            layout = root.get_hierarchy_layout(hierarchy_layout_uid)
+            if layout is None:
+                raise NotFoundError(
+                    f"Hierarchy layout {hierarchy_layout_uid} not found"
+                )
+            level = next(
+                (
+                    level
+                    for level in layout.levels
+                    if level.schema_uid == image.schema_uid
+                ),
+                None,
+            )
+            made = level.sample_for_image if level is not None else None
+            if made is None:
+                raise NotAllowedActionError(
+                    f"Layout {layout.name} does not make a sample for "
+                    f"{image.identifier}."
+                )
+            holder = self._parked_on(image, root)
+            if holder is None:
+                raise NotAllowedActionError(
+                    f"{image.identifier} is not parked, so it has a sample to be on."
+                )
+            parent = self._database_service.get_item(session, parent_uid)
+            if parent.schema_uid != made.parent_schema_uid:
+                raise ValueError(
+                    f"A sample for {image.identifier} is made under a "
+                    f"{root.items[made.parent_schema_uid].display_name}, not under "
+                    f"{parent.identifier}."
+                )
+            # Only within the item the image is parked on: that is what the
+            # import could place it in, and a scan of one case put on a slide of
+            # another is a mistake that no validation would catch afterwards.
+            if (
+                self._database_service.get_ancestor(parent, {holder.schema_uid})
+                is not holder
+            ):
+                raise ValueError(
+                    f"{parent.identifier} is not in {holder.identifier}, where "
+                    f"{image.identifier} is parked."
+                )
+            unknown = set(mappable_values or {}) - set(made.mappable_values)
+            if unknown:
+                raise ValueError(
+                    f"Layout {layout.name} fills no attribute {sorted(unknown)} of "
+                    "the sample from the image."
+                )
+            identifier = (identifier or "").strip() or image.identifier
+            sample_schema = root.items[made.sample_schema_uid]
+            # Asked here, since adding an item under an identifier that is taken
+            # hands back the item that has it: the image would be put on a
+            # sample the laboratory registered, which is the opposite of what
+            # was asked for.
+            if (
+                self._database_service.get_optional_item_by_identifier(
+                    session, identifier, sample_schema, image.dataset_uid
+                )
+                is not None
+            ):
+                raise NotAllowedActionError(
+                    f"There is already a {sample_schema.display_name} {identifier}."
+                )
+            sample = self.create(
+                sample_schema,
+                image.batch_uid,
+                target_parent_uids=[parent.uid],
+                identifier=identifier,
+                session=session,
+                name=image.name,
+                mappable_values={
+                    **self._values_from_image(image, made),
+                    **(mappable_values or {}),
+                },
+            )
+            if sample is None:
+                raise NotFoundError(f"Failed to make a sample for {image.identifier}")
+            self.move_to_parent(image, sample.uid, session=session)
+            return self._database_service.get_item(session, sample.uid).model
+
+    def _parked_on(
+        self, image: DatabaseImage, root: RootSchemaIndex
+    ) -> DatabaseSample | None:
+        """What the image is parked on, None where it is on a sample of its
+        own.
+
+        Parked is hanging under nothing but what an orphan relation names: an
+        image on a slide as well as on the case is on a slide."""
+        schema = root.items[image.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return None
+        holder_schema_uids = {
+            relation.sample_uid for relation in schema.samples if relation.orphan
+        }
+        samples = list(image.samples)
+        if len(samples) != 1 or samples[0].schema_uid not in holder_schema_uids:
+            return None
+        return samples[0]
+
+    @staticmethod
+    def _values_from_image(
+        image: DatabaseImage, made: SampleForImageLayout
+    ) -> dict[str, str]:
+        """What the image says for each attribute the sample is filled from.
+
+        Left out where the image says nothing, rather than given empty: an
+        empty value is a value for mapping to fail on."""
+        by_tag = {
+            attribute.tag: attribute.model
+            for attribute in chain(image.attributes, image.private_attributes)
+        }
+        values: dict[str, str] = {}
+        for sample_tag, image_tag in made.mappable_values.items():
+            attribute = by_tag.get(image_tag)
+            if attribute is None:
+                continue
+            value = attribute.value
+            text = value if isinstance(value, str) else attribute.display_value
+            if text is not None and text.strip() != "":
+                values[sample_tag] = text.strip()
+        return values
 
     @staticmethod
     def _holders_of(item: DatabaseItem, session: Session) -> list[DatabaseItem]:
