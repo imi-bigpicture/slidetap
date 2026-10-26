@@ -2451,9 +2451,7 @@ class DatabaseService:
         return result.rowcount
 
     @staticmethod
-    def _items_losing_children_to(
-        session: Session, items: Select[tuple[UUID]]
-    ) -> list[UUID]:
+    def _items_losing_children_to(session: Session, items: Select[UUID]) -> list[UUID]:
         """The items outside ``items`` that something in ``items`` hangs
         directly under, and that deleting ``items`` takes it from."""
         observation = _table_of(DatabaseObservation)

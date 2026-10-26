@@ -434,9 +434,9 @@ class TestIntegration:
         for image in images:
             assert isinstance(image, Mapping)
             image_uid = image["uid"]
-            response = test_client.get(f"/api/images/image/{image_uid}")
+            response = test_client.get(f"/api/images/image/{image_uid}/dzi")
             assert response.status_code == HTTPStatus.OK
-            response = test_client.get(f"/api/images/image/{image_uid}/0/0_0.jpg")
+            response = test_client.get(f"/api/images/image/{image_uid}/dzi/0/0_0.jpg")
             assert response.status_code == HTTPStatus.OK
 
         # Finish curating the batch: everything in it is valid, and locked. The

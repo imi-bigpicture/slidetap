@@ -64,6 +64,9 @@ dev = [
 
 [tool.uv]
 exclude-newer = "14 days"
+# Security fixes newer than the window: Pillow 13.0.0 and certifi 2026.10.x.
+# Drop once they are older than 14 days.
+exclude-newer-package = { pillow = false, certifi = false }
 
 [tool.uv.sources]
 slidetap = { workspace = true }
@@ -119,6 +122,8 @@ extend-immutable-calls = [
 "tests/**" = ["S101", "S105", "S106"]
 
 [tool.typos.default.extend-words]
+# SQLAlchemy's lazy="selectin" loading strategy.
+selectin = "selectin"
 
 [build-system]
 requires = ["hatchling"]

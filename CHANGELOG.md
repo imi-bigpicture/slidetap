@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0-rc.1] - 2026-10-26
+
 ### Breaking changes
 
 - `SchemaInterface.create()` is replaced by `root()`, the root of new projects, and `previous_roots()` gives the roots of earlier versions.
@@ -71,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A migration is planned and completed in chunks of 2000 items, each loaded with everything the planning reads, and completing validates again only the items the migration changed, with the other side of their relations.
 - A `NotFoundError` raised by a service is answered with 404 on every endpoint.
 - `ProjectService.get_completed()` and `get_exportable()` give a project where it is completed, or can be exported.
+- A `SampleForImageLayout` on a hierarchy level of images, `sample_for_image`, lets a curator make a sample for a parked image by dropping it on an item of the sample's parent schema in the tree, such as a slide for a scan LIS has no slide for, dropped on its block. The client asks for the identifier, the image's own by default, and the values the layout fills from the image's attributes, which the sample is given as mappable values. `ItemService.create_sample_for_image()` and `POST /api/items/item/{image_uid}/sample-for-image` make the sample in the image's batch and move the image onto it in one step, refusing with 409 an image that is not parked or an identifier that is taken, and with 400 a parent outside the item the image is parked on.
+- `ItemService.create()` takes a `name` and the `mappable_values` of the new item.
 - `Attribute.effective_layer` says which value of an attribute is in effect, as an `AttributeValueLayer`, and `values_below_effective` which values are below it.
 
 ### Changed
@@ -153,7 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of SlideTap
 
-[Unreleased]: https://github.com/imi-bigpicture/slidetap/compare/v0.3.0..HEAD
+[Unreleased]: https://github.com/imi-bigpicture/slidetap/compare/v0.4.0-rc.1..HEAD
+[0.4.0-rc.1]: https://github.com/imi-bigpicture/slidetap/compare/v0.3.0..v0.4.0-rc.1
 [0.3.0]: https://github.com/imi-bigpicture/slidetap/tree/refs/tags/v0.3.0
 [0.2.0]: https://github.com/imi-bigpicture/slidetap/tree/refs/tags/v0.2.0
 [0.1.0]: https://github.com/imi-bigpicture/slidetap/tree/refs/tags/v0.1.0
