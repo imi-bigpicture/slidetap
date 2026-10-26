@@ -119,6 +119,8 @@ extend-immutable-calls = [
 "tests/**" = ["S101", "S105", "S106"]
 
 [tool.typos.default.extend-words]
+# SQLAlchemy's lazy="selectin" loading strategy.
+selectin = "selectin"
 
 [build-system]
 requires = ["hatchling"]
