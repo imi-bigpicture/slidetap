@@ -233,8 +233,6 @@ class DicomProcessingStep(ImageProcessingStep):
         use_pseudonyms: bool = False,
     ):
         self._config = config
-        # What goes in the files is the application's to say, and is asked for
-        # again when they are stored: one producer, so that both write the same.
         self._metadata_producer = metadata_producer or EmptyDicomMetadataProducer()
         self._metadata_writer = metadata_writer or DicomMetadataWriter()
         self._use_pseudonyms = use_pseudonyms
@@ -316,6 +314,8 @@ class DicomProcessingStep(ImageProcessingStep):
                     include_labels=self._config.include_labels,
                     include_overviews=self._config.include_overviews,
                     workers=self._config.threads,
+                    add_missing_levels=self._config.add_missing_levels,
+                    regenerate_pyramid=self._config.regenerate_pyramid
                 )
             except Exception:
                 self._logger.error(

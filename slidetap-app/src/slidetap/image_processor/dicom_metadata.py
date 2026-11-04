@@ -117,9 +117,6 @@ class DicomMetadataWriter:
         source: Path,
         destination: Path,
         metadata: WsiDicomizerMetadata,
-        include_levels: list[int] | None = None,
-        include_labels: bool = True,
-        include_overviews: bool = True,
         workers: int | None = None,
     ) -> list[Path]:
         """Write the files of a DICOM image to destination with new metadata.
@@ -140,9 +137,6 @@ class DicomMetadataWriter:
                 destination,
                 metadata=self._with_icc_profiles(metadata, wsi.metadata),
                 replace_metadata=True,
-                include_levels=include_levels,
-                include_labels=include_labels,
-                include_overviews=include_overviews,
                 workers=workers,
             )
         self._logger.info(

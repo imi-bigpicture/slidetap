@@ -125,6 +125,9 @@ class DicomizationConfig:
     include_labels: bool = False
     include_overviews: bool = False
     threads: int = 1
+    add_missing_levels: bool = False
+    regenerate_pyramid: bool = False
+
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "DicomizationConfig":
