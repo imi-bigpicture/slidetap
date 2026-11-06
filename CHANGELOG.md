@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Requires wsidicom 0.36.1, wsidicomizer 0.31 and opentile 0.26 or later, which depend on each other and so are upgraded together.
+
 ## [0.4.0-rc.1] - 2026-10-26
 
 ### Breaking changes
