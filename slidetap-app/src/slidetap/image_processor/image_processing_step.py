@@ -315,7 +315,7 @@ class DicomProcessingStep(ImageProcessingStep):
                     include_overviews=self._config.include_overviews,
                     workers=self._config.threads,
                     add_missing_levels=self._config.add_missing_levels,
-                    regenerate_pyramid=self._config.regenerate_pyramid
+                    regenerate_pyramid=self._config.regenerate_pyramid,
                 )
             except Exception:
                 self._logger.error(

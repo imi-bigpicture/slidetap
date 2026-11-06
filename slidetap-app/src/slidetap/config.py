@@ -128,7 +128,6 @@ class DicomizationConfig:
     add_missing_levels: bool = False
     regenerate_pyramid: bool = False
 
-
     @classmethod
     def parse(cls, parser: ConfigParser) -> "DicomizationConfig":
         if not parser.contains_yaml_key("dicomization"):
