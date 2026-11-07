@@ -27,6 +27,7 @@ from slidetap_example import ExampleSchema
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
@@ -315,6 +316,7 @@ class TestProcessMetadataImportRunAgain:
             database_service=stored_database_service,
             review_service=decoy.mock(cls=ReviewService),
             verification_service=decoy.mock(cls=VerificationService),
+            application_policy=ApplicationPolicy(),
         )
 
         def run(will_retry: Callable[[BaseException], bool]) -> None:

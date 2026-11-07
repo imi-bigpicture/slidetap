@@ -1974,11 +1974,16 @@ class ItemService:
     def pseudonymize_identifiers(
         self, dataset_uid: UUID, session: Session | None = None
     ) -> int:
-        """Overwrite the identifier of every item that has a pseudonym with it.
+        """Overwrite the identifier of every item that has a pseudonym with it,
+        and clear the external identifier of every item in the dataset.
 
         The opposite of :py:meth:`clear_pseudonyms`. An item without a
-        pseudonym, or already known by it, is left alone and not counted.
-        There is no way back.
+        pseudonym, or already known by it, keeps its identifier and is not
+        counted. The external identifier, such as the id of an image where it
+        was imported from, is cleared on every item, as it leads back to what
+        the item was imported as. An item without one can no longer be read
+        from where it was imported from, such as an image viewed or downloaded
+        from there. There is no way back.
 
         Returns how many identifiers were replaced.
         """
@@ -2009,6 +2014,8 @@ class ItemService:
                     )
                 item.identifier = pseudonym
                 replaced += 1
+            for item in items:
+                item.external_identifier = None
             return replaced
 
     def private_attribute_summary(

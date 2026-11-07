@@ -16,6 +16,7 @@ from typing import TypeVar
 
 from dishka import Provider, Scope
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.config import (
     ConfigParser,
     DatabaseConfig,
@@ -28,6 +29,7 @@ from slidetap.config import (
     TaskConfig,
 )
 from slidetap.external_interfaces import (
+    ImageImportInterface,
     ItemNamingFactoryInterface,
     MapperInjectorInterface,
     MetadataExportInterface,
@@ -66,12 +68,22 @@ from slidetap.services.migration.project_migration_planner import (
 from slidetap.services.tag_service import TagService
 
 
+def _application_policy(
+    image_import_interface: ImageImportInterface,
+) -> ApplicationPolicy:
+    """How the application behaves, as the interfaces of its plugin say."""
+    return ApplicationPolicy(
+        pre_processes_images_separately=image_import_interface.pre_processes_separately
+    )
+
+
 class BaseProvider(Provider):
     def __init__(
         self,
         schema_interface: Callable[..., SchemaInterface],
         metadata_import_interface: Callable[..., MetadataImportInterface],
         metadata_export_interface: Callable[..., MetadataExportInterface],
+        image_import_interface: Callable[..., ImageImportInterface],
         pseudonym_factory_interface: Callable[
             ..., PseudonymFactoryInterface | None
         ] = lambda: None,
@@ -81,6 +93,7 @@ class BaseProvider(Provider):
         mapper_injector: Callable[..., MapperInjectorInterface | None] = lambda: None,
     ):
         super().__init__(scope=Scope.APP)
+        self.provide(_application_policy, provides=ApplicationPolicy)
 
         self.provide(schema_interface, provides=SchemaInterface)
         self.provide(AttributeService)
@@ -105,6 +118,8 @@ class BaseProvider(Provider):
         self.provide(ModelService)
         self.provide(metadata_import_interface, provides=MetadataImportInterface)
         self.provide(metadata_export_interface, provides=MetadataExportInterface)
+        # In both apps, as the web app also goes by when images are downloaded.
+        self.provide(image_import_interface, provides=ImageImportInterface)
         self.provide(
             pseudonym_factory_interface,
             provides=PseudonymFactoryInterface | None,

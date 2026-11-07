@@ -50,6 +50,7 @@ from slidetap.model.export_notice import ExportNotice, ExportNoticeKind
 from slidetap.model.export_preview import ExportPreviewFile
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
+from slidetap.model.image_to_view import ImageToView
 from slidetap.model.item import (
     Annotation,
     AnyItem,
@@ -263,6 +264,7 @@ __all__ = [
     "ImageGroup",
     "ImageSchema",
     "ImageStatus",
+    "ImageToView",
     "MetadataImportCompleteness",
     "ImageToSampleRelation",
     "Item",

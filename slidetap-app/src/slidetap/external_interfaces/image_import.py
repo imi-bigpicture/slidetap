@@ -23,7 +23,27 @@ class ImageImportInterface(metaclass=ABCMeta):
     """
     Metaclass for interface for importing images. Implementations must implement:
     - download: Download image file into download storage.
+
+    Implementations may override:
+    - pre_processes_separately: False if the images are pre-processed as
+      they are post-processed.
     """
+
+    @property
+    def pre_processes_separately(self) -> bool:
+        """Whether the images of a batch are pre-processed in a step of their
+        own: a batch is curated as searched, its images then
+        downloaded and their metadata imported, and the batch curated again
+        before it is post-processed.
+
+        False for an import whose images curation views where they are imported
+        from, needing nothing from their files: a batch then goes from the
+        curation of the search straight to post-processing, and each image is
+        downloaded and its metadata imported in the same task, right before it
+        is converted. The :py:class:`ApplicationPolicy` of the application follows
+        from it.
+        """
+        return True
 
     @abstractmethod
     def download(self, image: Image, project: Project) -> tuple[Path, Iterable[Path]]:

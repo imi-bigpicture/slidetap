@@ -62,6 +62,7 @@ from slidetap.model import (
     Sample,
 )
 from slidetap.model.errors import NotAllowedActionError
+from slidetap.model.image_status import PROCESSED_STATUSES
 from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.tag import Tag
 
@@ -759,14 +760,11 @@ class DatabaseImage(DatabaseItem[Image]):
     def storing_failed(self) -> bool:
         return self.status == ImageStatus.STORING_FAILED
 
-    @hybrid_property
+    @property
     def processed(self) -> bool:
-        """Return True if the image folder holds post-processed image data.
-
-        True from the image being post-processed and onwards, as storing it moves
-        the folder but does not change what it holds.
-        """
-        return self.post_processed or self.storing or self.stored
+        """Return True if the image folder holds post-processed image data, see
+        ``PROCESSED_STATUSES``."""
+        return self.status in PROCESSED_STATUSES
 
     @hybrid_property
     def failed(self) -> bool:

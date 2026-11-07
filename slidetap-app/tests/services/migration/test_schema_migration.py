@@ -35,6 +35,7 @@ from decoy import Decoy
 from slidetap_example import ExampleSchema
 from sqlalchemy import event, select
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.cli.mappers import MapperSetUp
 from slidetap.database import (
     DatabaseAttribute,
@@ -226,7 +227,9 @@ def schema_service(
 def validation_service(
     schema_service: SchemaService, stored_database_service: DatabaseService
 ) -> ValidationService:
-    return ValidationService(schema_service, stored_database_service)
+    return ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
 
 
 @pytest.fixture()
@@ -235,7 +238,11 @@ def review_service(
     validation_service: ValidationService,
     stored_database_service: DatabaseService,
 ) -> ReviewService:
-    return ReviewService(schema_service, validation_service, stored_database_service)
+    return ReviewService(
+        schema_service,
+        validation_service,
+        stored_database_service,
+    )
 
 
 @pytest.fixture()
@@ -462,9 +469,13 @@ def stored(
     """Stored while the example root was the root of new projects, before
     the application was upgraded to the second root."""
     schema_service = schema_service_of(schema)
-    validation_service = ValidationService(schema_service, stored_database_service)
+    validation_service = ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
     review_service = ReviewService(
-        schema_service, validation_service, stored_database_service
+        schema_service,
+        validation_service,
+        stored_database_service,
     )
     attribute_service = AttributeService(
         schema_service, validation_service, stored_database_service, review_service
@@ -2349,9 +2360,15 @@ class TestMigratingMappers:
         schema_service = schema_service_of(
             stranger, schema, migrations={schema.uid: migration}
         )
-        validation_service = ValidationService(schema_service, stored_database_service)
+        validation_service = ValidationService(
+            schema_service,
+            stored_database_service,
+            application_policy=ApplicationPolicy(),
+        )
         review_service = ReviewService(
-            schema_service, validation_service, stored_database_service
+            schema_service,
+            validation_service,
+            stored_database_service,
         )
         attribute_service = AttributeService(
             schema_service, validation_service, stored_database_service, review_service

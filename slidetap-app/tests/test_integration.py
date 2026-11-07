@@ -158,6 +158,7 @@ def base_provider():
         schema_interface=ExampleSchemaInterface,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
+        image_import_interface=ExampleImageImportInterface,
         mapper_injector=ExampleMapperInjector,
     )
 
@@ -166,7 +167,6 @@ def base_provider():
 def task_provider():
     provider = TaskAppProvider(
         image_export_interface=ExampleImageExportInterface,
-        image_import_interface=ExampleImageImportInterface,
     )
     provider.provide(ExampleImagePostProcessor)
     provider.provide(ExampleImagePreProcessor)

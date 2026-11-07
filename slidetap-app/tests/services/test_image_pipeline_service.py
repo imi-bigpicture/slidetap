@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Tests for retrying an image that failed to store."""
+"""Tests for retrying an image that failed."""
 
 from contextlib import nullcontext
 from uuid import uuid4
@@ -22,8 +22,9 @@ from decoy import Decoy, matchers
 from decoy.matchers import Anything
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import DatabaseBatch, DatabaseImage
-from slidetap.model import Batch, ImageStatus
+from slidetap.model import Batch, BatchStatus, ImageStatus
 from slidetap.services import (
     BatchService,
     DatabaseService,
@@ -39,10 +40,18 @@ def session(decoy: Decoy) -> Session:
 
 
 @pytest.fixture()
-def database_image(decoy: Decoy, batch: Batch) -> DatabaseImage:
+def batch_status() -> BatchStatus:
+    return BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+
+
+@pytest.fixture()
+def database_image(
+    decoy: Decoy, batch: Batch, batch_status: BatchStatus
+) -> DatabaseImage:
     database_image = decoy.mock(cls=DatabaseImage)
     database_batch = decoy.mock(cls=DatabaseBatch)
     decoy.when(database_batch.model).then_return(batch)
+    decoy.when(database_batch.status).then_return(batch_status)
     decoy.when(database_image.batch).then_return(database_batch)
     return database_image
 
@@ -65,10 +74,16 @@ def scheduler(decoy: Decoy) -> Scheduler:
 
 
 @pytest.fixture()
+def pre_processes_separately() -> bool:
+    return True
+
+
+@pytest.fixture()
 def image_pipeline_service(
     decoy: Decoy,
     scheduler: Scheduler,
     database_service: DatabaseService,
+    pre_processes_separately: bool,
 ) -> ImagePipelineService:
     schema_service = decoy.mock(cls=SchemaService)
     decoy.when(schema_service.can_change(matchers.Anything())).then_return(True)
@@ -80,6 +95,9 @@ def image_pipeline_service(
         batch_service=decoy.mock(cls=BatchService),
         schema_service=schema_service,
         database_service=database_service,
+        application_policy=ApplicationPolicy(
+            pre_processes_images_separately=pre_processes_separately
+        ),
     )
 
 
@@ -130,3 +148,74 @@ class TestImagePipelineService:
         # Assert
         decoy.verify(database_image.reset_as_post_processed(), times=0)
         decoy.verify(scheduler.store_images_in_batch(batch), times=0)
+
+
+@pytest.mark.unittest
+class TestRetryOfAnImageNotProcessed:
+    """A failed conversion is converted again from the image's files. An image
+    that failed to download or be pre-processed is pre-processed again: by
+    pre-processing it, or, where images are not pre-processed separately
+    or its batch is past that, by post-processing it, which pre-processes it
+    first."""
+
+    @pytest.mark.parametrize("pre_processes_separately", [True, False])
+    def test_a_failed_conversion_is_converted_from_its_files(
+        self,
+        decoy: Decoy,
+        image_pipeline_service: ImagePipelineService,
+        scheduler: Scheduler,
+        database_image: DatabaseImage,
+    ) -> None:
+        # Arrange
+        decoy.when(database_image.status).then_return(
+            ImageStatus.POST_PROCESSING_FAILED
+        )
+
+        # Act
+        image_pipeline_service.retry(uuid4())
+
+        # Assert
+        decoy.verify(database_image.reset_as_pre_processed(), times=1)
+        decoy.verify(scheduler.post_process_image(Anything()), times=1)
+
+    @pytest.mark.parametrize(
+        ["pre_processes_separately", "batch_status", "post_processes"],
+        [
+            (True, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, False),
+            (True, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE, True),
+            (False, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE, True),
+        ],
+    )
+    @pytest.mark.parametrize(
+        ["failed_status", "reset"],
+        [
+            (ImageStatus.DOWNLOADING_FAILED, "reset_as_not_started"),
+            (ImageStatus.PRE_PROCESSING_FAILED, "reset_as_downloaded"),
+        ],
+    )
+    def test_a_failed_pre_processing_is_retried_by_the_task_for_the_batch(
+        self,
+        decoy: Decoy,
+        image_pipeline_service: ImagePipelineService,
+        scheduler: Scheduler,
+        database_image: DatabaseImage,
+        failed_status: ImageStatus,
+        reset: str,
+        post_processes: bool,
+    ) -> None:
+        # Arrange
+        decoy.when(database_image.status).then_return(failed_status)
+
+        # Act
+        image_pipeline_service.retry(uuid4())
+
+        # Assert
+        decoy.verify(getattr(database_image, reset)(), times=1)
+        decoy.verify(
+            scheduler.post_process_image(Anything()),
+            times=1 if post_processes else 0,
+        )
+        decoy.verify(
+            scheduler.download_and_pre_process_image(Anything()),
+            times=0 if post_processes else 1,
+        )

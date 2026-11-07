@@ -32,6 +32,7 @@ from slidetap_example import ExampleSchema
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseItem,
     DatabaseReviewIssue,
@@ -65,9 +66,13 @@ def batch_service(
     schema_service: SchemaService,
     stored_database_service: DatabaseService,
 ) -> BatchService:
-    validation_service = ValidationService(schema_service, stored_database_service)
+    validation_service = ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
     review_service = ReviewService(
-        schema_service, validation_service, stored_database_service
+        schema_service,
+        validation_service,
+        stored_database_service,
     )
     return BatchService(
         schema_service,
@@ -75,6 +80,7 @@ def batch_service(
         stored_database_service,
         review_service,
         VerificationService(schema_service, stored_database_service, review_service),
+        application_policy=ApplicationPolicy(),
     )
 
 

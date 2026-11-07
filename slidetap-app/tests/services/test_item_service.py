@@ -26,6 +26,7 @@ import pytest
 from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseDataset,
     DatabaseImage,
@@ -107,9 +108,15 @@ class TestAddSearchResultForAnExistingPatient:
     ) -> ItemService:
         """The real thing on a real database, unlike the mocked one above."""
         schema_service = schema_service_of(schema)
-        validation_service = ValidationService(schema_service, stored_database_service)
+        validation_service = ValidationService(
+            schema_service,
+            stored_database_service,
+            application_policy=ApplicationPolicy(),
+        )
         review_service = ReviewService(
-            schema_service, validation_service, stored_database_service
+            schema_service,
+            validation_service,
+            stored_database_service,
         )
         attribute_service = AttributeService(
             schema_service, validation_service, stored_database_service, review_service
@@ -986,9 +993,15 @@ class TestGivingADatasetNewPseudonyms:
         schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         schema_service = schema_service_of(schema)
-        validation_service = ValidationService(schema_service, stored_database_service)
+        validation_service = ValidationService(
+            schema_service,
+            stored_database_service,
+            application_policy=ApplicationPolicy(),
+        )
         review_service = ReviewService(
-            schema_service, validation_service, stored_database_service
+            schema_service,
+            validation_service,
+            stored_database_service,
         )
         attribute_service = AttributeService(
             schema_service, validation_service, stored_database_service, review_service
@@ -1486,6 +1499,105 @@ class TestGivingADatasetNewPseudonyms:
         with pytest.raises(NotAllowedActionError):
             item_service.pseudonymize_identifiers(dataset.uid)
         assert self._identifiers(stored_database_service, uids) == ["SLIDE-0"]
+
+    @staticmethod
+    def _set_external_identifiers(
+        stored_database_service: DatabaseService, uids: Sequence[UUID]
+    ) -> None:
+        with stored_database_service.get_session() as session:
+            for uid in uids:
+                stored_database_service.get_item(
+                    session, uid
+                ).external_identifier = f"external-{uid}"
+            session.commit()
+
+    @staticmethod
+    def _external_identifiers(
+        stored_database_service: DatabaseService, uids: Sequence[UUID]
+    ) -> list[str | None]:
+        with stored_database_service.get_session() as session:
+            return [
+                stored_database_service.get_item(session, uid).external_identifier
+                for uid in uids
+            ]
+
+    def test_pseudonymizing_identifiers_clears_every_external_identifier(
+        self,
+        stored_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        # Arrange — one without a pseudonym, whose external identifier leads
+        # back to where it was imported from all the same.
+        item_service = self._item_service(
+            stored_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
+        )
+        uids = self._add_slides(
+            stored_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["PSEUDO_aaa", None],
+        )
+        self._set_external_identifiers(stored_database_service, uids)
+
+        # Act
+        item_service.pseudonymize_identifiers(dataset.uid)
+
+        # Assert
+        assert self._external_identifiers(stored_database_service, uids) == [
+            None,
+            None,
+        ]
+
+    def test_a_refused_pseudonymizing_keeps_the_external_identifiers(
+        self,
+        stored_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        # Arrange
+        item_service = self._item_service(
+            stored_database_service,
+            schema,
+            _CountingPseudonymFactory(),
+            schema_service_of,
+        )
+        uids = self._add_slides(
+            stored_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["PSEUDO_aaa"],
+        )
+        self._set_external_identifiers(stored_database_service, uids)
+        with stored_database_service.get_session() as session:
+            holder = Sample(
+                uid=uuid4(),
+                identifier="PSEUDO_aaa",
+                dataset_uid=dataset.uid,
+                batch_uid=batch_uid,
+                schema_uid=slide_schema_uid,
+                pseudonym=None,
+            )
+            stored_database_service.add_item(session, holder, [], [])
+            session.commit()
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError):
+            item_service.pseudonymize_identifiers(dataset.uid)
+        assert self._external_identifiers(stored_database_service, uids) == [
+            f"external-{uids[0]}"
+        ]
 
 
 @pytest.mark.unittest

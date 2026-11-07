@@ -29,7 +29,6 @@ from slidetap.database import (
 )
 from slidetap.model import (
     AnyItem,
-    BatchStatus,
     MetadataImportCompleteness,
     MetadataSearchResult,
     NonValidItem,
@@ -898,7 +897,7 @@ class ReviewService:
         if (
             unit.completeness is not None
             and item.batch is not None
-            and item.batch.status < BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+            and not self._validation_service.import_is_complete(item.batch)
         ):
             expected_completeness = unit.completeness
 

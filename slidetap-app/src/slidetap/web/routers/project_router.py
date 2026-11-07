@@ -328,11 +328,14 @@ def pseudonymize_identifiers(
     item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
-    """Overwrite the identifier of every item that has a pseudonym with it.
+    """Overwrite the identifier of every item that has a pseudonym with it,
+    and clear the external identifier of every item.
 
     The opposite of ``clear_pseudonyms``: the link is cut on the side of the
-    identifiers instead. Only for a completed, exported or failed project, as
-    the other two pseudonym operations are.
+    identifiers instead. The external identifier, such as an image's id where
+    it was imported from, leads back there too, so it goes as well. Only for a
+    completed, exported or failed project, as the other two pseudonym
+    operations are.
 
     Parameters
     ----------

@@ -21,12 +21,17 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseBatch,
     DatabaseImage,
     DatabaseProject,
 )
-from slidetap.model import BatchStatus, ImageStatus, NotAllowedActionError
+from slidetap.model import (
+    BatchStatus,
+    ImageStatus,
+    NotAllowedActionError,
+)
 from slidetap.services import (
     BatchService,
     DatabaseService,
@@ -68,10 +73,16 @@ def review_service(decoy: Decoy) -> ReviewService:
 
 
 @pytest.fixture()
+def application_policy() -> ApplicationPolicy:
+    return ApplicationPolicy()
+
+
+@pytest.fixture()
 def batch_service(
     decoy: Decoy,
     database_service: DatabaseService,
     review_service: ReviewService,
+    application_policy: ApplicationPolicy,
 ) -> BatchService:
     return BatchService(
         schema_service=decoy.mock(cls=SchemaService),
@@ -79,6 +90,7 @@ def batch_service(
         database_service=database_service,
         review_service=review_service,
         verification_service=decoy.mock(cls=VerificationService),
+        application_policy=application_policy,
     )
 
 
@@ -177,3 +189,130 @@ class TestPreProcessedSweep:
             ),
             times=1,
         )
+
+
+@pytest.mark.unittest
+class TestWithoutPreProcessing:
+    """Where the images are not pre-processed, a batch goes from the search
+    straight to curation, and from there to conversion."""
+
+    @pytest.fixture()
+    def application_policy(self) -> ApplicationPolicy:
+        return ApplicationPolicy(pre_processes_images_separately=False)
+
+    @pytest.fixture()
+    def project(self, decoy: Decoy, database_batch: DatabaseBatch) -> DatabaseProject:
+        project = decoy.mock(cls=DatabaseProject)
+        decoy.when(database_batch.project).then_return(project)
+        return project
+
+    def test_conversion_starts_from_the_search(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        database_batch: DatabaseBatch,
+        project: DatabaseProject,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(database_batch.status).then_return(
+            BatchStatus.METADATA_SEARCH_COMPLETE
+        )
+
+        # Act
+        batch_service.set_as_post_processing(database_batch, session=session)
+
+        # Assert
+        decoy.verify(
+            decoy.prop(database_batch.status).set(BatchStatus.IMAGE_POST_PROCESSING),
+            times=1,
+        )
+
+    @pytest.mark.parametrize(
+        "status",
+        [BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, BatchStatus.IMAGE_PRE_PROCESSING],
+    )
+    def test_conversion_starts_from_a_batch_pre_processed_before(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        database_batch: DatabaseBatch,
+        project: DatabaseProject,
+        session: Session,
+        status: BatchStatus,
+    ) -> None:
+        """A batch pre-processed, or being so, before the application stopped
+        pre-processing images separately is not left without a way on:
+        its images not pre-processed are pre-processed as they are converted."""
+        # Arrange
+        decoy.when(database_batch.status).then_return(status)
+
+        # Act
+        batch_service.set_as_post_processing(database_batch, session=session)
+
+        # Assert
+        decoy.verify(
+            decoy.prop(database_batch.status).set(BatchStatus.IMAGE_POST_PROCESSING),
+            times=1,
+        )
+
+    def test_pre_processing_is_refused(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        database_batch: DatabaseBatch,
+        project: DatabaseProject,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(database_batch.metadata_search_complete).then_return(True)
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError):
+            batch_service.set_as_pre_processing(database_batch, session=session)
+
+    def test_the_batch_is_swept_once_converted(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        review_service: ReviewService,
+        database_batch: DatabaseBatch,
+        project: DatabaseProject,
+        session: Session,
+    ) -> None:
+        """What the files say comes with the conversion, so it is then that the
+        items stop being excused of it."""
+        # Arrange
+        dataset_uid = uuid4()
+        decoy.when(project.dataset_uid).then_return(dataset_uid)
+        decoy.when(database_batch.image_post_processing).then_return(True)
+
+        # Act
+        batch_service.set_as_post_processed(database_batch, session=session)
+
+        # Assert
+        decoy.verify(
+            review_service.flag_invalid_review_units(
+                dataset_uid, database_batch.uid, session=session
+            ),
+            times=1,
+        )
+
+
+@pytest.mark.unittest
+class TestWithPreProcessing:
+    def test_conversion_does_not_start_from_the_search(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        database_batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(database_batch.status).then_return(
+            BatchStatus.METADATA_SEARCH_COMPLETE
+        )
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError):
+            batch_service.set_as_post_processing(database_batch, session=session)

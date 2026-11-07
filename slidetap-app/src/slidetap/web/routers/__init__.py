@@ -14,6 +14,7 @@
 
 """FastAPI routers for SlideTap."""
 
+from .application_router import application_router
 from .attribute_router import attribute_router
 from .batch_router import batch_router
 from .dataset_router import dataset_router
@@ -29,6 +30,7 @@ from .tag_router import tag_router
 from .task_router import task_router
 
 __all__ = [
+    "application_router",
     "attribute_router",
     "batch_router",
     "dataset_router",

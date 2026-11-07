@@ -26,6 +26,7 @@ from uuid import UUID, uuid4
 import pytest
 from decoy import Decoy
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.model import (
     BatchStatus,
     Dataset,
@@ -103,6 +104,7 @@ def validation_service(
     return ValidationService(
         schema_service=decoy.mock(cls=SchemaService),
         database_service=stored_database_service,
+        application_policy=ApplicationPolicy(),
     )
 
 
@@ -268,6 +270,7 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
         validation_service = ValidationService(
             schema_service=decoy.mock(cls=SchemaService),
             database_service=stored_database_service,
+            application_policy=ApplicationPolicy(),
         )
         add_images(
             stored_database_service,

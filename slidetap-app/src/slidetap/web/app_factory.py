@@ -39,6 +39,7 @@ from slidetap.services import (
     SchemaService,
 )
 from slidetap.web.routers import (
+    application_router,
     attribute_router,
     batch_router,
     dataset_router,
@@ -142,6 +143,7 @@ class SlideTapWebAppFactory:
         logger.info("Creating and registering FastAPI routers.")
         app.include_router(health_router)
         app.include_router(login_router)
+        app.include_router(application_router)
         app.include_router(attribute_router)
         app.include_router(batch_router)
         app.include_router(dataset_router)

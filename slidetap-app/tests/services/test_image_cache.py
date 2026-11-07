@@ -17,10 +17,9 @@
 from uuid import UUID, uuid4
 
 import pytest
-from decoy import Decoy
 
 from slidetap.config import ImageCacheConfig
-from slidetap.services.database_service import DatabaseService
+from slidetap.model import ImageFormat, ImageStatus, ImageToView
 from slidetap.services.image_service import ImageCache, ImageCacheItem
 
 
@@ -35,21 +34,28 @@ class FakeImage:
 
 
 class OpeningImageCache(ImageCache):
-    """Image cache that opens fake images instead of reading the database."""
+    """Image cache that opens fake images instead of reading files."""
 
-    def __init__(self, cache_size: int, database_service: DatabaseService):
-        super().__init__(ImageCacheConfig(cache_size=cache_size), database_service)
-        self.opened: dict[UUID, FakeImage] = {}
+    def __init__(self, cache_size: int):
+        super().__init__(ImageCacheConfig(cache_size=cache_size))
+        self.opened: dict[tuple[UUID, str | None], FakeImage] = {}
 
-    def _open(self, uid: UUID) -> ImageCacheItem | None:
-        image = FakeImage()
-        self.opened[uid] = image
-        return ImageCacheItem(image)  # type: ignore[arg-type]
+    def _open(self, image: ImageToView) -> ImageCacheItem | None:
+        opened = FakeImage()
+        self.opened[(image.uid, image.folder_path)] = opened
+        return ImageCacheItem(opened)  # type: ignore[arg-type]
 
 
-@pytest.fixture()
-def database_service(decoy: Decoy) -> DatabaseService:
-    return decoy.mock(cls=DatabaseService)
+def _image(
+    uid: UUID | None = None, folder_path: str | None = "/download"
+) -> ImageToView:
+    return ImageToView(
+        uid=uid or uuid4(),
+        status=ImageStatus.PRE_PROCESSED,
+        format=ImageFormat.OTHER_WSI,
+        folder_path=folder_path,
+        filenames=("slide.svs",),
+    )
 
 
 @pytest.mark.unittest
@@ -65,47 +71,86 @@ class TestImageCache:
         # Assert
         assert second.users == 0
 
-    def test_evicts_least_recently_used_image_repeatedly(
-        self, database_service: DatabaseService
-    ):
+    def test_evicts_least_recently_used_image_repeatedly(self):
         # Arrange
-        cache = OpeningImageCache(1, database_service)
-        uids = [uuid4() for _ in range(4)]
+        cache = OpeningImageCache(1)
+        images = [_image() for _ in range(4)]
 
         # Act
-        for uid in uids:
-            with cache.get(uid):
+        for image in images:
+            with cache.get(image):
                 pass
 
         # Assert
         assert len(cache._cache) == 1
-        assert [cache.opened[uid].closed for uid in uids] == [True, True, True, False]
+        assert [
+            cache.opened[(image.uid, image.folder_path)].closed for image in images
+        ] == [True, True, True, False]
 
-    def test_image_in_use_is_not_evicted(self, database_service: DatabaseService):
+    def test_image_in_use_is_not_evicted(self):
         # Arrange
-        cache = OpeningImageCache(0, database_service)
-        in_use_uid = uuid4()
-        other_uid = uuid4()
+        cache = OpeningImageCache(0)
+        in_use = _image()
+        other = _image()
 
         # Act
-        with cache.get(in_use_uid):
-            with cache.get(other_uid):
+        with cache.get(in_use):
+            with cache.get(other):
                 pass
-            in_use_closed_while_reading = cache.opened[in_use_uid].closed
+            in_use_closed_while_reading = cache.opened[
+                (in_use.uid, in_use.folder_path)
+            ].closed
 
         # Assert
         assert not in_use_closed_while_reading
-        assert cache.opened[other_uid].closed
-        assert cache.opened[in_use_uid].closed
+        assert cache.opened[(other.uid, other.folder_path)].closed
+        assert cache.opened[(in_use.uid, in_use.folder_path)].closed
 
-    def test_image_without_files_gives_none(self, database_service: DatabaseService):
+    def test_a_moved_image_is_opened_where_it_now_is(self):
         # Arrange
-        cache = ImageCache(ImageCacheConfig(cache_size=1), database_service)
-        cache._open = lambda uid: None  # type: ignore[method-assign]
+        cache = OpeningImageCache(10)
+        uid = uuid4()
+        downloaded = _image(uid, "/download")
+        converted = _image(uid, "/processing")
+        with cache.get(downloaded):
+            pass
 
         # Act
-        with cache.get(uuid4()) as image:
+        with cache.get(converted) as opened:
+            read = opened
+
+        # Assert
+        assert read is cache.opened[(uid, "/processing")]
+        assert cache.opened[(uid, "/download")].closed
+        assert list(cache._cache) == [(uid, "/processing")]
+
+    def test_a_moved_image_being_read_is_closed_after(self):
+        # Arrange
+        cache = OpeningImageCache(10)
+        uid = uuid4()
+        downloaded = _image(uid, "/download")
+        converted = _image(uid, "/processing")
+
+        # Act
+        with cache.get(downloaded):
+            with cache.get(converted):
+                pass
+            closed_while_reading = cache.opened[(uid, "/download")].closed
+        with cache.get(converted):
+            pass
+
+        # Assert
+        assert not closed_while_reading
+        assert cache.opened[(uid, "/download")].closed
+
+    def test_image_without_files_gives_none(self):
+        # Arrange
+        cache = OpeningImageCache(1)
+
+        # Act
+        with cache.get(_image(folder_path=None)) as image:
             result = image
 
         # Assert
         assert result is None
+        assert cache.opened == {}

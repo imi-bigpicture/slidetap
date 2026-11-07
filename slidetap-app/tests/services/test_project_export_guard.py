@@ -25,6 +25,7 @@ import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import DatabaseImage, DatabaseSample
 from slidetap.model import (
     BatchCreate,
@@ -66,7 +67,11 @@ def project_service(
         attribute_service=decoy.mock(cls=AttributeService),
         batch_service=decoy.mock(cls=BatchService),
         schema_service=schema_service,
-        validation_service=ValidationService(schema_service, stored_database_service),
+        validation_service=ValidationService(
+            schema_service,
+            stored_database_service,
+            application_policy=ApplicationPolicy(),
+        ),
         mapper_service=decoy.mock(cls=MapperService),
         database_service=stored_database_service,
         storage_service=decoy.mock(cls=StorageService),

@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SLIDETAP_DOWNLOAD` and `SLIDETAP_PROCESSING` set the download and processing folders apart from `SLIDETAP_STORAGE`, such as on a local disk while the outbox is on a network share. Unset, they are `download` and `processing` under `SLIDETAP_STORAGE`, as before.
+- `pre_processes_separately` of `ImageImportInterface`, True by default. False for an import whose images curation views where they are imported from, needing nothing from their files: a batch then goes from the curation of the search straight to post-processing, without the pre-processing step and its statuses, and pre-processing a batch is refused. An image not pre-processed when it is post-processed, as each then is, is pre-processed first, in the same task: downloaded, and its metadata imported with `import_image_metadata()`, before it is converted. A failure there settles it as failed to download or pre-process, and a retry, or the retry of a worker that stopped, goes on from where it was. An image whose post-processing cannot be queued fails at the step it is at, and a retry of one that failed to download or pre-process, in a batch not yet post-processing, only sets it back, for post-processing the batch to take on. A converted image's download is then removed, as nothing views it; one that failed to be converted keeps it, for a retry to convert from. What the review unit says the import leaves out is held against the items once the batch is post-processed rather than pre-processed. A batch pre-processed, or being so, before an application stopped pre-processing images separately can still be converted. `ApplicationPolicy` holds how the application behaves as the interfaces of its plugin say, such as whether it pre-processes images separately, for the services and the client that go by it, and `GET /api/application/policy` gives it to the client; the client hides the pre-processing step and converts a batch from the search where images are not pre-processed separately.
+- `ImageViewInterface`, given to `WebAppProvider` as `image_view_interface`, reads the images to view them: their Deep Zoom description, tiles and thumbnail. By default `FileImageViewInterface` reads an image from its downloaded files, as before. An application that views images before they are downloaded reads those from where they are imported from, and hands the downloaded ones to the default. It is given the image as `ImageToView`: what viewing reads of it, without its attributes and relations. That is read as its columns alone, and kept for `image_cache.image_seconds` of the config, 5 by default, so that the tiles a viewer asks for at once read it once. An image whose files are not where it was kept as being, as one converted or stored meanwhile, is read again and viewed where it now is, and one whose files are gone is not found rather than an error.
+
 ### Changed
 
-- Requires wsidicom 0.36.1, wsidicomizer 0.31 and opentile 0.26 or later, which depend on each other and so are upgraded together.
+- Replacing the identifiers of a project with their pseudonyms (`POST /api/projects/project/{uid}/pseudonymize_identifiers`, `ItemService.pseudonymize_identifiers()`) also clears the external identifier of every item of the dataset, as it leads back to what the item was imported as, such as an image's id where it was imported from. An image that is not converted can then no longer be viewed or downloaded from there. A refused replacement leaves them as they were.
+
+### Fixed
+
+- A batch whose image failed to download is finished post-processing once its other images are settled, rather than left post-processing for good.
+- The thumbnail of an image that failed to be stored is made from its converted files, as of one stored, rather than read as a download.
 
 ## [0.4.0-rc.1] - 2026-10-26
 

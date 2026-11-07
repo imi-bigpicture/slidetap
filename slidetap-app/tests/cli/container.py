@@ -18,11 +18,13 @@ import os
 
 from dishka import Container, make_container
 from slidetap_example import (
+    ExampleImageImportInterface,
     ExampleImagePreProcessor,
     ExampleMapperInjector,
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
 )
+from slidetap_example.config import ExampleConfig
 from slidetap_example.schema import ExampleSchemaInterface
 
 from slidetap import BaseProvider
@@ -37,10 +39,12 @@ def create_container() -> Container:
         schema_interface=ExampleSchemaInterface,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
+        image_import_interface=ExampleImageImportInterface,
         mapper_injector=ExampleMapperInjector,
     )
     base_provider.provide(ExampleImagePreProcessor)
     config_provider = ConfigProvider(
         database_config=lambda: DatabaseConfig(os.environ["SLIDETAP_DBURI"], False)
     )
+    config_provider.provide(ExampleConfig.parse, provides=ExampleConfig)
     return make_container(base_provider, config_provider)

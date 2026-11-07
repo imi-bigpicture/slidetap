@@ -30,6 +30,7 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.model import (
     Code,
     CodeAttribute,
@@ -136,7 +137,9 @@ def validation_service(
 ) -> ValidationService:
     """Real, not a mock: what a remap leaves in `valid` is part of what these
     tests are about."""
-    return ValidationService(schema_service, stored_database_service)
+    return ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
 
 
 @pytest.fixture()

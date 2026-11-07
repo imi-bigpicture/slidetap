@@ -20,6 +20,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 import pytest
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.model import (
     Dataset,
     MetadataSearchResult,
@@ -57,9 +58,15 @@ class TestPseudonymsAreNotShared:
         schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
         schema_service = schema_service_of(schema)
-        validation_service = ValidationService(schema_service, stored_database_service)
+        validation_service = ValidationService(
+            schema_service,
+            stored_database_service,
+            application_policy=ApplicationPolicy(),
+        )
         review_service = ReviewService(
-            schema_service, validation_service, stored_database_service
+            schema_service,
+            validation_service,
+            stored_database_service,
         )
         attribute_service = AttributeService(
             schema_service, validation_service, stored_database_service, review_service

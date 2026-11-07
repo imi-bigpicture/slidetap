@@ -18,6 +18,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseBatch,
     DatabaseImage,
@@ -54,6 +55,10 @@ PRE_PROCESSING_SETTLED = [
 
 
 POST_PROCESSING_SETTLED = [
+    # An image not pre-processed is pre-processed as it is post-processed, and
+    # one that fails to be is settled as at pre-processing.
+    ImageStatus.DOWNLOADING_FAILED,
+    ImageStatus.PRE_PROCESSING_FAILED,
     ImageStatus.POST_PROCESSING_FAILED,
     ImageStatus.POST_PROCESSED,
 ]
@@ -78,7 +83,9 @@ class BatchService:
         database_service: DatabaseService,
         review_service: ReviewService,
         verification_service: VerificationService,
+        application_policy: ApplicationPolicy,
     ):
+        self._application_policy = application_policy
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
@@ -411,6 +418,11 @@ class BatchService:
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
+            if not self._application_policy.pre_processes_images_separately:
+                raise NotAllowedActionError(
+                    f"The images of batch {batch.uid} are not pre-processed: "
+                    "they are downloaded when they are post-processed."
+                )
             if not batch.metadata_search_complete:
                 error = (
                     f"Can only set {BatchStatus.METADATA_SEARCH_COMPLETE.name} "
@@ -471,6 +483,17 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+            if not self._application_policy.pre_processes_images_separately:
+                # Where the images are not pre-processed, it is now that what
+                # the files say has come in, and the items are held to it, as
+                # they are on being pre-processed otherwise.
+                flagged = self._review_service.flag_invalid_review_units(
+                    batch.project.dataset_uid, batch.uid, session=session
+                )
+                self._logger.info(
+                    f"Batch {batch.uid} has {flagged} review units holding "
+                    "something not valid."
+                )
             self._logger.info(f"Batch {batch.uid} set as post-processed.")
             session.commit()
             return batch.model
@@ -566,9 +589,20 @@ class BatchService:
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            if not batch.image_pre_processing_complete and not force:
+            # Curated from the search on where the images are not pre-processed
+            # separately, and from pre-processing on a batch pre-processed,
+            # or being so, before the application stopped doing that: its images
+            # not pre-processed are then pre-processed as they are
+            # post-processed.
+            ready = [BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE]
+            if not self._application_policy.pre_processes_images_separately:
+                ready += [
+                    BatchStatus.METADATA_SEARCH_COMPLETE,
+                    BatchStatus.IMAGE_PRE_PROCESSING,
+                ]
+            if batch.status not in ready and not force:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE.name} "
+                    f"Can only set {' or '.join(status.name for status in ready)} "
                     f"batch as {BatchStatus.IMAGE_POST_PROCESSING.name}, "
                     f"was {batch.status.name}"
                 )

@@ -53,6 +53,7 @@ from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.config import TaskConfig
 from slidetap.database import (
     DatabaseImage,
@@ -226,6 +227,7 @@ def download_and_pre_process_image(
     task_id: str,
     image_import_interface: FromDishka[ImageImportInterface],
     metadata_import_interface: FromDishka[MetadataImportInterface],
+    application_policy: FromDishka[ApplicationPolicy],
     database_service: FromDishka[DatabaseService],
     review_service: FromDishka[ReviewService],
     batch_service: FromDishka[BatchService],
@@ -242,11 +244,18 @@ def download_and_pre_process_image(
 
     Not started for a project on a root the application cannot process images
     on, as a task queued before a deploy can be, nor for an image that no
-    longer exists.
+    longer exists, nor where the application does not pre-process images
+    separately, as one queued before it stopped doing so can be.
     """
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
     logger.info(f"Download and pre-process image {image_uid}")
+    if not application_policy.pre_processes_images_separately:
+        logger.warning(
+            f"Image {image_uid} is not pre-processed: the application does not "
+            "pre-process images separately."
+        )
+        return
     with database_service.get_session() as session:
         database_image = database_service.get_optional_image(session, image_uid)
         if database_image is None:
@@ -301,6 +310,39 @@ def download_and_pre_process_image(
             )
             return
 
+    _download_and_import(
+        image_uid,
+        task_id,
+        needs_download,
+        image_import_interface,
+        metadata_import_interface,
+        database_service,
+        review_service,
+        attribute_service,
+        will_retry,
+    )
+    # Whether it was pre-processed or failed to be, the image is settled.
+    batch_service.finish_pre_processing_if_settled(batch_uid)
+
+
+def _download_and_import(
+    image_uid: UUID,
+    task_id: str,
+    needs_download: bool,
+    image_import_interface: ImageImportInterface,
+    metadata_import_interface: MetadataImportInterface,
+    database_service: DatabaseService,
+    review_service: ReviewService,
+    attribute_service: AttributeService,
+    will_retry: Callable[[BaseException], bool],
+) -> bool:
+    """Pre-process an image claimed for it: download it, where needs_download,
+    as it is then claimed for downloading, then import its metadata from its
+    files.
+
+    True where it is pre-processed. False where it failed to be, which settles
+    it, or was left where it could not go on from.
+    """
     if needs_download:
         downloaded = _run_download_phase(
             image_uid,
@@ -310,10 +352,7 @@ def download_and_pre_process_image(
             will_retry,
         )
         if not downloaded:
-            # An image that failed is settled too, and can be the last one the
-            # batch was waiting for.
-            batch_service.finish_pre_processing_if_settled(batch_uid)
-            return
+            return False
 
         with database_service.get_session() as session:
             database_image = database_service.get_image_for_update(session, image_uid)
@@ -322,11 +361,11 @@ def download_and_pre_process_image(
                     f"Image {image_uid} not in DOWNLOADED after download "
                     f"(status={database_image.status.name}), skipping pre-process"
                 )
-                return
+                return False
             database_image.set_as_pre_processing()
             session.commit()
 
-    _run_pre_process_phase(
+    return _run_pre_process_phase(
         image_uid,
         task_id,
         metadata_import_interface,
@@ -334,8 +373,6 @@ def download_and_pre_process_image(
         attribute_service,
         will_retry,
     )
-    # Whether it was pre-processed or failed to be, the image is settled.
-    batch_service.finish_pre_processing_if_settled(batch_uid)
 
 
 def _run_download_phase(
@@ -402,7 +439,7 @@ def _run_pre_process_phase(
     attribute_service: AttributeService,
     will_retry: Callable[[BaseException], bool],
 ) -> bool:
-    """Read the image's metadata, holding no database session while it reads.
+    """Read the image's files, holding no database session while it reads.
 
     A failure that has the task retried sets the image back as downloaded for
     the retry to claim, and is raised. Any other failure, including writing
@@ -419,19 +456,9 @@ def _run_pre_process_phase(
         )
         with database_service.get_session() as session:
             database_image = database_service.get_image_for_update(session, image_uid)
-            database_image.folder_path = str(pre_processed.folder_path)
-            database_image.files.clear()
-            for image_file in pre_processed.files:
-                new_file = DatabaseImageFile(database_image, image_file.filename)
-                session.add(new_file)
-                database_image.files.add(new_file)
-            attribute_service.update_for_item(
-                database_image, pre_processed.attributes.values(), session
+            _save_pre_processed(
+                database_image, pre_processed, attribute_service, session
             )
-            # What the file said about itself, kept from the reading of it that
-            # put these attributes in the item, to write over when the metadata
-            # is written into DICOM.
-            database_image.source_metadata = pre_processed.source_metadata
             database_image.set_as_pre_processed()
         return True
     except Exception as exception:
@@ -449,6 +476,38 @@ def _run_pre_process_phase(
         return False
 
 
+def _save_pre_processed(
+    database_image: DatabaseImage,
+    pre_processed: Image,
+    attribute_service: AttributeService,
+    session: Session,
+) -> None:
+    """Put what pre-processing the image gave on it: its files, and what they
+    say."""
+    database_image.folder_path = str(pre_processed.folder_path)
+    database_image.files.clear()
+    for image_file in pre_processed.files:
+        new_file = DatabaseImageFile(database_image, image_file.filename)
+        session.add(new_file)
+        database_image.files.add(new_file)
+    _save_what_the_files_say(database_image, pre_processed, attribute_service, session)
+
+
+def _save_what_the_files_say(
+    database_image: DatabaseImage,
+    read: Image,
+    attribute_service: AttributeService,
+    session: Session,
+) -> None:
+    """Put what reading the image files gave on the image: the attributes and
+    the metadata they say."""
+    attribute_service.update_for_item(database_image, read.attributes.values(), session)
+    # What the file said about itself, kept from the reading of it that put
+    # these attributes in the item, to write over when the metadata is written
+    # into DICOM.
+    database_image.source_metadata = read.source_metadata
+
+
 @dishka_task(
     slidetap_tasks,
     name="post_process_image",
@@ -462,19 +521,32 @@ def post_process_image(
     image_uid: UUID | str,
     task_id: str,
     image_export_interface: FromDishka[ImageExportInterface],
+    image_import_interface: FromDishka[ImageImportInterface],
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     schema_service: FromDishka[SchemaService],
+    review_service: FromDishka[ReviewService],
+    attribute_service: FromDishka[AttributeService],
+    application_policy: FromDishka[ApplicationPolicy],
+    metadata_import_interface: FromDishka[MetadataImportInterface],
     will_retry: Callable[[BaseException], bool] = _not_retried,
 ) -> None:
     """Post-process (export) the image with given UID.
 
-    No database session is held while the image is converted. A failure that
-    has the task retried removes what the attempt wrote, sets the image back as
-    pre-processed for the retry to claim, and is raised. Any other failure,
+    No database session is held while the image is downloaded or converted. A
+    failure that has the task retried removes what the attempt wrote, sets the
+    image back for the retry to claim, and is raised. Any other failure,
     including writing what came of the conversion, removes what was written and
     sets the image as failed to post-process, which settles it for the batch.
+
+    An image not pre-processed, as where images are not pre-processed
+    separately, is pre-processed first, in this task: downloaded if it is not,
+    and its metadata imported from its files. A failure there settles it as
+    failed to download or pre-process, and a retry goes on from where it
+    failed. A converted image's download is removed where images are not
+    pre-processed separately, as nothing views it. One that failed to be
+    converted keeps it, for a retry to convert from.
     """
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
@@ -496,19 +568,48 @@ def post_process_image(
 
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
-        if not database_image.pre_processed:
+        batch_uid = database_image.batch_uid
+        # One not pre-processed, as where images are not pre-processed before
+        # curation, is pre-processed first.
+        needs_download = database_image.not_started
+        pre_processes = needs_download or database_image.downloaded
+        if needs_download:
+            database_image.set_as_downloading()
+        elif database_image.downloaded:
+            database_image.set_as_pre_processing()
+        elif database_image.pre_processed:
+            database_image.set_as_post_processing()
+        else:
             logger.info(
-                f"Image {image_uid} not in PRE_PROCESSED state "
+                f"Image {image_uid} not in a state to post-process "
                 f"(status={database_image.status.name}), skipping"
             )
             session.commit()
             return
-        database_image.set_as_post_processing()
         session.commit()
+
+    if pre_processes:
+        if not _download_and_import(
+            image_uid,
+            task_id,
+            needs_download,
+            image_import_interface,
+            metadata_import_interface,
+            database_service,
+            review_service,
+            attribute_service,
+            will_retry,
+        ):
+            # An image that failed is settled too, and can be the last one the
+            # batch was waiting for.
+            batch_service.finish_post_processing_if_settled(batch_uid)
+            return
+        with database_service.get_session() as session:
+            database_image = database_service.get_image_for_update(session, image_uid)
+            database_image.set_as_post_processing()
 
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
-        batch_uid = database_image.batch_uid
         image = database_image.model
         batch = database_image.batch.model
         project = database_image.batch.project.model
@@ -551,6 +652,11 @@ def post_process_image(
             DatabaseImage.set_as_post_processing_failed,
             ImageStatus.POST_PROCESSING_FAILED,
         )
+    else:
+        if not application_policy.pre_processes_images_separately:
+            # Converted and on record, and not viewed from its download: the
+            # download has served its purpose.
+            storage_service.cleanup_download_image_path(project, image)
 
     batch_service.finish_post_processing_if_settled(batch_uid)
 

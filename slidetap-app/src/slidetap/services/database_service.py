@@ -126,6 +126,7 @@ from slidetap.model import (
     Image,
     ImageSchema,
     ImageStatus,
+    ImageToView,
     Item,
     ItemSchema,
     ItemType,
@@ -1322,6 +1323,38 @@ class DatabaseService:
         elif isinstance(image, Image):
             return session.get(DatabaseImage, image.uid)
         return image
+
+    def get_image_to_view(self, session: Session, uid: UUID) -> ImageToView | None:
+        """The image as viewing it reads it, or None if there is no such image.
+
+        Read as the columns it needs alone, as it is read for every tile.
+        """
+        rows = session.execute(
+            select(
+                DatabaseImage.status,
+                DatabaseImage.format,
+                DatabaseImage.folder_path,
+                DatabaseImage.thumbnail_path,
+                DatabaseImage.external_identifier,
+                DatabaseImageFile.filename,
+            )
+            .outerjoin(
+                DatabaseImageFile, DatabaseImageFile.image_uid == DatabaseImage.uid
+            )
+            .where(DatabaseImage.uid == uid)
+        ).all()
+        if not rows:
+            return None
+        first = rows[0]
+        return ImageToView(
+            uid=uid,
+            status=first.status,
+            format=first.format,
+            folder_path=first.folder_path,
+            thumbnail_path=first.thumbnail_path,
+            external_identifier=first.external_identifier,
+            filenames=tuple(row.filename for row in rows if row.filename is not None),
+        )
 
     def get_observation(
         self,

@@ -25,6 +25,7 @@ from uuid import UUID, uuid4
 import pytest
 from slidetap_example import ExampleSchema
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
     BatchCreate,
@@ -61,7 +62,9 @@ def schema_service(
 def validation_service(
     schema_service: SchemaService, stored_database_service: DatabaseService
 ) -> ValidationService:
-    return ValidationService(schema_service, stored_database_service)
+    return ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
 
 
 @pytest.fixture()
@@ -70,7 +73,11 @@ def review_service(
     validation_service: ValidationService,
     stored_database_service: DatabaseService,
 ) -> ReviewService:
-    return ReviewService(schema_service, validation_service, stored_database_service)
+    return ReviewService(
+        schema_service,
+        validation_service,
+        stored_database_service,
+    )
 
 
 @pytest.fixture()

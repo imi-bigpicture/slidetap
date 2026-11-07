@@ -195,6 +195,12 @@ class TaskConfig:
 @dataclass(frozen=True)
 class ImageCacheConfig:
     cache_size: int = 10
+    """How many opened images are kept open."""
+    image_seconds: float = 5.0
+    """How long what is read of an image to view it is kept, in seconds, before
+    it is read again. A viewer asks for many tiles at once, and each is to read
+    the image; an image moved, as a converted one is, is viewed where it now is
+    once this has passed. 0 reads it for every request."""
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "ImageCacheConfig":
@@ -202,9 +208,13 @@ class ImageCacheConfig:
             return cls()
         parser = parser.get_sub_parser("image_cache")
         cache_size = parser.get_yaml_or_default("cache_size", None)
-        if cache_size is None:
-            return cls()
-        return cls(cache_size)
+        image_seconds = parser.get_yaml_or_default("image_seconds", None)
+        return cls(
+            cache_size=cls.cache_size if cache_size is None else cache_size,
+            image_seconds=(
+                cls.image_seconds if image_seconds is None else float(image_seconds)
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -228,11 +238,30 @@ class StorageConfig:
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "StorageConfig":
+        """The outbox under ``SLIDETAP_STORAGE``, and the download and
+        processing folders under ``SLIDETAP_DOWNLOAD`` and
+        ``SLIDETAP_PROCESSING`` where set, and under ``SLIDETAP_STORAGE``
+        otherwise.
+
+        The download and processing folders only hold files on their way to the
+        outbox, so they can be on a faster local disk than it.
+        """
         storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
         outbox = storage_path.joinpath("storage")
-        download = storage_path.joinpath("download")
-        processing = storage_path.joinpath("processing")
+        download = cls._folder(parser, "SLIDETAP_DOWNLOAD", storage_path, "download")
+        processing = cls._folder(
+            parser, "SLIDETAP_PROCESSING", storage_path, "processing"
+        )
         return cls(outbox, download, processing)
+
+    @staticmethod
+    def _folder(
+        parser: ConfigParser, key: str, storage_path: Path, default_name: str
+    ) -> Path:
+        value = parser.get_env_or_none(key)
+        if value:
+            return Path(value)
+        return storage_path.joinpath(default_name)
 
 
 @dataclass(frozen=True)

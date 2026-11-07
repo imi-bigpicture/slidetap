@@ -24,6 +24,7 @@ from uuid import UUID, uuid4
 import pytest
 from slidetap_example import ExampleSchema
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import DatabaseSample
 from slidetap.model import (
     BatchCreate,
@@ -65,9 +66,13 @@ def mapper_service(
     schema_service: SchemaService,
     stored_database_service: DatabaseService,
 ) -> MapperService:
-    validation_service = ValidationService(schema_service, stored_database_service)
+    validation_service = ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
     review_service = ReviewService(
-        schema_service, validation_service, stored_database_service
+        schema_service,
+        validation_service,
+        stored_database_service,
     )
     attribute_service = AttributeService(
         schema_service, validation_service, stored_database_service, review_service

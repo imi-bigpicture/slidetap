@@ -80,8 +80,8 @@ def _read_tile(
     extension: str,
     z: int | None,
 ) -> Response:
-    """Read a tile, answering not found for an image without files to read
-    and for a tile outside the image."""
+    """Read a tile, answering not found for an image that cannot be read and
+    for a tile outside the image."""
     try:
         tile = image_service.get_tile(image_uid, dzi_level, x, y, extension, z)
     except (ValueError, WsiDicomNotFoundError, WsiDicomOutOfBoundsError) as exception:

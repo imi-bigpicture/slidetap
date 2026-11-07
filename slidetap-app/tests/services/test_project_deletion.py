@@ -27,6 +27,7 @@ from decoy import Decoy, matchers
 from slidetap_example import ExampleSchema
 from sqlalchemy import func, select
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseImage,
@@ -77,7 +78,9 @@ def project_service(
     stored_database_service: DatabaseService,
     storage_service: StorageService,
 ) -> ProjectService:
-    validation_service = ValidationService(schema_service, stored_database_service)
+    validation_service = ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
     return ProjectService(
         attribute_service=decoy.mock(cls=AttributeService),
         batch_service=decoy.mock(cls=BatchService),

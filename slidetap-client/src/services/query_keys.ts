@@ -43,6 +43,12 @@ import { Size } from 'src/models/setting'
 import { AttributeValueField, RelationFilterDefinition } from 'src/models/table_item'
 
 export const queryKeys = {
+  // Application
+  application: {
+    all: ['application'] as const,
+    policy: () => [...queryKeys.application.all, 'policy'] as const,
+  },
+
   // Projects
   project: {
     all: ['projects'] as const,

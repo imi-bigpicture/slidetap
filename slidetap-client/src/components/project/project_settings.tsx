@@ -381,7 +381,8 @@ export default function ProjectSettings({
               {pseudonymizeIdentifiersMutation.isSuccess && (
                 <Alert severity="success">
                   {pseudonymizeIdentifiersMutation.data.changed} items now have their
-                  pseudonym as their identifier. What they were called before is gone.
+                  pseudonym as their identifier. What they were called before, and their
+                  ids where they were imported from, are gone.
                 </Alert>
               )}
               {removePrivateAttributesMutation.isSuccess && (
@@ -453,7 +454,10 @@ export default function ProjectSettings({
                 Every item of <strong>{project.name}</strong> that has a pseudonym is
                 known by it here from now on: its identifier is overwritten with the
                 pseudonym, and there is no way back. An item without a pseudonym keeps
-                the identifier it has.
+                the identifier it has. Every item also loses the id it has where it was
+                imported from, such as an image&apos;s id in the image archive, so an
+                image that has not been converted can no longer be viewed or downloaded
+                from there.
               </>
             ) : pending === 'seed' ? (
               <>

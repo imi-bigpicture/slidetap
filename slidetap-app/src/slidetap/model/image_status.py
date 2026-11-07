@@ -29,3 +29,16 @@ class ImageStatus(IntEnum):
     STORING = 11
     STORING_FAILED = 12
     STORED = 13
+
+
+PROCESSED_STATUSES = frozenset(
+    (
+        ImageStatus.POST_PROCESSED,
+        ImageStatus.STORING,
+        ImageStatus.STORING_FAILED,
+        ImageStatus.STORED,
+    )
+)
+"""The statuses of an image whose folder holds post-processed image data: from
+being post-processed and onwards, as storing it moves the folder but does not
+change what it holds, whether or not storing succeeds."""
