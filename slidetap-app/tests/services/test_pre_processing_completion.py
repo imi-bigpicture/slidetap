@@ -28,6 +28,7 @@ import pytest
 from decoy import Decoy
 from decoy.matchers import Anything
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
@@ -141,6 +142,7 @@ def batch_service(
         database_service=stored_database_service,
         review_service=review_service,
         verification_service=decoy.mock(cls=VerificationService),
+        application_policy=ApplicationPolicy(),
     )
 
 

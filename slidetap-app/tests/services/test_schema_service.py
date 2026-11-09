@@ -21,12 +21,17 @@ from slidetap_example import ExampleSchema
 
 from slidetap.external_interfaces import SchemaInterface
 from slidetap.model import (
+    AttributePath,
+    CodeAttributeSchema,
     EnumAttributeSchema,
+    ListAttributeSchema,
     NotFoundError,
+    ObjectAttributeSchema,
     Project,
     ProjectNotEditableError,
     ProjectStatus,
     RootSchema,
+    StringAttributeSchema,
 )
 from slidetap.services import DatabaseService, SchemaService
 
@@ -323,3 +328,146 @@ class TestEditableRoots:
         assert not schema_service.can_change(project)
         with pytest.raises(ProjectNotEditableError, match="deleted"):
             schema_service.assert_can_change(project)
+
+
+@pytest.fixture()
+def diagnose_schema() -> CodeAttributeSchema:
+    return CodeAttributeSchema(
+        uid=uuid4(),
+        tag="diagnose",
+        name="diagnose",
+        display_name="Diagnose",
+        optional=False,
+        read_only=False,
+    )
+
+
+def diagnose_list_schema(tag: str, entry: CodeAttributeSchema) -> ListAttributeSchema:
+    return ListAttributeSchema(
+        uid=uuid4(),
+        tag=tag,
+        name=tag,
+        display_name=tag.capitalize(),
+        optional=True,
+        read_only=False,
+        display_attributes_in_parent=False,
+        attribute=entry,
+    )
+
+
+@pytest.fixture()
+def statement_schema(diagnose_schema: CodeAttributeSchema) -> ObjectAttributeSchema:
+    """A statement with two lists of the same diagnoses, which mean different
+    things, and a note."""
+    return ObjectAttributeSchema(
+        uid=uuid4(),
+        tag="statement",
+        name="statement",
+        display_name="Statement",
+        optional=True,
+        read_only=False,
+        display_attributes_in_parent=False,
+        display_value_tags=["diagnoses"],
+        attributes={
+            "diagnoses": diagnose_list_schema("diagnoses", diagnose_schema),
+            "differentials": diagnose_list_schema("differentials", diagnose_schema),
+            "note": StringAttributeSchema(
+                uid=uuid4(),
+                tag="note",
+                name="note",
+                display_name="Note",
+                optional=True,
+                read_only=False,
+            ),
+        },
+    )
+
+
+@pytest.fixture()
+def statement_schema_service(
+    schema: ExampleSchema,
+    statement_schema: ObjectAttributeSchema,
+    schema_service_of: Callable[..., SchemaService],
+) -> SchemaService:
+    """A schema service of the example root with the statement on its
+    specimens."""
+    specimen = schema.specimen
+    root = schema.model_copy(
+        update={
+            "samples": {
+                **schema.samples,
+                specimen.uid: specimen.model_copy(
+                    update={
+                        "attributes": {
+                            **specimen.attributes,
+                            "statement": statement_schema,
+                        }
+                    }
+                ),
+            }
+        }
+    )
+    return schema_service_of(root)
+
+
+def attribute_path(*steps: str | int) -> AttributePath:
+    return AttributePath(steps=steps)
+
+
+@pytest.mark.unittest
+class TestPathsHoldSameKind:
+    def test_paths_to_two_entries_of_the_same_list_hold_the_same_kind(
+        self,
+        statement_schema_service: SchemaService,
+        statement_schema: ObjectAttributeSchema,
+    ):
+        # Act & Assert
+        statement_schema_service.assert_paths_hold_same_kind(
+            statement_schema.uid,
+            attribute_path("diagnoses", 0),
+            statement_schema.uid,
+            attribute_path("diagnoses", 3),
+        )
+
+    def test_paths_to_entries_of_lists_meaning_different_things_do_not(
+        self,
+        statement_schema_service: SchemaService,
+        statement_schema: ObjectAttributeSchema,
+    ):
+        """The same diagnose schema, held by another list."""
+        # Act & Assert
+        with pytest.raises(ValueError):
+            statement_schema_service.assert_paths_hold_same_kind(
+                statement_schema.uid,
+                attribute_path("diagnoses", 0),
+                statement_schema.uid,
+                attribute_path("differentials", 0),
+            )
+
+    def test_paths_to_different_schemas_are_not(
+        self,
+        statement_schema_service: SchemaService,
+        statement_schema: ObjectAttributeSchema,
+    ):
+        # Act & Assert
+        with pytest.raises(ValueError):
+            statement_schema_service.assert_paths_hold_same_kind(
+                statement_schema.uid,
+                attribute_path("note"),
+                statement_schema.uid,
+                attribute_path("diagnoses", 0),
+            )
+
+    def test_a_path_with_no_steps_is_refused(
+        self,
+        statement_schema_service: SchemaService,
+        statement_schema: ObjectAttributeSchema,
+    ):
+        # Act & Assert
+        with pytest.raises(ValueError):
+            statement_schema_service.assert_paths_hold_same_kind(
+                statement_schema.uid,
+                attribute_path(),
+                statement_schema.uid,
+                attribute_path("diagnoses", 0),
+            )

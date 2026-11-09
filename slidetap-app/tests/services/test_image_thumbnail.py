@@ -20,18 +20,22 @@ from uuid import UUID
 
 import pytest
 from decoy import Decoy
-from decoy.matchers import Anything
 from slidetap_example import ExampleSchema
 
+from slidetap.config import ImageCacheConfig
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
     DatabaseImage,
     DatabaseProject,
 )
+from slidetap.external_interfaces.implementations import FileImageViewInterface
 from slidetap.model import BatchStatus, ImageFormat, ImageStatus
-from slidetap.services import DatabaseService, ImageService, StorageService
-from slidetap.services.image_service import ImageCache
+from slidetap.services import (
+    DatabaseService,
+    ImageCache,
+    ImageService,
+)
 
 
 def _add_pre_processed_image(
@@ -80,12 +84,12 @@ class TestThumbnail:
         written into the outbox of a pseudonymised project on every request."""
         # Arrange
         image_uid = _add_pre_processed_image(stored_database_service, schema, tmp_path)
-        storage_service = decoy.mock(cls=StorageService)
+        file_image_view_interface = FileImageViewInterface(decoy.mock(cls=ImageCache))
         image_service = ImageService(
-            storage_service, stored_database_service, decoy.mock(cls=ImageCache)
+            stored_database_service, file_image_view_interface, ImageCacheConfig()
         )
         monkeypatch.setattr(
-            image_service,
+            file_image_view_interface,
             "_create_thumbnail",
             lambda image, width, height, format: b"thumbnail",
         )
@@ -95,13 +99,6 @@ class TestThumbnail:
 
         # Assert
         assert thumbnail == b"thumbnail"
-        decoy.verify(
-            storage_service.store_thumbnail(
-                Anything(), Anything(), Anything(), Anything()
-            ),
-            times=0,
-        )
-        decoy.verify(
-            storage_service.store_thumbnail(Anything(), Anything(), Anything()),
-            times=0,
-        )
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
+            assert image.thumbnail_path is None

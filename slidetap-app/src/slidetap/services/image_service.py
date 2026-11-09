@@ -14,25 +14,30 @@
 
 """Service for accessing image data."""
 
-import io
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
+from time import monotonic
 from types import TracebackType
+from typing import TypeVar
 from uuid import UUID
 
-from PIL import Image as PILImage
 from wsidicom import WsiDicom
+from wsidicom.errors import WsiDicomNotFoundError
 from wsidicomizer import WsiDicomizer
 
 from slidetap.config import ImageCacheConfig
-from slidetap.database import DatabaseImage
-from slidetap.model import Dzi, ImageFormat
+from slidetap.external_interfaces.image_view import ImageViewInterface
+from slidetap.model import Dzi, ImageFormat, ImageToView
 from slidetap.services.database_service import DatabaseService
-from slidetap.services.storage_service import StorageService
+
+Viewed = TypeVar("Viewed")
+
+MISSING_FILES = (FileNotFoundError, WsiDicomNotFoundError)
+"""What reading an image raises where its files are not there."""
 
 
 @dataclass
@@ -48,16 +53,23 @@ class ImageCacheItem:
         self.item.close()
 
 
+CacheKey = tuple[UUID, str]
+"""An image by its uid and the folder it was opened from."""
+
+
 class ImageCache:
     """A collection of cached images.
 
     Safe to use from several threads. An image is only closed and removed when
     the cache is over its size and no request is reading the image.
+
+    An image is cached by the folder it was opened from too, so that one moved,
+    as a converted image is from its download, is opened again where it now is.
+    What was opened from where it was is closed once no request reads it.
     """
 
-    def __init__(self, config: ImageCacheConfig, database_service: DatabaseService):
-        self._database_service = database_service
-        self._cache: dict[UUID, ImageCacheItem] = {}
+    def __init__(self, config: ImageCacheConfig):
+        self._cache: dict[CacheKey, ImageCacheItem] = {}
         self._cache_size = config.cache_size
         self._lock = Lock()
 
@@ -83,12 +95,15 @@ class ImageCache:
         return len(self._cache) > self._cache_size
 
     @contextmanager
-    def get(self, uid: UUID) -> Generator[WsiDicom | None, None, None]:
+    def get(self, image: ImageToView) -> Generator[WsiDicom | None, None, None]:
         """The opened image, or None if the image has no files to open.
 
         The image is kept open for as long as the context is entered.
         """
-        cached_item = self._acquire(uid)
+        if image.folder_path is None:
+            yield None
+            return
+        cached_item = self._acquire(image, (image.uid, str(image.folder_path)))
         if cached_item is None:
             yield None
             return
@@ -99,23 +114,24 @@ class ImageCache:
                 cached_item.users -= 1
                 self._remove_old()
 
-    def _acquire(self, uid: UUID) -> ImageCacheItem | None:
+    def _acquire(self, image: ImageToView, key: CacheKey) -> ImageCacheItem | None:
         with self._lock:
-            cached_item = self._cache.get(uid)
+            self._remove_moved(key)
+            cached_item = self._cache.get(key)
             if cached_item is not None:
                 cached_item.last_accessed = datetime.now()
                 cached_item.users += 1
                 return cached_item
         # Opened outside the lock, as opening can be slow. Should another request
         # have opened the same image meanwhile, the image already cached is used.
-        opened_item = self._open(uid)
+        opened_item = self._open(image)
         if opened_item is None:
             return None
         with self._lock:
-            cached_item = self._cache.get(uid)
+            cached_item = self._cache.get(key)
             if cached_item is None:
                 cached_item = opened_item
-                self._cache[uid] = cached_item
+                self._cache[key] = cached_item
             else:
                 opened_item.close()
             cached_item.last_accessed = datetime.now()
@@ -123,20 +139,29 @@ class ImageCache:
             self._remove_old()
         return cached_item
 
-    def _open(self, uid: UUID) -> ImageCacheItem | None:
-        with self._database_service.get_session() as session:
-            image = self._database_service.get_image(session, uid)
-            if image.folder_path is None:
-                return None
-            if image.format == ImageFormat.DICOM_WSI:
-                wsi = WsiDicom.open(image.folder_path)
-            elif image.format == ImageFormat.OTHER_WSI:
-                wsi = WsiDicomizer.open(
-                    Path(image.folder_path).joinpath(next(iter(image.files)).filename)
-                )
-            else:
-                return None
-            return ImageCacheItem(wsi)
+    def _open(self, image: ImageToView) -> ImageCacheItem | None:
+        if image.folder_path is None:
+            return None
+        if image.format == ImageFormat.DICOM_WSI:
+            wsi = WsiDicom.open(image.folder_path)
+        elif image.format == ImageFormat.OTHER_WSI and image.filenames:
+            wsi = WsiDicomizer.open(
+                Path(image.folder_path).joinpath(image.filenames[0])
+            )
+        else:
+            return None
+        return ImageCacheItem(wsi)
+
+    def _remove_moved(self, key: CacheKey):
+        """Close and remove the image as it was opened from another folder,
+        where no request is reading it. Called holding the lock."""
+        uid, _ = key
+        for moved_key in [
+            cached_key
+            for cached_key, cached_item in self._cache.items()
+            if cached_key[0] == uid and cached_key != key and cached_item.users == 0
+        ]:
+            self._cache.pop(moved_key).close()
 
     def _remove_old(self):
         """Close and remove the least recently used images that no request is
@@ -146,64 +171,69 @@ class ImageCache:
 
     def _remove_oldest_not_in_use(self) -> bool:
         not_in_use = [
-            (uid, cached_item)
-            for uid, cached_item in self._cache.items()
+            (key, cached_item)
+            for key, cached_item in self._cache.items()
             if cached_item.users == 0
         ]
         if not not_in_use:
             return False
-        oldest_uid, oldest_item = min(
+        oldest_key, oldest_item = min(
             not_in_use, key=lambda entry: entry[1].last_accessed
         )
-        del self._cache[oldest_uid]
+        del self._cache[oldest_key]
         oldest_item.close()
         return True
 
 
 class ImageService:
+    """Views the images, through the image view interface of the application.
+
+    What is read of an image to view it is kept for a few seconds, see
+    :py:attr:`ImageCacheConfig.image_seconds`, as a viewer asks for many tiles
+    at once and each would otherwise read it again. An image whose files are
+    not where it was kept as being, as one moved meanwhile, is read again and
+    viewed where it now is. One whose files are gone is not found.
+    """
+
     def __init__(
         self,
-        storage_service: StorageService,
         database_service: DatabaseService,
-        image_cache: ImageCache,
+        image_view_interface: ImageViewInterface,
+        config: ImageCacheConfig,
     ):
-        self._storage_service = storage_service
         self._database_service = database_service
-        self._image_cache = image_cache
+        self._image_view_interface = image_view_interface
+        self._image_seconds = config.image_seconds
+        self._images: dict[UUID, tuple[float, ImageToView]] = {}
+        self._images_lock = Lock()
 
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str
     ) -> bytes | None:
-        """A thumbnail of the image at the given size.
-
-        Read from the thumbnail made when the image was post-processed, and
-        otherwise made from the image files for this request alone. A thumbnail
-        made here is not stored: the outbox is handed over as it is, and a
-        thumbnail named after the image is not something to hand over with a
-        pseudonymised project.
-        """
-        with self._database_service.get_session() as session:
-            image = self._database_service.get_optional_image(session, image_uid)
-            if image is None or image.folder_path is None:
-                return None
-            if image.thumbnail_path is None:
-                return self._create_thumbnail(image, width, height, format)
-
-            return self._read_thumbnail(image, width, height, format)
+        """A thumbnail of the image at the given size, or None if there is no
+        such image or it has none to give."""
+        try:
+            return self._view(
+                image_uid,
+                lambda image: self._image_view_interface.get_thumbnail(
+                    image, width, height, format
+                ),
+            )
+        except ValueError:
+            return None
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
-        with self._image_cache.get(image_uid) as wsi:
-            if wsi is None:
-                raise ValueError(f"Image with UID {image_uid} not found in cache.")
-            return Dzi(
-                url=base_url,
-                width=wsi.size.width,
-                height=wsi.size.height,
-                tile_size=wsi.tile_size.width,
-                tile_format="jpeg",
-                planes=wsi.pyramids[0].base_level.focal_planes,
-                channels=wsi.pyramids[0].base_level.optical_paths,
-            )
+        """The Deep Zoom description of the image.
+
+        Raises
+        ------
+        ValueError
+            If there is no such image, or it cannot be read.
+        """
+        return self._view(
+            image_uid,
+            lambda image: self._image_view_interface.get_dzi(image, base_url),
+        )
 
     def get_tile(
         self,
@@ -214,38 +244,71 @@ class ImageService:
         extension: str,
         z: int | None = None,
     ) -> bytes:
-        with self._image_cache.get(image_uid) as wsi:
-            if wsi is None:
-                raise ValueError(f"Image with UID {image_uid} not found in cache.")
-            level = wsi.pyramids[0].highest_level - dzi_level
-            return wsi.read_encoded_tile(level, (x, y), z)
+        """A tile of the image.
 
-    def _read_thumbnail(
-        self, image: DatabaseImage, width: int, height: int, format: str
-    ) -> bytes | None:
-        """Read the thumbnail stored for an image, scaled to the given size."""
-        if image.thumbnail_path is None or not Path(image.thumbnail_path).exists():
-            return None
-        with PILImage.open(image.thumbnail_path) as thumbnail:
-            thumbnail.thumbnail((width, height))
-            with io.BytesIO() as output:
-                thumbnail.save(output, format)
-                return output.getvalue()
+        Raises
+        ------
+        ValueError
+            If there is no such image, or it cannot be read.
+        """
+        return self._view(
+            image_uid,
+            lambda image: self._image_view_interface.get_tile(
+                image, dzi_level, x, y, extension, z
+            ),
+        )
 
-    def _create_thumbnail(
-        self, image: DatabaseImage, width: int, height: int, format: str
-    ):
-        if image.folder_path is None:
-            raise ValueError("No image files found.")
-        if image.processed:
-            with WsiDicom.open(image.folder_path) as wsi:
-                thumbnail = wsi.read_thumbnail((width, height))
+    def _view(self, image_uid: UUID, view: Callable[[ImageToView], Viewed]) -> Viewed:
+        """View the image as it was read within the last seconds, and, where
+        its files are not there, as it is read now: once, and only where it has
+        moved since."""
+        image = self._existing_image(image_uid)
+        try:
+            return view(image)
+        except MISSING_FILES as exception:
+            with self._images_lock:
+                self._images.pop(image_uid, None)
+            now = self._image(image_uid)
+            if now is None:
+                raise ValueError(f"Image with UID {image_uid} not found.") from (
+                    exception
+                )
+            if now.folder_path == image.folder_path:
+                raise ValueError(
+                    f"The files of image {image_uid} are not there."
+                ) from exception
+        try:
+            return view(now)
+        except MISSING_FILES as exception:
+            raise ValueError(
+                f"The files of image {image_uid} are not there."
+            ) from exception
 
-        else:
-            with WsiDicomizer.open(
-                Path(image.folder_path).joinpath(next(iter(image.files)).filename)
-            ) as wsi:
-                thumbnail = wsi.read_thumbnail((width, height))
-        with io.BytesIO() as output:
-            thumbnail.save(output, format)
-            return output.getvalue()
+    def _image(self, image_uid: UUID) -> ImageToView | None:
+        """The image as read within the last seconds, or as read now. An image
+        not there is not kept, so that one added is viewed at once."""
+        now = monotonic()
+        with self._images_lock:
+            kept = self._images.get(image_uid)
+            if kept is not None and now - kept[0] < self._image_seconds:
+                return kept[1]
+        with self._database_service.get_session(commit=False) as session:
+            image = self._database_service.get_image_to_view(session, image_uid)
+        with self._images_lock:
+            # What has passed its time is dropped, so that what is kept is
+            # only what was viewed within the last seconds.
+            for uid in [
+                uid
+                for uid, (read_at, _) in self._images.items()
+                if now - read_at >= self._image_seconds
+            ]:
+                del self._images[uid]
+            if image is not None and self._image_seconds > 0:
+                self._images[image_uid] = (now, image)
+        return image
+
+    def _existing_image(self, image_uid: UUID) -> ImageToView:
+        image = self._image(image_uid)
+        if image is None:
+            raise ValueError(f"Image with UID {image_uid} not found.")
+        return image

@@ -26,6 +26,7 @@ import pytest
 from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import DatabaseBatch, DatabaseImage, DatabaseSample
 from slidetap.model import (
     BatchStatus,
@@ -179,6 +180,7 @@ def validation_service(
     return ValidationService(
         schema_service=schema_service,
         database_service=database_service,
+        application_policy=ApplicationPolicy(),
     )
 
 
@@ -653,3 +655,47 @@ class TestPending:
 
         # Assert
         assert not pending
+
+
+@pytest.mark.unittest
+class TestImportIsComplete:
+    """A batch holds all the import brings once its images are pre-processed:
+    in their own step, or, where they are pre-processed as they are
+    post-processed, once they are post-processed, as nothing reads their files
+    before."""
+
+    @pytest.mark.parametrize(
+        ["pre_processes_images_separately", "status", "complete"],
+        [
+            (True, BatchStatus.IMAGE_PRE_PROCESSING, False),
+            (True, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, True),
+            (False, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, False),
+            (False, BatchStatus.IMAGE_POST_PROCESSING, False),
+            (False, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE, True),
+        ],
+    )
+    def test_the_import_is_complete_as_the_images_are_pre_processed(
+        self,
+        decoy: Decoy,
+        schema_service: SchemaService,
+        database_service: DatabaseService,
+        pre_processes_images_separately: bool,
+        status: BatchStatus,
+        complete: bool,
+    ):
+        # Arrange
+        validation_service = ValidationService(
+            schema_service=schema_service,
+            database_service=database_service,
+            application_policy=ApplicationPolicy(
+                pre_processes_images_separately=pre_processes_images_separately
+            ),
+        )
+        batch = decoy.mock(cls=DatabaseBatch)
+        decoy.when(batch.status).then_return(status)
+
+        # Act
+        is_complete = validation_service.import_is_complete(batch)
+
+        # Assert
+        assert is_complete is complete

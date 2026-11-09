@@ -28,6 +28,7 @@ import pytest
 from decoy import Decoy, matchers
 from slidetap_example import ExampleSchema
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.model import (
     BatchCreate,
     BatchStatus,
@@ -92,7 +93,11 @@ def review_service(
 ) -> ReviewService:
     return ReviewService(
         schema_service,
-        ValidationService(schema_service, stored_database_service),
+        ValidationService(
+            schema_service,
+            stored_database_service,
+            application_policy=ApplicationPolicy(),
+        ),
         stored_database_service,
     )
 
@@ -125,6 +130,7 @@ def batch_service(
         stored_database_service,
         review_service,
         verification_service,
+        application_policy=ApplicationPolicy(),
     )
 
 

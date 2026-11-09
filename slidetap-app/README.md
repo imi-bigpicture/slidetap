@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
         schema_interface=YourSchemaInterface,
         metadata_export_interface=YourMetadataExportInterface,
         metadata_import_interface=YourMetadataImportInterface,
+        image_import_interface=YourImageImportInterface,
         mapper_injector=YourMapperInjector,
     )
     config_provider = ConfigProvider()
@@ -165,11 +166,11 @@ def make_task_app() -> TaskApp:
         schema_interface=YourSchemaInterface,
         metadata_export_interface=YourMetadataExportInterface,
         metadata_import_interface=YourMetadataImportInterface,
+        image_import_interface=YourImageImportInterface,
         mapper_injector=YourMapperInjector,
     )
     task_provider = TaskAppProvider(
         image_export_interface=YourImageExportInterface,
-        image_import_interface=YourImageImportInterface,
     )
     app_provider = ProcrastinateAppProvider()
     config_provider = ConfigProvider()
@@ -215,6 +216,7 @@ def create_container() -> Container:
         schema_interface=YourSchemaInterface,
         metadata_export_interface=YourMetadataExportInterface,
         metadata_import_interface=YourMetadataImportInterface,
+        image_import_interface=YourImageImportInterface,
         mapper_injector=YourMapperInjector,
     )
     return make_container(base_provider, ConfigProvider())
@@ -256,6 +258,8 @@ variables:
 - SLIDETAP_CONFIG_FILE: Path to the config.yaml holding the rest of the settings.
 - SLIDETAP_SECRET_KEY: The secret key to sign access tokens with, at least 32 bytes long. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 - SLIDETAP_STORAGE: Path to location where to store data.
+- SLIDETAP_DOWNLOAD: Path to download images to before they are converted, if not `download` under `SLIDETAP_STORAGE`. Can be on a local disk; the web app and every worker need to reach the same folder.
+- SLIDETAP_PROCESSING: Path to convert images in before they are moved to the outbox, if not `processing` under `SLIDETAP_STORAGE`. Can be on a local disk, as `SLIDETAP_DOWNLOAD`.
 - SLIDETAP_DBURI: URI for database storage, which also holds the task queue.
 - SLIDETAP_CORS_ORIGINS: Origins the front end is served from, if it is not served from the same origin as the API.
 - SLIDETAP_MAPPING_FILE: Path to a mapping file to load, if any.

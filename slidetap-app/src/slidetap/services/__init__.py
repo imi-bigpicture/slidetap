@@ -19,6 +19,7 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.dataset_service import DatasetService
 from slidetap.services.file_operations import FileOperations
 from slidetap.services.image_service import ImageCache, ImageService
+from slidetap.services.item_grouping_service import ItemGroupingService
 from slidetap.services.item_service import ItemService
 from slidetap.services.mapper_service import (
     MapperCache,
@@ -46,6 +47,7 @@ __all__ = [
     "FileOperations",
     "ImageCache",
     "ImageService",
+    "ItemGroupingService",
     "ItemService",
     "ReviewService",
     "MapperInjectorInterface",

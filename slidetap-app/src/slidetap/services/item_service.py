@@ -18,7 +18,7 @@ import logging
 import re
 import uuid
 from collections import deque
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import chain
@@ -1639,6 +1639,7 @@ class ItemService:
         validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
@@ -1659,6 +1660,7 @@ class ItemService:
                 review_status,
                 status_filter,
                 load_relations=True,
+                uids=uids,
             )
 
             # Said on the row rather than worked out again in the table: the
@@ -1725,6 +1727,7 @@ class ItemService:
         validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
+        uids: Collection[UUID] | None = None,
     ) -> int:
         with self._database_service.get_session() as session:
             root = self._schema_service.root_of_dataset(dataset_uid, session)
@@ -1747,6 +1750,7 @@ class ItemService:
                     root, item_schema
                 ),
                 status_filter=status_filter,
+                uids=uids,
             )
 
     def select_item(
@@ -1974,11 +1978,16 @@ class ItemService:
     def pseudonymize_identifiers(
         self, dataset_uid: UUID, session: Session | None = None
     ) -> int:
-        """Overwrite the identifier of every item that has a pseudonym with it.
+        """Overwrite the identifier of every item that has a pseudonym with it,
+        and clear the external identifier of every item in the dataset.
 
         The opposite of :py:meth:`clear_pseudonyms`. An item without a
-        pseudonym, or already known by it, is left alone and not counted.
-        There is no way back.
+        pseudonym, or already known by it, keeps its identifier and is not
+        counted. The external identifier, such as the id of an image where it
+        was imported from, is cleared on every item, as it leads back to what
+        the item was imported as. An item without one can no longer be read
+        from where it was imported from, such as an image viewed or downloaded
+        from there. There is no way back.
 
         Returns how many identifiers were replaced.
         """
@@ -2009,6 +2018,8 @@ class ItemService:
                     )
                 item.identifier = pseudonym
                 replaced += 1
+            for item in items:
+                item.external_identifier = None
             return replaced
 
     def private_attribute_summary(
@@ -2352,13 +2363,37 @@ class ItemService:
         """Swap a single attribute value between two existing items.
 
         ``attribute_tag`` may be a top-level tag or a compound
-        ``parent.child`` tag pointing at an ObjectAttribute child.
+        ``parent.child`` tag pointing at an ObjectAttribute child. See
+        :py:meth:`move_attribute_value` for a place inside a list.
 
         Only swaps: an item to swap with has to exist already. Creating one
         here used to be supported, but it produced an item with none of the
         source's other attributes — for a diagnosis, everything except the code
         being dragged. Moving the whole item to the other parent is what that
         case actually wants, so use :py:meth:`move_to_parent` for it.
+        """
+        path = attribute_tag.split(".")
+        self.move_attribute_value(
+            source_item_uid, path, target_item_uid, path, session=session
+        )
+
+    def move_attribute_value(
+        self,
+        source_item_uid: UUID,
+        source_path: Sequence[str | int],
+        target_item_uid: UUID,
+        target_path: Sequence[str | int],
+        session: Session | None = None,
+    ) -> None:
+        """Move the value at a place on an item to a place on an existing item,
+        the same one or another: swapped with the value there, or, where there
+        is none, such as past the last of a list, moved there.
+
+        A place is the tag of an attribute of the item, then the tags and list
+        positions down to the value, such as ``["statement", "diagnoses", 2]``.
+        Both places hold attributes of the same schema; a whole attribute of
+        the item is swapped only with the same attribute of an item of the
+        same schema. See :py:meth:`AttributeService.move_attribute_value`.
         """
         with self._database_service.get_session(session) as session:
             source = self._database_service.get_item(session, source_item_uid)
@@ -2369,29 +2404,34 @@ class ItemService:
                 raise ValueError(f"Target item {target_item_uid} not found")
             self._schema_service.assert_can_change(source, session)
             self._schema_service.assert_can_change(target, session)
-            if target.schema_uid != source.schema_uid:
+            if (
+                len(source_path) == 1
+                and len(target_path) == 1
+                and target.schema_uid != source.schema_uid
+            ):
                 raise ValueError(
                     f"Cannot swap attribute between items of different "
                     f"schemas (source {source.schema_uid}, target "
                     f"{target.schema_uid})"
                 )
+            items = [source] if source is target else [source, target]
 
-            # Read before the swap, and for both ends: a value moved off one
+            # Read before the move, and for both ends: a value moved off one
             # item and onto the other can make the one it lands on valid and
             # leave the one it left invalid, which is the whole point of moving
             # it. Whichever way it goes, both have to say so.
             was_valid = {
                 item.uid: self._validation_service.item_is_valid_for_now(item, session)
-                for item in (source, target)
+                for item in items
             }
 
-            self._attribute_service.swap_attribute_value(
-                source, target, attribute_tag, session
+            self._attribute_service.move_attribute_value(
+                source, source_path, target, target_path, session
             )
 
-            self._validation_service.validate_item_attributes(source, session)
-            self._validation_service.validate_item_attributes(target, session)
-            for item in (source, target):
+            for item in items:
+                self._validation_service.validate_item_attributes(item, session)
+            for item in items:
                 self._review_service.item_validity_changed(
                     item.uid,
                     was_valid[item.uid],
@@ -2792,6 +2832,7 @@ class ItemService:
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseItem]:
         root = self._schema_service.root_of_dataset(dataset_uid, session)
         item_schema = root.items.get(item_schema_uid)
@@ -2821,6 +2862,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ImageSchema):
@@ -2841,6 +2883,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 status_filter=status_filter,
                 load_relations=load_relations,
             )
@@ -2862,6 +2905,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ObservationSchema):
@@ -2882,6 +2926,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 load_relations=load_relations,
             )
         else:

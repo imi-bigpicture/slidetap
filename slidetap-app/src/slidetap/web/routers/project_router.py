@@ -24,11 +24,12 @@ from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from slidetap.model import (
     AnyAttribute,
     AttributeMigrationIssue,
+    ItemGrouping,
     NotAllowedActionError,
     Project,
     ProjectActions,
@@ -38,6 +39,7 @@ from slidetap.model import (
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
+    ItemGroupingService,
     ItemService,
     MigrationService,
     ProjectService,
@@ -328,11 +330,14 @@ def pseudonymize_identifiers(
     item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
-    """Overwrite the identifier of every item that has a pseudonym with it.
+    """Overwrite the identifier of every item that has a pseudonym with it,
+    and clear the external identifier of every item.
 
     The opposite of ``clear_pseudonyms``: the link is cut on the side of the
-    identifiers instead. Only for a completed, exported or failed project, as
-    the other two pseudonym operations are.
+    identifiers instead. The external identifier, such as an image's id where
+    it was imported from, leads back there too, so it goes as well. Only for a
+    completed, exported or failed project, as the other two pseudonym
+    operations are.
 
     Parameters
     ----------
@@ -782,3 +787,27 @@ def get_project_validation(
     validation = validation_service.get_validation_for_project(project_uid)
     logger.debug(f"Validation of project {project_uid}: {validation}")
     return validation
+
+
+@project_router.get("/project/{project_uid}/groups")
+def get_project_groups(
+    project_uid: UUID,
+    item_grouping_service: FromDishka[ItemGroupingService],
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+) -> ItemGrouping | None:
+    """Get the groups the selected items of a project fall into by what they
+    share, smallest first.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project to group the items of.
+    batch_uid: UUID | None
+        Only the items of this batch, when given.
+
+    Returns
+    ----------
+    ItemGrouping | None
+        The groups, or None where the project's root groups nothing.
+    """
+    return item_grouping_service.get_grouping(project_uid, batch_uid)

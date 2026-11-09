@@ -647,6 +647,7 @@ def get_items_get(
         table_request.included,
         table_request.validity,
         status_filter=table_request.status_filter,
+        uids=table_request.uids,
     )
     count = item_service.get_count_for_schema(
         item_schema_uid,
@@ -660,6 +661,7 @@ def get_items_get(
         table_request.included,
         table_request.validity,
         status_filter=table_request.status_filter,
+        uids=table_request.uids,
     )
     return ItemsResponse(items=list(items), count=count)
 
@@ -884,16 +886,19 @@ def move_attribute(
     item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> None:
-    """Swap a single attribute value between two existing items."""
+    """Move an attribute value to a place on an existing item, the same one or
+    another, swapping it with the value there where there is one."""
+    source_path, target_path = request.paths
     logger.debug(
-        f"Moving attribute '{request.attribute_tag}' from item "
-        f"{request.source_item_uid} to {request.target_item_uid}"
+        f"Moving attribute {source_path} from item {request.source_item_uid} to "
+        f"{target_path} of {request.target_item_uid}"
     )
     try:
-        item_service.move_attribute(
+        item_service.move_attribute_value(
             request.source_item_uid,
-            request.attribute_tag,
-            target_item_uid=request.target_item_uid,
+            source_path,
+            request.target_item_uid,
+            target_path,
         )
     except ValueError as exception:
         logger.error(

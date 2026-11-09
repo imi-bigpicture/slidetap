@@ -21,6 +21,7 @@ import {
   Downloading,
   Flag,
   Grading,
+  GroupWork,
   HourglassBottom,
   HourglassEmpty,
   HourglassFull,
@@ -43,6 +44,7 @@ import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
 import Curate from 'src/components/project/curate'
+import Groups from 'src/components/project/groups'
 import Unmapped from 'src/components/project/unmapped'
 import Review from 'src/components/project/review'
 import HierarchyPage from 'src/pages/hierarchy'
@@ -56,11 +58,16 @@ import Verify from 'src/components/project/verify'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
 import { assertExtensionPath, useExtensions } from 'src/extensions'
 import { Batch } from 'src/models/batch'
-import { BatchStatus, BatchStatusStrings } from 'src/models/batch_status'
+import {
+  BatchStatus,
+  BatchStatusStrings,
+  batchIsReadyToProcess,
+} from 'src/models/batch_status'
 import { Dataset } from 'src/models/dataset'
 import { Project } from 'src/models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
 import { rootDisplayName } from 'src/models/schema/root_schema'
+import { usePreProcessImages } from 'src/hooks/use_pre_process_images'
 import batchApi from 'src/services/api/batch.api'
 import datasetApi from 'src/services/api/dataset_api'
 import itemApi from 'src/services/api/item_api'
@@ -105,9 +112,15 @@ function batchIsImageEditable(batchStatus?: BatchStatus): boolean {
   )
 }
 
-function batchIsProcessing(batchStatus?: BatchStatus): boolean {
+/** Whether a batch is at the conversion of its images: ready to start it, or
+ * converting, or converted. Where the server has no pre-processing step, a batch
+ * is ready as soon as its metadata is searched. */
+function batchIsProcessing(
+  batchStatus: BatchStatus | undefined,
+  preProcessImages: boolean,
+): boolean {
   return (
-    batchStatus === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ||
+    batchIsReadyToProcess(batchStatus, preProcessImages) ||
     batchStatus === BatchStatus.IMAGE_POST_PROCESSING ||
     batchStatus === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
   )
@@ -118,8 +131,14 @@ function batchIsProcessing(batchStatus?: BatchStatus): boolean {
  * folded into `batchIsProcessing` itself, whose other callers (Curate,
  * Review) are for changing the batch rather than looking at its images, and
  * stay closed once it is completed. */
-function batchIsProcessingOrCompleted(batchStatus?: BatchStatus): boolean {
-  return batchIsProcessing(batchStatus) || batchStatus === BatchStatus.COMPLETED
+function batchIsProcessingOrCompleted(
+  batchStatus: BatchStatus | undefined,
+  preProcessImages: boolean,
+): boolean {
+  return (
+    batchIsProcessing(batchStatus, preProcessImages) ||
+    batchStatus === BatchStatus.COMPLETED
+  )
 }
 
 function batchIsProcessed(batchStatus?: BatchStatus): boolean {
@@ -231,6 +250,7 @@ export default function DisplayProject({
   })
   const itemIdentifier = itemQuery.data?.identifier
   const rootSchema = useSchemaContext()
+  const preProcessImages = usePreProcessImages()
   // Whether the project can be changed: its root schema is editable, with the
   // project's state applied.
   const actions = useProjectActions()
@@ -414,6 +434,18 @@ export default function DisplayProject({
         icon: <QuestionMark />,
         description: 'Values in the project with no mapping',
       },
+      // Only where the schema groups the items: without a policy there is
+      // nothing to count.
+      ...(rootSchema.itemGrouping != null
+        ? [
+            {
+              name: rootSchema.itemGrouping.displayName,
+              path: 'groups_dataset',
+              icon: <GroupWork />,
+              description: 'Groups of items in the project, and those too small',
+            },
+          ]
+        : []),
       {
         name: 'Export',
         path: 'export',
@@ -465,7 +497,7 @@ export default function DisplayProject({
         path: 'curate_batch',
         enabled:
           batchIsImageEditable(batch.status) ||
-          batchIsProcessing(batch.status) ||
+          batchIsProcessing(batch.status, preProcessImages) ||
           batchIsMetadataEditable(batch.status),
         icon: <RateReview />,
         description: 'Curate items in batch',
@@ -475,7 +507,7 @@ export default function DisplayProject({
         path: 'review_batch',
         enabled:
           batchIsImageEditable(batch.status) ||
-          batchIsProcessing(batch.status) ||
+          batchIsProcessing(batch.status, preProcessImages) ||
           batchIsMetadataEditable(batch.status),
         icon: <Flag />,
         description: 'Review items in batch flagged for review',
@@ -486,24 +518,41 @@ export default function DisplayProject({
         icon: <QuestionMark />,
         description: 'Values in the batch with no mapping',
       },
-      {
-        name: 'Pre-process',
-        path: 'pre_process_images',
-        enabled: actions.edit && batchIsPreProcessing(batch.status),
-        icon:
-          batch.status === BatchStatus.IMAGE_PRE_PROCESSING ? (
-            <Downloading />
-          ) : batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
-            <DownloadDone />
-          ) : (
-            <Download />
-          ),
-        description: 'Pre-process images in batch',
-      },
+      ...(rootSchema.itemGrouping != null
+        ? [
+            {
+              name: rootSchema.itemGrouping.displayName,
+              path: 'groups_batch',
+              icon: <GroupWork />,
+              description: 'Groups of items in the batch, and those too small',
+            },
+          ]
+        : []),
+      // Only where the server has the step: where it does not, the images are
+      // downloaded as they are converted, and the batch never stops here.
+      ...(preProcessImages
+        ? [
+            {
+              name: 'Pre-process',
+              path: 'pre_process_images',
+              enabled: actions.edit && batchIsPreProcessing(batch.status),
+              icon:
+                batch.status === BatchStatus.IMAGE_PRE_PROCESSING ? (
+                  <Downloading />
+                ) : batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
+                  <DownloadDone />
+                ) : (
+                  <Download />
+                ),
+              description: 'Pre-process images in batch',
+            },
+          ]
+        : []),
       {
         name: 'Post-process',
         path: 'process_images',
-        enabled: actions.edit && batchIsProcessingOrCompleted(batch.status),
+        enabled:
+          actions.edit && batchIsProcessingOrCompleted(batch.status, preProcessImages),
         icon:
           batch.status === BatchStatus.IMAGE_POST_PROCESSING ? (
             <HourglassBottom />
@@ -521,7 +570,7 @@ export default function DisplayProject({
             {
               name: 'Verify',
               path: 'verify',
-              enabled: batchIsProcessingOrCompleted(batch.status),
+              enabled: batchIsProcessingOrCompleted(batch.status, preProcessImages),
               icon: <Grading />,
               description: 'Verify a random sample of the batch',
             },
@@ -668,6 +717,16 @@ export default function DisplayProject({
       element={<Unmapped project={project} batch={batch} />}
     />,
     <Route
+      key="groups_dataset"
+      path="/groups_dataset"
+      element={<Groups project={project} />}
+    />,
+    <Route
+      key="groups_batch"
+      path="/groups_batch"
+      element={<Groups project={project} batch={batch} />}
+    />,
+    <Route
       key="curate_dataset"
       path="/curate_dataset"
       element={
@@ -709,11 +768,17 @@ export default function DisplayProject({
         />
       }
     />,
-    <Route
-      key="pre_process_images"
-      path="/pre_process_images"
-      element={<PreProcessImages project={project} batch={batch} />}
-    />,
+    // Not routed where the server has no pre-processing step, so that an address
+    // kept from before does not open a start the server refuses.
+    ...(preProcessImages
+      ? [
+          <Route
+            key="pre_process_images"
+            path="/pre_process_images"
+            element={<PreProcessImages project={project} batch={batch} />}
+          />,
+        ]
+      : []),
 
     <Route
       key="process_images"

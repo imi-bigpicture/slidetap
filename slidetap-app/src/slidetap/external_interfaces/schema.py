@@ -15,6 +15,7 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Sequence
 
+from slidetap.external_interfaces.item_grouping import ItemGrouper
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import RootSchema
 
@@ -67,4 +68,10 @@ class SchemaInterface(metaclass=ABCMeta):
     def migration_from(self, root: RootSchema) -> SchemaMigration | None:
         """The migration of the projects on a previous root to the root of new
         projects, or None where they stay view only."""
+        return None
+
+    def item_grouper_of(self, root: RootSchema) -> ItemGrouper | None:
+        """How the items of a root with an `ItemGroupingPolicy` are grouped,
+        or None where they are not. Asked once for each such root, when the
+        schema service is created."""
         return None

@@ -36,6 +36,7 @@ from procrastinate.jobs import Job
 from slidetap_example import ExampleSchema
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
@@ -49,7 +50,13 @@ from slidetap.external_interfaces import (
     TransientTaskError,
 )
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
-from slidetap.model import BatchStatus, Image, ImageFile, ImageFormat, ImageStatus
+from slidetap.model import (
+    BatchStatus,
+    Image,
+    ImageFile,
+    ImageFormat,
+    ImageStatus,
+)
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -186,12 +193,19 @@ def batch_service(
         database_service=stored_database_service,
         review_service=decoy.mock(cls=ReviewService),
         verification_service=decoy.mock(cls=VerificationService),
+        application_policy=ApplicationPolicy(),
     )
 
 
 @pytest.fixture()
 def storage_service(decoy: Decoy) -> StorageService:
     return decoy.mock(cls=StorageService)
+
+
+PRE_PROCESSING = ApplicationPolicy()
+NO_PRE_PROCESSING = ApplicationPolicy(pre_processes_images_separately=False)
+"""The pipeline of an application without an image pre-processor, or whose
+pre-processor runs on post-processing."""
 
 
 def _download_and_pre_process(
@@ -203,12 +217,14 @@ def _download_and_pre_process(
     metadata_import_interface: MetadataImportInterface,
     will_retry: Callable[[BaseException], bool],
     review_service: ReviewService,
+    application_policy: ApplicationPolicy = PRE_PROCESSING,
 ) -> None:
     download_and_pre_process_image.func.__wrapped__(  # type: ignore[attr-defined]
         image_uid=image_uid,
         task_id="1",
         image_import_interface=image_import_interface,
         metadata_import_interface=metadata_import_interface,
+        application_policy=application_policy,
         database_service=database_service,
         review_service=review_service,
         batch_service=batch_service,
@@ -226,15 +242,27 @@ def _post_process(
     storage_service: StorageService,
     image_export_interface: ImageExportInterface,
     will_retry: Callable[[BaseException], bool],
+    image_import_interface: ImageImportInterface | None = None,
+    review_service: ReviewService | None = None,
+    attribute_service: AttributeService | None = None,
+    application_policy: ApplicationPolicy = PRE_PROCESSING,
+    metadata_import_interface: MetadataImportInterface | None = None,
 ) -> None:
+    """Run the task. What only downloading for the conversion uses, where the
+    images are not pre-processed, is left out by the tests where they are."""
     post_process_image.func.__wrapped__(  # type: ignore[attr-defined]
         image_uid=image_uid,
         task_id="1",
         image_export_interface=image_export_interface,
+        image_import_interface=image_import_interface,
         database_service=database_service,
         batch_service=batch_service,
         storage_service=storage_service,
         schema_service=schema_service,
+        review_service=review_service,
+        attribute_service=attribute_service,
+        application_policy=application_policy,
+        metadata_import_interface=metadata_import_interface,
         will_retry=will_retry,
     )
 
@@ -353,9 +381,7 @@ class TestDownloadAndPreProcessImage:
             sessions_while_working.append(len(open_sessions))
             return tmp_path, []
 
-        def import_image_metadata(
-            image: Image, batch: Any, project: Any, task_id: str
-        ) -> Image:
+        def pre_process(image: Image, batch: Any, project: Any, task_id: str) -> Image:
             sessions_while_working.append(len(open_sessions))
             raise ValueError("Unreadable file")
 
@@ -368,7 +394,7 @@ class TestDownloadAndPreProcessImage:
             metadata_import_interface.import_image_metadata(
                 Anything(), Anything(), Anything(), Anything()
             )
-        ).then_do(import_image_metadata)
+        ).then_do(pre_process)
 
         # Act
         _download_and_pre_process(
@@ -460,6 +486,44 @@ class TestDownloadAndPreProcessImage:
         )
 
         # Assert
+        decoy.verify(image_import_interface.download(Anything(), Anything()), times=0)
+
+    def test_an_image_is_not_pre_processed_where_that_is_left_to_post_processing(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+    ):
+        """As a task queued before the application moved its pre-processing
+        to post-processing can be."""
+        # Arrange
+        stored = _add_batch(
+            stored_database_service, schema, BatchStatus.IMAGE_PRE_PROCESSING
+        )
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        image_import_interface = decoy.mock(cls=ImageImportInterface)
+
+        # Act
+        _download_and_pre_process(
+            image_uid,
+            stored_database_service,
+            batch_service,
+            schema_service,
+            image_import_interface,
+            decoy.mock(cls=MetadataImportInterface),
+            _not_retried,
+            decoy.mock(cls=ReviewService),
+            application_policy=NO_PRE_PROCESSING,
+        )
+
+        # Assert
+        assert (
+            _image_status(stored_database_service, image_uid) == ImageStatus.NOT_STARTED
+        )
         decoy.verify(image_import_interface.download(Anything(), Anything()), times=0)
 
 
@@ -613,6 +677,467 @@ class TestPostProcessImage:
         )
 
 
+"""The pipeline of an application without an image pre-processor."""
+
+
+def _converted(tmp_path: Path) -> Callable[..., Image]:
+    """An export that converts the image into the processing folder."""
+
+    def export(image: Image, batch: Any, project: Any, task_id: str) -> Image:
+        # A copy, so that what the export was given stays as it was given.
+        return image.model_copy(
+            update={
+                "folder_path": str(tmp_path.joinpath("processing")),
+                "files": [ImageFile(uid=uuid4(), filename="slide.dcm")],
+            }
+        )
+
+    return export
+
+
+@pytest.mark.integration
+class TestPostProcessImageNotPreProcessed:
+    """An image not pre-processed, as where images are not pre-processed before
+    curation, is pre-processed as it is post-processed: downloaded if it is
+    not, and its metadata imported, before it is converted."""
+
+    @pytest.fixture()
+    def image_import_interface(
+        self, decoy: Decoy, tmp_path: Path
+    ) -> ImageImportInterface:
+        image_import_interface = decoy.mock(cls=ImageImportInterface)
+        download = tmp_path.joinpath("download")
+        decoy.when(image_import_interface.download(Anything(), Anything())).then_return(
+            (download, [download.joinpath("slide.svs")])
+        )
+        return image_import_interface
+
+    @pytest.fixture()
+    def metadata_import_interface(self, decoy: Decoy) -> MetadataImportInterface:
+        metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
+        decoy.when(
+            metadata_import_interface.import_image_metadata(
+                Anything(), Anything(), Anything(), "1"
+            )
+        ).then_do(
+            lambda image, batch, project, task_id: image.model_copy(
+                update={"source_metadata": "read from the file"}
+            )
+        )
+        return metadata_import_interface
+
+    @pytest.fixture()
+    def image_export_interface(
+        self, decoy: Decoy, tmp_path: Path
+    ) -> ImageExportInterface:
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+        decoy.when(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            )
+        ).then_do(_converted(tmp_path))
+        return image_export_interface
+
+    @pytest.fixture()
+    def stored(
+        self, stored_database_service: DatabaseService, schema: ExampleSchema
+    ) -> StoredBatch:
+        return _add_batch(
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
+        )
+
+    @pytest.fixture()
+    def post_process(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        storage_service: StorageService,
+        image_import_interface: ImageImportInterface,
+        metadata_import_interface: MetadataImportInterface,
+        image_export_interface: ImageExportInterface,
+    ) -> Callable[..., None]:
+        """Post-process an image as an application whose images are not
+        pre-processed separately, unless given another pipeline."""
+
+        def post_process(image_uid: UUID, **overrides: Any) -> None:
+            arguments: dict[str, Any] = {
+                "image_import_interface": image_import_interface,
+                "metadata_import_interface": metadata_import_interface,
+                "application_policy": NO_PRE_PROCESSING,
+                "review_service": decoy.mock(cls=ReviewService),
+                "attribute_service": decoy.mock(cls=AttributeService),
+                "image_export_interface": image_export_interface,
+                "will_retry": _not_retried,
+            }
+            arguments.update(overrides)
+            _post_process(
+                image_uid,
+                stored_database_service,
+                batch_service,
+                schema_service,
+                storage_service,
+                arguments.pop("image_export_interface"),
+                arguments.pop("will_retry"),
+                **arguments,
+            )
+
+        return post_process
+
+    def test_an_image_not_started_is_downloaded_imported_and_converted(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        storage_service: StorageService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        attribute_service = decoy.mock(cls=AttributeService)
+
+        # Act
+        post_process(image_uid, attribute_service=attribute_service)
+
+        # Assert
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
+            assert image.status == ImageStatus.POST_PROCESSED
+            assert image.folder_path == str(tmp_path.joinpath("processing"))
+            assert image.source_metadata == "read from the file"
+        assert (
+            _batch_status(stored_database_service, stored.batch_uid)
+            == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
+        decoy.verify(
+            attribute_service.update_for_item(Anything(), Anything(), Anything()),
+            times=1,
+        )
+        decoy.verify(
+            storage_service.cleanup_download_image_path(Anything(), Anything()),
+            times=1,
+        )
+
+    def test_the_metadata_is_imported_from_the_download_before_conversion(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        read = tmp_path.joinpath("read")
+        metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
+        decoy.when(
+            metadata_import_interface.import_image_metadata(
+                Anything(), Anything(), Anything(), "1"
+            )
+        ).then_do(
+            lambda image, batch, project, task_id: image.model_copy(
+                update={
+                    "folder_path": str(read),
+                    "files": [ImageFile(uid=uuid4(), filename="slide.svs")],
+                    "source_metadata": "read by the import",
+                }
+            )
+        )
+        exported: list[Image] = []
+        convert = _converted(tmp_path)
+
+        def export(image: Image, batch: Any, project: Any, task_id: str) -> Image:
+            exported.append(image)
+            return convert(image, batch, project, task_id)
+
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+        decoy.when(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            )
+        ).then_do(export)
+
+        # Act
+        post_process(
+            image_uid,
+            metadata_import_interface=metadata_import_interface,
+            image_export_interface=image_export_interface,
+        )
+
+        # Assert
+        assert len(exported) == 1
+        assert exported[0].folder_path == str(read)
+        assert exported[0].source_metadata == "read by the import"
+
+    def test_a_downloaded_image_is_imported_and_converted(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        image_import_interface: ImageImportInterface,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        """As one left downloaded by pre-processing before the application
+        stopped pre-processing images separately."""
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service,
+            schema,
+            stored,
+            ImageStatus.DOWNLOADED,
+            folder_path=str(tmp_path.joinpath("download")),
+        )
+
+        # Act
+        post_process(image_uid)
+
+        # Assert
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
+            assert image.status == ImageStatus.POST_PROCESSED
+            assert image.source_metadata == "read from the file"
+        decoy.verify(image_import_interface.download(Anything(), Anything()), times=0)
+
+    def test_an_image_not_pre_processed_is_also_where_images_are_separately(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        storage_service: StorageService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+    ):
+        """As one of a batch post-processed before the application started
+        pre-processing images separately. Its download is kept, as any is
+        where images are pre-processed separately."""
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+
+        # Act
+        post_process(image_uid, application_policy=ApplicationPolicy())
+
+        # Assert
+        assert (
+            _image_status(stored_database_service, image_uid)
+            == ImageStatus.POST_PROCESSED
+        )
+        decoy.verify(
+            storage_service.cleanup_download_image_path(Anything(), Anything()),
+            times=0,
+        )
+
+    def test_a_failure_to_import_the_metadata_settles_the_image(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+    ):
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
+        decoy.when(
+            metadata_import_interface.import_image_metadata(
+                Anything(), Anything(), Anything(), "1"
+            )
+        ).then_raise(ValueError("Not a whole slide image"))
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+
+        # Act
+        post_process(
+            image_uid,
+            metadata_import_interface=metadata_import_interface,
+            image_export_interface=image_export_interface,
+        )
+
+        # Assert
+        assert (
+            _image_status(stored_database_service, image_uid)
+            == ImageStatus.PRE_PROCESSING_FAILED
+        )
+        assert (
+            _batch_status(stored_database_service, stored.batch_uid)
+            == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
+        decoy.verify(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            ),
+            times=0,
+        )
+
+    def test_a_failed_download_settles_the_image(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+    ):
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        image_import_interface = decoy.mock(cls=ImageImportInterface)
+        decoy.when(image_import_interface.download(Anything(), Anything())).then_raise(
+            ValueError("Slide not in PACS")
+        )
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+
+        # Act
+        post_process(
+            image_uid,
+            image_import_interface=image_import_interface,
+            image_export_interface=image_export_interface,
+        )
+
+        # Assert
+        assert (
+            _image_status(stored_database_service, image_uid)
+            == ImageStatus.DOWNLOADING_FAILED
+        )
+        assert (
+            _batch_status(stored_database_service, stored.batch_uid)
+            == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
+        decoy.verify(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            ),
+            times=0,
+        )
+
+    def test_a_failed_conversion_keeps_the_download_for_a_retry(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        storage_service: StorageService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+        decoy.when(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            )
+        ).then_raise(ValueError("Not a whole slide image"))
+
+        # Act
+        post_process(image_uid, image_export_interface=image_export_interface)
+
+        # Assert
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
+            assert image.status == ImageStatus.POST_PROCESSING_FAILED
+            assert image.folder_path == str(tmp_path.joinpath("download"))
+        assert (
+            _batch_status(stored_database_service, stored.batch_uid)
+            == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
+        decoy.verify(
+            storage_service.cleanup_download_image_path(Anything(), Anything()),
+            times=0,
+        )
+
+    def test_a_retried_conversion_failure_sets_the_image_back_as_pre_processed(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.NOT_STARTED
+        )
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+        decoy.when(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            )
+        ).then_raise(TransientTaskError("Processing share unreachable"))
+
+        # Act & Assert
+        with pytest.raises(TransientTaskError):
+            post_process(
+                image_uid,
+                image_export_interface=image_export_interface,
+                will_retry=_retried,
+            )
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
+            assert image.status == ImageStatus.PRE_PROCESSED
+            assert image.folder_path == str(tmp_path.joinpath("download"))
+
+    def test_an_image_pre_processed_before_is_converted_from_its_files(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        storage_service: StorageService,
+        image_import_interface: ImageImportInterface,
+        post_process: Callable[..., None],
+        stored: StoredBatch,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        """An image pre-processed before the application stopped pre-processing
+        images separately is not downloaded or imported again, and its
+        download is removed once it is converted, as any is."""
+        # Arrange
+        image_uid = _add_image(
+            stored_database_service,
+            schema,
+            stored,
+            ImageStatus.PRE_PROCESSED,
+            folder_path=str(tmp_path.joinpath("download")),
+        )
+
+        metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
+
+        # Act
+        post_process(image_uid, metadata_import_interface=metadata_import_interface)
+
+        # Assert
+        assert (
+            _image_status(stored_database_service, image_uid)
+            == ImageStatus.POST_PROCESSED
+        )
+        decoy.verify(image_import_interface.download(Anything(), Anything()), times=0)
+        decoy.verify(
+            metadata_import_interface.import_image_metadata(
+                Anything(), Anything(), Anything(), "1"
+            ),
+            times=0,
+        )
+        decoy.verify(
+            storage_service.cleanup_download_image_path(Anything(), Anything()),
+            times=1,
+        )
+
+
 @pytest.mark.integration
 class TestStoringProgress:
     def test_counts_what_storing_takes_and_where_it_is(
@@ -632,6 +1157,7 @@ class TestStoringProgress:
             database_service=stored_database_service,
             review_service=decoy.mock(cls=ReviewService),
             verification_service=decoy.mock(cls=VerificationService),
+            application_policy=ApplicationPolicy(),
         )
         stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
         for index, status in enumerate(

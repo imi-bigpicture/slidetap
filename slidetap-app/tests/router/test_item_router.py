@@ -773,6 +773,7 @@ class TestSlideTapItemRouter:
                 None,
                 None,
                 status_filter=None,
+                uids=None,
             )
         ).then_return([sample])
         decoy.when(
@@ -788,6 +789,7 @@ class TestSlideTapItemRouter:
                 None,
                 None,
                 status_filter=None,
+                uids=None,
             )
         ).then_return(11)
 
@@ -1069,13 +1071,59 @@ class TestSlideTapItemRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         decoy.verify(
-            item_service.move_attribute(
+            item_service.move_attribute_value(
                 request.source_item_uid,
-                request.attribute_tag,
-                target_item_uid=request.target_item_uid,
+                ["stain"],
+                request.target_item_uid,
+                ["stain"],
             ),
             times=1,
         )
+
+    def test_an_entry_of_a_list_is_moved_by_its_path(
+        self, decoy: Decoy, test_client: TestClient, item_service: ItemService
+    ):
+        # Arrange
+        request = MoveAttributeRequest(
+            source_item_uid=uuid4(),
+            target_item_uid=uuid4(),
+            source_path=["statement", "diagnoses", 2],
+            target_path=["statement", "diagnoses", 0],
+        )
+
+        # Act
+        response = test_client.post(
+            "api/items/move-attribute",
+            json=request.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        decoy.verify(
+            item_service.move_attribute_value(
+                request.source_item_uid,
+                ["statement", "diagnoses", 2],
+                request.target_item_uid,
+                ["statement", "diagnoses", 0],
+            ),
+            times=1,
+        )
+
+    def test_a_move_with_both_a_tag_and_paths_is_refused(self, test_client: TestClient):
+        # Act
+        response = test_client.post(
+            "api/items/move-attribute",
+            json={
+                "sourceItemUid": str(uuid4()),
+                "targetItemUid": str(uuid4()),
+                "attributeTag": "stain",
+                "sourcePath": ["stain"],
+                "targetPath": ["stain"],
+            },
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
     def test_an_attribute_move_the_service_refuses_is_a_bad_request(
         self, decoy: Decoy, test_client: TestClient, item_service: ItemService
@@ -1085,10 +1133,11 @@ class TestSlideTapItemRouter:
             source_item_uid=uuid4(), attribute_tag="stain", target_item_uid=uuid4()
         )
         decoy.when(
-            item_service.move_attribute(
+            item_service.move_attribute_value(
                 request.source_item_uid,
-                request.attribute_tag,
-                target_item_uid=request.target_item_uid,
+                ["stain"],
+                request.target_item_uid,
+                ["stain"],
             )
         ).then_raise(ValueError("No such attribute"))
 

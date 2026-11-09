@@ -21,10 +21,7 @@ from procrastinate import App as TaskApp
 from procrastinate import PsycopgConnector
 
 from slidetap.config import TaskConfig
-from slidetap.external_interfaces import (
-    ImageExportInterface,
-    ImageImportInterface,
-)
+from slidetap.external_interfaces import ImageExportInterface
 from slidetap.task.tasks import slidetap_tasks
 
 
@@ -52,9 +49,7 @@ class ProcrastinateAppProvider(Provider):
 class TaskAppProvider(Provider):
     def __init__(
         self,
-        image_import_interface: Callable[..., ImageImportInterface],
         image_export_interface: Callable[..., ImageExportInterface],
     ):
         super().__init__(scope=Scope.APP)
-        self.provide(image_import_interface, provides=ImageImportInterface)
         self.provide(image_export_interface, provides=ImageExportInterface)

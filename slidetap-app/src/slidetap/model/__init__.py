@@ -32,6 +32,7 @@ from slidetap.model.attribute import (
     UnionAttribute,
     attribute_factory,
 )
+from slidetap.model.attribute_path import AttributePath
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.batch import Batch, BatchCreate, BatchStoringProgress
 from slidetap.model.batch_status import BatchStatus
@@ -50,6 +51,7 @@ from slidetap.model.export_notice import ExportNotice, ExportNoticeKind
 from slidetap.model.export_preview import ExportPreviewFile
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
+from slidetap.model.image_to_view import ImageToView
 from slidetap.model.item import (
     Annotation,
     AnyItem,
@@ -69,6 +71,15 @@ from slidetap.model.item import (
     Sample,
     SampleForImageRequest,
     item_factory,
+)
+from slidetap.model.item_grouping import (
+    IncompleteGroupedItem,
+    IncompleteItem,
+    ItemGroup,
+    ItemGrouping,
+    ItemGroups,
+    ItemGroupSummary,
+    ItemGroupValuePart,
 )
 from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_value_type import ItemValueType
@@ -132,6 +143,7 @@ from slidetap.model.schema.images_layout import (
     ImageOrder,
     ImagesLayout,
 )
+from slidetap.model.schema.item_grouping_policy import ItemGroupingPolicy
 from slidetap.model.schema.item_relation import (
     Cardinality,
     ImageToSampleRelation,
@@ -220,6 +232,7 @@ __all__ = [
     "AttributeFilter",
     "AttributeValueField",
     "ItemValidity",
+    "AttributePath",
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
@@ -263,6 +276,7 @@ __all__ = [
     "ImageGroup",
     "ImageSchema",
     "ImageStatus",
+    "ImageToView",
     "MetadataImportCompleteness",
     "ImageToSampleRelation",
     "Item",
@@ -330,6 +344,14 @@ __all__ = [
     "ProjectSchema",
     "ReviewLayout",
     "ReviewUnitSchema",
+    "IncompleteGroupedItem",
+    "IncompleteItem",
+    "ItemGroup",
+    "ItemGroupValuePart",
+    "ItemGrouping",
+    "ItemGroupingPolicy",
+    "ItemGroups",
+    "ItemGroupSummary",
     "NonValidItem",
     "ReviewTabLayout",
     "ProjectStatus",

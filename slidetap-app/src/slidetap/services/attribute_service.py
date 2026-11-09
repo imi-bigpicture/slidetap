@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 
 import logging
-from collections.abc import Callable, Iterable, Mapping, MutableMapping
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from typing import overload
 from uuid import UUID, uuid4
 
@@ -27,10 +27,10 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseProject,
 )
-from slidetap.database.attribute import DatabaseObjectAttribute
 from slidetap.model import (
     AnyAttribute,
     Attribute,
+    AttributePath,
     AttributeSchema,
     BooleanAttribute,
     BooleanAttributeSchema,
@@ -543,61 +543,143 @@ class AttributeService:
             return UnionAttribute(**base)
         raise TypeError(f"Unknown attribute schema type {type(schema).__name__}.")
 
-    def swap_attribute_value(
+    def move_attribute_value(
+        self,
+        source: DatabaseItem,
+        source_path: Sequence[str | int],
+        target: DatabaseItem,
+        target_path: Sequence[str | int],
+        session: Session,
+    ) -> None:
+        """Move the value at the end of a path on one item to the end of a path
+        on another, or on the same item.
+
+        A path on an item is the tag of an attribute of the item, then the tags
+        of the attributes in objects and the positions of the attributes in
+        lists it goes down through, such as ``["statement", "diagnoses", 2]``.
+
+        Where the target holds a value, the two are swapped. Where it holds none,
+        the value is moved there, leaving the source without it: an attribute
+        of an object left empty, or, past the last of a list, appended to it.
+        A value taken out of a list leaves no gap.
+
+        Both paths lead to attributes of the same schema, held by attributes of
+        the same schema, such as two entries of the same list on items of
+        different kinds. The values are moved whole, with what was mapped and
+        what is still to be mapped of them. An attribute held in another is
+        moved as an edit of what holds it, which keeps what was imported as it
+        came. See `AttributePath`.
+
+        Raises
+        ------
+        ValueError
+            If a path does not start with a tag of an attribute of its item,
+            goes through something that is not an object or a list, the source
+            holds no value, or the paths do not lead to the same kind of
+            attribute.
+        """
+        source_tag, source_attribute_path = AttributePath.from_item_path(source_path)
+        target_tag, target_attribute_path = AttributePath.from_item_path(target_path)
+        if bool(source_attribute_path.steps) != bool(target_attribute_path.steps):
+            raise ValueError(
+                f"Cannot move between attribute '{source_tag}' and attribute "
+                f"'{target_tag}': one path is a whole attribute, the other a value "
+                "inside one."
+            )
+        if not source_attribute_path.steps:
+            if source_tag != target_tag:
+                raise ValueError(
+                    f"Cannot move attribute '{source_tag}' to attribute '{target_tag}'."
+                )
+            self._swap_attribute_values(source, target, source_tag, session)
+            return
+        source_row = self._find_top_level_attribute(source, source_tag)
+        target_row = self._find_top_level_attribute(target, target_tag)
+        if source_row is None or target_row is None:
+            raise ValueError(
+                f"Attribute '{source_tag}' or '{target_tag}' missing on source or "
+                "target"
+            )
+        same_row = source_row is target_row
+        source_root = source_row.model
+        target_root = source_root if same_row else target_row.model
+        self._schema_service.assert_paths_hold_same_kind(
+            source_root.schema_uid,
+            source_attribute_path,
+            target_root.schema_uid,
+            target_attribute_path,
+        )
+        source_root_schema = self._schema_service.get_any_attribute(
+            source_root.schema_uid
+        )
+        target_root_schema = self._schema_service.get_any_attribute(
+            target_root.schema_uid
+        )
+        moved = source_attribute_path.value_in(source_root)
+        if moved is None:
+            raise ValueError(f"No value at {list(source_path)} to move.")
+        replaced = target_attribute_path.value_in(target_root)
+
+        if same_row:
+            if source_attribute_path.overlaps(target_attribute_path):
+                raise ValueError("Cannot move a value into or out of itself.")
+            root = source_attribute_path.replaced_in(
+                source_root, source_root_schema, replaced
+            )
+            if replaced is None:
+                # Taken out first, what was after it in its list moves up.
+                target_attribute_path = target_attribute_path.after_removal_of(
+                    source_attribute_path
+                )
+            root = target_attribute_path.replaced_in(root, source_root_schema, moved)
+            source_row.set_value(root.updated_value, root.display_value)
+        else:
+            source_root = source_attribute_path.replaced_in(
+                source_root, source_root_schema, replaced
+            )
+            target_root = target_attribute_path.replaced_in(
+                target_root, target_root_schema, moved
+            )
+            source_row.set_value(source_root.updated_value, source_root.display_value)
+            target_row.set_value(target_root.updated_value, target_root.display_value)
+        self._record_unmapped_on_both(source_row, target_row, session)
+
+    def _swap_attribute_values(
         self,
         source: DatabaseItem,
         target: DatabaseItem,
         attribute_tag: str,
         session: Session,
     ) -> None:
-        """Exchange the value at ``attribute_tag`` between two items.
+        """Exchange the values of the top-level attribute of a tag between two
+        items: what was edited, mapped, and is still to be mapped of it, and
+        its display value. What was imported stays on each, as it came.
 
-        For a top-level tag, exchanges the user/mapped fields. For a compound
-        ``parent.child`` tag, exchanges the child slot inside each side's
-        parent ObjectAttribute and recomputes the parent's ``display_value``
-        so table renderers stay in sync.
+        Raises
+        ------
+        ValueError
+            If either item has no attribute of the tag.
         """
-        parent_tag, _, child_tag = attribute_tag.partition(".")
-
-        source_attr = self._find_top_level_attribute(source, parent_tag)
-        target_attr = self._find_top_level_attribute(target, parent_tag)
+        source_attr = self._find_top_level_attribute(source, attribute_tag)
+        target_attr = self._find_top_level_attribute(target, attribute_tag)
         if source_attr is None or target_attr is None:
-            raise ValueError(f"Attribute '{parent_tag}' missing on source or target")
-
-        if not child_tag:
-            # original_value is the import-time source-of-truth and stays put.
-            source_attr.updated_value, target_attr.updated_value = (
-                target_attr.updated_value,
-                source_attr.updated_value,
-            )
-            source_attr.mapped_value, target_attr.mapped_value = (
-                target_attr.mapped_value,
-                source_attr.mapped_value,
-            )
-            source_attr.mappable_value, target_attr.mappable_value = (
-                target_attr.mappable_value,
-                source_attr.mappable_value,
-            )
-            source_attr.display_value, target_attr.display_value = (
-                target_attr.display_value,
-                source_attr.display_value,
-            )
-            self._record_unmapped_on_both(source_attr, target_attr, session)
-            return
-
-        if not isinstance(source_attr, DatabaseObjectAttribute) or not isinstance(
-            target_attr, DatabaseObjectAttribute
-        ):
-            raise ValueError(
-                f"Compound tag '{attribute_tag}' requires '{parent_tag}' to be "
-                f"an object attribute on both sides"
-            )
-        source_child = self._read_object_child(source_attr, child_tag)
-        target_child = self._read_object_child(target_attr, child_tag)
-        self._write_object_child(source_attr, child_tag, target_child)
-        self._write_object_child(target_attr, child_tag, source_child)
-        self._refresh_object_display_value(source_attr)
-        self._refresh_object_display_value(target_attr)
+            raise ValueError(f"Attribute '{attribute_tag}' missing on source or target")
+        source_attr.updated_value, target_attr.updated_value = (
+            target_attr.updated_value,
+            source_attr.updated_value,
+        )
+        source_attr.mapped_value, target_attr.mapped_value = (
+            target_attr.mapped_value,
+            source_attr.mapped_value,
+        )
+        source_attr.mappable_value, target_attr.mappable_value = (
+            target_attr.mappable_value,
+            source_attr.mappable_value,
+        )
+        source_attr.display_value, target_attr.display_value = (
+            target_attr.display_value,
+            source_attr.display_value,
+        )
         self._record_unmapped_on_both(source_attr, target_attr, session)
 
     def _record_unmapped_on_both(
@@ -616,23 +698,6 @@ class AttributeService:
         for attribute in (source_attr, target_attr):
             self._database_service.record_unmapped_values(attribute, session)
 
-    def _refresh_object_display_value(self, parent: DatabaseObjectAttribute) -> None:
-        """Recompute and store the parent ObjectAttribute's ``display_value``
-        from its effective value. Table cells render from ``display_value``
-        directly, so leaving it stale after a child-swap blanks the column.
-        """
-        schema = self._schema_service.get_any_attribute(parent.schema_uid)
-        if not isinstance(schema, ObjectAttributeSchema):
-            raise TypeError(
-                f"Object attribute {parent.uid} has schema {schema.uid} of type "
-                f"{type(schema).__name__}."
-            )
-        value = parent.value
-        if value is None or not value:
-            parent.display_value = None
-        else:
-            parent.display_value = schema.create_display_value(value)
-
     @staticmethod
     def _find_top_level_attribute(
         item: DatabaseItem, tag: str
@@ -641,41 +706,3 @@ class AttributeService:
             if attr.tag == tag:
                 return attr
         return None
-
-    @staticmethod
-    def _read_object_child(
-        parent: DatabaseObjectAttribute, child_tag: str
-    ) -> AnyAttribute | None:
-        for value_dict in (
-            parent.updated_value,
-            parent.mapped_value,
-            parent.original_value,
-        ):
-            if value_dict and child_tag in value_dict:
-                return value_dict[child_tag]
-        return None
-
-    @classmethod
-    def _write_object_child(
-        cls,
-        parent: DatabaseObjectAttribute,
-        child_tag: str,
-        child_value: AnyAttribute | None,
-    ) -> None:
-        base = (
-            parent.updated_value or parent.mapped_value or parent.original_value or {}
-        )
-        new_value = dict(base)
-        if child_value is None or cls._is_attribute_model_empty(child_value):
-            new_value.pop(child_tag, None)
-        else:
-            new_value[child_tag] = child_value
-        parent.updated_value = new_value
-
-    @staticmethod
-    def _is_attribute_model_empty(attr: AnyAttribute) -> bool:
-        return (
-            attr.updated_value is None
-            and attr.mapped_value is None
-            and attr.original_value is None
-        )

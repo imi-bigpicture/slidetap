@@ -13,6 +13,10 @@
 #    limitations under the License.
 
 
+from collections.abc import Sequence
+from datetime import datetime
+from typing import Literal
+
 from slidetap.database.attribute import (
     DatabaseAttribute,
     DatabaseBooleanAttribute,
@@ -27,10 +31,12 @@ from slidetap.database.attribute import (
     DatabaseUnionAttribute,
 )
 from slidetap.model import (
+    AnyAttribute,
     Attribute,
     AttributeSchema,
     BooleanAttribute,
     BooleanAttributeSchema,
+    Code,
     CodeAttribute,
     CodeAttributeSchema,
     DatetimeAttribute,
@@ -39,6 +45,7 @@ from slidetap.model import (
     EnumAttributeSchema,
     ListAttribute,
     ListAttributeSchema,
+    Measurement,
     MeasurementAttribute,
     MeasurementAttributeSchema,
     NumericAttribute,
@@ -50,6 +57,14 @@ from slidetap.model import (
     UnionAttribute,
     UnionAttributeSchema,
 )
+
+EntryKey = (
+    tuple[Literal["mappable", "text"], str]
+    | tuple[Literal["code"], str, str]
+    | tuple[Literal["measurement"], float, str]
+    | tuple[str, bool | int | float | datetime]
+)
+"""What an entry of a list is compared by, for a list of unique entries."""
 
 
 class AttributeValidator:
@@ -246,9 +261,45 @@ class AttributeValidator:
                 cls.validate_attribute(value, schema.attribute)
                 for value in attribute.value
             ]
-            valid = valid_count and all(validations)
+            valid = (
+                valid_count
+                and all(validations)
+                and not (schema.unique_items and cls._has_repeats(attribute.value))
+            )
         attribute.valid = valid
         return attribute.valid
+
+    @staticmethod
+    def _has_repeats(entries: Sequence[AnyAttribute]) -> bool:
+        """Whether two of the entries of a list are the same.
+
+        Entries are compared by their effective value, the one they are
+        exported with: a code by its scheme and code (not its meaning), text
+        trimmed, and a measurement by its value and unit. An entry not yet
+        mapped is compared by the text it is mapped from, trimmed, and never
+        equals one that is mapped. Entries that are empty, or that hold other
+        attributes, are not compared.
+        """
+
+        def key(entry: AnyAttribute) -> EntryKey | None:
+            value = entry.value
+            if value is None:
+                mappable = (entry.mappable_value or "").strip()
+                return ("mappable", mappable) if mappable else None
+            if isinstance(value, Code):
+                return ("code", value.scheme, value.code)
+            if isinstance(value, Measurement):
+                return ("measurement", value.value, value.unit)
+            if isinstance(value, str):
+                text = value.strip()
+                return ("text", text) if text else None
+            if isinstance(value, (bool, int, float, datetime)):
+                # By type too, as True equals 1 and 1 equals 1.0.
+                return (type(value).__name__, value)
+            return None
+
+        keys = [found for found in map(key, entries) if found is not None]
+        return len(keys) != len(set(keys))
 
     @classmethod
     def _validate_union_attribute(

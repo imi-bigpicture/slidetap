@@ -23,10 +23,11 @@ import { withSelectedBatch } from 'src/components/project/selected_batch'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
-import { BatchStatus } from 'src/models/batch_status'
+import { BatchStatus, batchIsReadyToProcess } from 'src/models/batch_status'
 import { ImageStatus } from 'src/models/image_status'
 import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
+import { usePreProcessImages } from 'src/hooks/use_pre_process_images'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -39,9 +40,10 @@ interface ProcessImagesProps {
 }
 
 function ProcessImages({ project, batch }: ProcessImagesProps): ReactElement {
+  const preProcessImages = usePreProcessImages()
   return (
     <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
-      {batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
+      {batchIsReadyToProcess(batch.status, preProcessImages) ? (
         <StartProcessImages batch={batch} />
       ) : (
         <ProcessImagesProgress project={project} batch={batch} />

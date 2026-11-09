@@ -64,3 +64,19 @@ export const BatchStatusList = [
   BatchStatus.DELETING,
   BatchStatus.DELETED,
 ]
+
+/** Whether a batch can be started converting its images: once they are
+ * pre-processed, or, where the server has no pre-processing step, already once
+ * its metadata is searched. A batch pre-processed, or being so, before the
+ * server dropped the step is still ready, rather than left with no way on. */
+export function batchIsReadyToProcess(
+  status: BatchStatus | undefined,
+  preProcessImages: boolean,
+): boolean {
+  return (
+    status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ||
+    (!preProcessImages &&
+      (status === BatchStatus.METADATA_SEARCH_COMPLETE ||
+        status === BatchStatus.IMAGE_PRE_PROCESSING))
+  )
+}

@@ -7,9 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Item grouping: `ItemGroupingPolicy` (`RootSchema.item_grouping`) with `minimum_count` and an optional `close_count`, worked out by the `ItemGrouper` that `SchemaInterface.item_grouper_of()` gives for the root. `ItemGroupingService` and `GET /api/projects/project/{uid}/groups` (optional `batchUid`) give the groups smallest first, marking those too small and listing items in no group. The client shows them in a project and a batch section, as a list and a grid. Groups that are too small can be removed, tagging their items "Group too small". `TableRequest.uids` and the `uids` and `compact` props of `ItemTable` limit a table to given items.
+- `POST /api/items/move-attribute` takes `sourcePath` and `targetPath`, such as `["statement", "diagnoses", 2]`, instead of `attributeTag`. The value is swapped with the one at the target, or moved there if there is none, such as past the end of a list. Both paths must lead to the same attribute schema in the same kind of holder (`SchemaService.assert_paths_hold_same_kind()`). `AttributePath` reads and replaces values inside an attribute. In the overview, list entries get drag handles to swap or move them within and between items.
+- `ListAttributeSchema.unique_items`: a list with two equal entries is not valid. Codes are compared by scheme and code, text trimmed, measurements by value and unit, and unmapped values by their text. The client marks repeats and does not offer codes the list already has.
+- The client edits a list of codes as one row per code, each with the usual code lookup and mapping field. A list shows its description above its entries.
+- `SLIDETAP_DOWNLOAD` and `SLIDETAP_PROCESSING` set the download and processing folders apart from `SLIDETAP_STORAGE`. Unset, they are subfolders of it, as before.
+- `ImageImportInterface.pre_processes_separately`, True by default. When False, a batch goes from search straight to post-processing, and each image is downloaded and pre-processed in its post-processing task. Retries resume where they stopped, and a converted image's download is removed. `ApplicationPolicy` and `GET /api/application/policy` tell the client, which then hides the pre-processing step.
+- `ImageViewInterface`, given to `WebAppProvider` as `image_view_interface`, reads images for viewing. The default, `FileImageViewInterface`, reads the downloaded files. It is given an `ImageToView`, kept for `image_cache.image_seconds` (5 by default). A moved image is opened from where it now is, and one whose files are gone gives not found.
+
 ### Changed
 
-- Requires wsidicom 0.36.1, wsidicomizer 0.31 and opentile 0.26 or later, which depend on each other and so are upgraded together.
+- Replacing a project's identifiers with pseudonyms also clears every item's external identifier. An image that is not converted can then no longer be viewed or downloaded from its source.
+
+### Fixed
+
+- A batch with an image that failed to download finishes post-processing once its other images are done.
+- The thumbnail of an image that failed to be stored is made from its converted files.
+- Drag handles show their own hand cursor, visible on both themes.
+- Codes two levels down, such as in a list inside an object, are mapped.
 
 ## [0.4.0-rc.1] - 2026-10-26
 

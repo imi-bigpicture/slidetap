@@ -36,6 +36,7 @@ from procrastinate import App as TaskApp
 from slidetap_example import ExampleSchema
 from sqlalchemy import select
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseImage,
     DatabaseSample,
@@ -153,7 +154,9 @@ def schema_service(
 def validation_service(
     schema_service: SchemaService, stored_database_service: DatabaseService
 ) -> ValidationService:
-    return ValidationService(schema_service, stored_database_service)
+    return ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
 
 
 @pytest.fixture()
@@ -162,7 +165,11 @@ def review_service(
     validation_service: ValidationService,
     stored_database_service: DatabaseService,
 ) -> ReviewService:
-    return ReviewService(schema_service, validation_service, stored_database_service)
+    return ReviewService(
+        schema_service,
+        validation_service,
+        stored_database_service,
+    )
 
 
 @pytest.fixture()
@@ -558,6 +565,7 @@ class TestProjectList:
             VerificationService(
                 schema_service, stored_database_service, review_service
             ),
+            application_policy=ApplicationPolicy(),
         )
         metadata_import_interface = decoy.mock(cls=MetadataImportInterface)
         dataset = Dataset(
@@ -892,6 +900,7 @@ class TestViewOnlyRoot:
             batch_service,
             schema_service,
             stored_database_service,
+            application_policy=ApplicationPolicy(),
         )
 
         # Act & Assert
@@ -926,6 +935,7 @@ class TestViewOnlyRoot:
             task_id="task",
             image_import_interface=image_import_interface,
             metadata_import_interface=decoy.mock(cls=MetadataImportInterface),
+            application_policy=ApplicationPolicy(),
             database_service=stored_database_service,
             review_service=decoy.mock(cls=ReviewService),
             batch_service=batch_service,
@@ -936,10 +946,15 @@ class TestViewOnlyRoot:
             image_uid=image_uid,
             task_id="task",
             image_export_interface=image_export_interface,
+            image_import_interface=image_import_interface,
             database_service=stored_database_service,
             batch_service=batch_service,
             storage_service=decoy.mock(cls=StorageService),
             schema_service=schema_service,
+            review_service=decoy.mock(cls=ReviewService),
+            attribute_service=decoy.mock(cls=AttributeService),
+            application_policy=ApplicationPolicy(),
+            metadata_import_interface=decoy.mock(cls=MetadataImportInterface),
         )
 
         # Assert
@@ -982,6 +997,7 @@ class TestViewOnlyRoot:
             decoy.mock(cls=BatchService),
             schema_service,
             stored_database_service,
+            application_policy=ApplicationPolicy(),
         )
 
         # Act & Assert
@@ -1227,9 +1243,13 @@ class TestViewOnlyRoot:
     def _batch_service(
         database_service: DatabaseService, schema_service: SchemaService
     ) -> BatchService:
-        validation_service = ValidationService(schema_service, database_service)
+        validation_service = ValidationService(
+            schema_service, database_service, application_policy=ApplicationPolicy()
+        )
         review_service = ReviewService(
-            schema_service, validation_service, database_service
+            schema_service,
+            validation_service,
+            database_service,
         )
         return BatchService(
             schema_service,
@@ -1237,4 +1257,5 @@ class TestViewOnlyRoot:
             database_service,
             review_service,
             VerificationService(schema_service, database_service, review_service),
+            application_policy=ApplicationPolicy(),
         )

@@ -21,6 +21,7 @@ from slidetap import BaseProvider
 from slidetap.service_provider import ConfigProvider
 from slidetap_example.config import ExampleConfig
 from slidetap_example.interfaces import (
+    ExampleImageImportInterface,
     ExampleImagePreProcessor,
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
@@ -42,6 +43,7 @@ def create_providers() -> list[Provider]:
         schema_interface=ExampleSchemaInterface,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
+        image_import_interface=ExampleImageImportInterface,
         mapper_injector=ExampleMapperInjector,
     )
     base_provider.provide(ExampleImagePreProcessor)

@@ -26,6 +26,8 @@ from slidetap.external_interfaces.exceptions import (
 )
 from slidetap.external_interfaces.image_export import ImageExportInterface
 from slidetap.external_interfaces.image_import import ImageImportInterface
+from slidetap.external_interfaces.image_view import ImageViewInterface
+from slidetap.external_interfaces.item_grouping import ItemGrouper
 from slidetap.external_interfaces.item_naming_factory import (
     ItemNamingFactoryInterface,
 )
@@ -45,6 +47,8 @@ __all__ = [
     "DicomMetadataProducer",
     "EmptyDicomMetadataProducer",
     "ImageExportInterface",
+    "ImageViewInterface",
+    "ItemGrouper",
     "ItemNamingFactoryInterface",
     "MetadataImportInterface",
     "MetadataExportInterface",

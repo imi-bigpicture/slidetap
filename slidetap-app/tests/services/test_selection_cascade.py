@@ -27,6 +27,7 @@ from uuid import UUID, uuid4
 import pytest
 from decoy import Decoy, matchers
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseImage,
@@ -322,7 +323,11 @@ def validation_service(
     schema: RootSchema,
     schema_service_of: Callable[..., SchemaService],
 ) -> ValidationService:
-    return ValidationService(schema_service_of(schema), stored_database_service)
+    return ValidationService(
+        schema_service_of(schema),
+        stored_database_service,
+        application_policy=ApplicationPolicy(),
+    )
 
 
 @pytest.fixture()
@@ -334,7 +339,9 @@ def item_service(
 ) -> ItemService:
     schema_service = schema_service_of(schema)
     review_service = ReviewService(
-        schema_service, validation_service, stored_database_service
+        schema_service,
+        validation_service,
+        stored_database_service,
     )
     attribute_service = AttributeService(
         schema_service, validation_service, stored_database_service, review_service

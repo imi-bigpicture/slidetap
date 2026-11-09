@@ -23,7 +23,6 @@ from slidetap.task import (
 )
 from slidetap_example import (
     ExampleImageExportInterface,
-    ExampleImageImportInterface,
     ExampleImagePostProcessor,
 )
 from slidetap_example.container import create_container
@@ -33,7 +32,6 @@ def make_task_app() -> TaskApp:
     """Build the task app for the example application."""
     task_provider = TaskAppProvider(
         image_export_interface=ExampleImageExportInterface,
-        image_import_interface=ExampleImageImportInterface,
     )
     task_provider.provide(ExampleImagePostProcessor)
     container = create_container(task_provider, ProcrastinateAppProvider())

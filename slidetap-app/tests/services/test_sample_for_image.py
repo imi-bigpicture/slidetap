@@ -25,6 +25,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseImage,
     DatabaseSample,
@@ -241,9 +242,13 @@ def item_service(
     schema_service_of: Callable[..., SchemaService],
 ) -> ItemService:
     schema_service = schema_service_of(schema)
-    validation_service = ValidationService(schema_service, stored_database_service)
+    validation_service = ValidationService(
+        schema_service, stored_database_service, application_policy=ApplicationPolicy()
+    )
     review_service = ReviewService(
-        schema_service, validation_service, stored_database_service
+        schema_service,
+        validation_service,
+        stored_database_service,
     )
     attribute_service = AttributeService(
         schema_service, validation_service, stored_database_service, review_service

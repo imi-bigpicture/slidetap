@@ -20,6 +20,7 @@ from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.hierarchy_layout import HierarchyLayout
 from slidetap.model.schema.images_layout import ImagesLayout
+from slidetap.model.schema.item_grouping_policy import ItemGroupingPolicy
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     ImageSchema,
@@ -76,3 +77,7 @@ class RootSchema(FrozenBaseModel):
 
     review_unit: ReviewUnitSchema | None = None
     """What is reviewed, where anything is. None where nothing is reviewed."""
+
+    item_grouping: ItemGroupingPolicy | None = None
+    """How the items of a project are grouped by what they share, and how
+    many a group must hold. None where they are not grouped."""

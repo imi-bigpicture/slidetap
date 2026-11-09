@@ -17,9 +17,11 @@ from collections.abc import Callable, Iterable, Mapping
 from functools import partial
 from uuid import UUID
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.model import (
     Batch,
     BatchStatus,
+    Image,
     ImageSchema,
     ImageStatus,
     NotFoundError,
@@ -43,7 +45,9 @@ class ImagePipelineService:
         batch_service: BatchService,
         schema_service: SchemaService,
         database_service: DatabaseService,
+        application_policy: ApplicationPolicy,
     ):
+        self._application_policy = application_policy
         self._scheduler = scheduler
         self._batch_service = batch_service
         self._schema_service = schema_service
@@ -85,6 +89,11 @@ class ImagePipelineService:
 
         A retry that cannot be queued sets the image back to the status it
         failed with, with why, so that it can be retried again.
+
+        Where images are not pre-processed separately, an image that failed to
+        download or pre-process in a batch not yet post-processing is only set
+        back: post-processing the batch takes it on, so that it is not
+        converted before the batch is curated for it.
         """
         retry_action: Callable[[], None]
 
@@ -95,19 +104,16 @@ class ImagePipelineService:
             # Storing is exporting the image, and the rest is processing it.
             self._schema_service.assert_can_change(image, session)
             failed_status = image.status
+            pre_process = self._pre_process_retry(image.batch.status)
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")
                 image.reset_as_not_started()
-                retry_action = partial(
-                    self._scheduler.download_and_pre_process_image, image.model
-                )
+                retry_action = partial(pre_process, image.model)
             elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
                 image.set_status_message("")
                 image.reset_as_downloaded()
-                retry_action = partial(
-                    self._scheduler.download_and_pre_process_image, image.model
-                )
+                retry_action = partial(pre_process, image.model)
             elif image.status == ImageStatus.POST_PROCESSING_FAILED:
                 image.set_status_message("")
                 image.reset_as_pre_processed()
@@ -192,9 +198,7 @@ class ImagePipelineService:
                 try:
                     self._scheduler.post_process_images(image_uids)
                 except DeferError as error:
-                    self._fail_images(
-                        error.failures, ImageStatus.POST_PROCESSING_FAILED
-                    )
+                    self._fail_images(error.failures, self._post_processing_failure)
         self._batch_service.finish_post_processing_if_settled(batch.uid)
         return self._batch_service.get(batch.uid)
 
@@ -235,10 +239,43 @@ class ImagePipelineService:
                 f"batch {batch_uid}: {exception}"
             ) from exception
 
+    def _pre_process_retry(self, batch_status: BatchStatus) -> Callable[[Image], None]:
+        """What takes on an image set back for its download or pre-processing
+        to be retried, as its batch is.
+
+        Post-processing it where its batch is post-processing, which
+        pre-processes it first. Otherwise pre-processing it, where images are
+        pre-processed separately, and else nothing: post-processing the batch
+        takes it on.
+        """
+        if batch_status in (
+            BatchStatus.IMAGE_POST_PROCESSING,
+            BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+        ):
+            return self._scheduler.post_process_image
+        if self._application_policy.pre_processes_images_separately:
+            return self._scheduler.download_and_pre_process_image
+        return lambda image: None
+
+    @staticmethod
+    def _post_processing_failure(status: ImageStatus) -> ImageStatus:
+        """How an image whose post-processing could not be queued fails, by
+        the step it is at. One not pre-processed, as where images are not
+        pre-processed separately, fails at the step it would have started
+        with, so that a retry goes on from there."""
+        if status == ImageStatus.NOT_STARTED:
+            return ImageStatus.DOWNLOADING_FAILED
+        if status == ImageStatus.DOWNLOADED:
+            return ImageStatus.PRE_PROCESSING_FAILED
+        return ImageStatus.POST_PROCESSING_FAILED
+
     def _fail_images(
-        self, failures: Mapping[UUID, BaseException], status: ImageStatus
+        self,
+        failures: Mapping[UUID, BaseException],
+        status: ImageStatus | Callable[[ImageStatus], ImageStatus],
     ) -> None:
-        """Set images whose task could not be queued as failed, with why.
+        """Set images whose task could not be queued as failed, with why: as
+        the status given, or as the status given for the one it is at.
 
         Set as failed rather than left waiting for a task that does not exist,
         so that the batch can settle around them and they can be retried.
@@ -248,7 +285,11 @@ class ImagePipelineService:
                 image = self._database_service.get_optional_image(session, image_uid)
                 if image is None:
                     continue
-                image.status = status
+                image.status = (
+                    status
+                    if isinstance(status, ImageStatus)
+                    else (status(image.status))
+                )
                 image.set_status_message(f"Failed to queue processing: {exception}")
 
     def _image_uids_in_batch(

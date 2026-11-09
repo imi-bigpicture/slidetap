@@ -12,7 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Add, Delete, ExpandLess, ExpandMore } from '@mui/icons-material'
+import {
+  Add,
+  Delete,
+  DragIndicator,
+  ExpandLess,
+  ExpandMore,
+} from '@mui/icons-material'
 import {
   Autocomplete,
   Box,
@@ -23,29 +29,39 @@ import {
   LinearProgress,
   Stack,
   TextField,
+  Tooltip,
 } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
+import { dragHandleCursor } from 'src/components/drag_cursor'
 import { ItemDetailAction } from 'src/models/action'
 import type {
   Attribute,
   AttributeValueTypes,
+  CodeAttribute,
   ListAttribute,
 } from 'src/models/attribute'
 import { newAttribute } from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
+import type { Code } from 'src/models/code'
 import {
+  isCodeAttributeSchema,
   isEnumAttributeSchema,
   isStringAttributeSchema,
 } from 'src/models/helpers'
 import {
+  CodeAttributeSchema,
   ListAttributeSchema,
   NumericAttributeSchema,
 } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import attributeApi from 'src/services/api/attribute_api'
 import { queryKeys } from 'src/services/query_keys'
+import DisplayCodeValue from './code'
+import { ListEntryDragContext, type ListEntryDrag } from './list_entry_drag'
+import { repeatedPositions } from './list_unique'
+import { withCodeDisplayValue } from './list_code'
 import { useTypedText } from './use_typed_text'
 import { selectValueToDisplay } from './value_to_display'
 
@@ -63,6 +79,7 @@ function ListChildRow({
   removeTitle,
   onCommit,
   onRemove,
+  repeated = false,
 }: {
   value: string
   readOnly: boolean
@@ -70,6 +87,8 @@ function ListChildRow({
   removeTitle: string
   onCommit: (text: string) => void
   onRemove: () => void
+  /** Says what an entry before it says, in a list of unique entries. */
+  repeated?: boolean
 }): React.ReactElement {
   const typed = useTypedText(value, onCommit)
   /** Not while it is being written in: a box is empty until the first letter
@@ -86,7 +105,8 @@ function ListChildRow({
         maxRows={12}
         size="small"
         value={typed.text}
-        error={!writing && typed.text.trim() === ''}
+        error={repeated || (!writing && typed.text.trim() === '')}
+        helperText={repeated ? 'Already in the list' : undefined}
         onChange={(event) => {
           typed.onChange(event.target.value)
         }}
@@ -109,6 +129,155 @@ function ListChildRow({
           <Delete fontSize="small" />
         </IconButton>
       )}
+    </Stack>
+  )
+}
+
+/** One code of a list of codes: the field it is looked up and mapped in, the
+ * same one a code of its own has, and the control that takes it out of the
+ * list. */
+function ListCodeChildRow({
+  child,
+  schema,
+  action,
+  atMin,
+  readOnly,
+  onUpdate,
+  onRemove,
+  repeated,
+  excludedCodes,
+}: {
+  child: CodeAttribute
+  schema: CodeAttributeSchema
+  action: ItemDetailAction
+  atMin: boolean
+  readOnly: boolean
+  onUpdate: (child: CodeAttribute) => void
+  onRemove: () => void
+  /** Says what an entry before it says, in a list of unique entries. */
+  repeated: boolean
+  /** Codes not to offer, as the list has them already. */
+  excludedCodes?: Code[]
+}): React.ReactElement {
+  return (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+      <DisplayCodeValue
+        attribute={child}
+        schema={schema}
+        action={action}
+        valueToDisplay={ValueDisplayType.CURRENT}
+        handleAttributeUpdate={onUpdate}
+        repeated={repeated}
+        excludedCodes={excludedCodes}
+      />
+      {!readOnly && (
+        <IconButton
+          size="small"
+          disabled={atMin}
+          title={`Remove ${schema.displayName}`}
+          onClick={onRemove}
+          // Level with the field rather than with the text under it.
+          sx={{ mt: 0.5 }}
+        >
+          <Delete fontSize="small" />
+        </IconButton>
+      )}
+    </Stack>
+  )
+}
+
+/** Where an entry of a list sits, or the place past the last: what is
+ * dragged there is dropped at its position, and an entry is dragged from it by
+ * its handle. Without a drag, just what it holds.
+ *
+ * What it holds is given no drag of its own, so a list inside an entry is not
+ * dragged as though it were this one. */
+function EntryPlace({
+  drag,
+  position,
+  dropAt,
+  setDropAt,
+  handleTitle,
+  children,
+}: {
+  drag: ListEntryDrag | null
+  position: number
+  dropAt: number | null
+  setDropAt: (position: number | null) => void
+  /** The handle's tooltip; no handle where not given, as for the place past
+   * the last, which holds no entry. */
+  handleTitle?: string
+  children: React.ReactNode
+}): React.ReactElement {
+  const held = (
+    <ListEntryDragContext.Provider value={null}>
+      {children}
+    </ListEntryDragContext.Provider>
+  )
+  if (drag === null) {
+    return <Box>{held}</Box>
+  }
+  return (
+    <Stack
+      direction="row"
+      spacing={0.5}
+      onDragOver={(event) => {
+        if (!drag.accepts(event)) return
+        event.preventDefault()
+        // Here, not on the card around it: this place says where it goes.
+        event.stopPropagation()
+        event.dataTransfer.dropEffect = 'move'
+        if (dropAt !== position) setDropAt(position)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+          setDropAt(null)
+        }
+      }}
+      onDrop={(event) => {
+        setDropAt(null)
+        if (drag.onDrop(event, position)) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+      }}
+      sx={{
+        alignItems: 'flex-start',
+        borderRadius: 1,
+        outline: dropAt === position ? '2px dashed' : 'none',
+        outlineColor: 'primary.main',
+        outlineOffset: 2,
+      }}
+    >
+      {handleTitle === undefined ? (
+        // The handle's width, so what is here lines up with the entries.
+        <Box sx={{ width: 20, flexShrink: 0 }} />
+      ) : (
+        <Tooltip title={handleTitle}>
+          <Box
+            draggable
+            onDragStart={(event) => {
+              event.stopPropagation()
+              drag.onDragStart(event, position)
+            }}
+            sx={[
+              {
+                display: 'flex',
+                alignItems: 'center',
+                width: 20,
+                flexShrink: 0,
+                height: 40,
+                userSelect: 'none',
+                color: 'action.active',
+              },
+              dragHandleCursor,
+            ]}
+          >
+            <DragIndicator fontSize="small" />
+          </Box>
+        </Tooltip>
+      )}
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>{held}</Box>
     </Stack>
   )
 }
@@ -143,6 +312,12 @@ export default function DisplayListAttribute({
    * by the schema, so there is nothing to read back from what has been saved
    * before, and nothing outside the list to be picked. */
   const enumChild = isEnumAttributeSchema(schema.attribute)
+  /** A child that is a code. A code is looked up, or typed to be mapped, in a
+   * field of its own, so such a list is laid out as the codes themselves, each
+   * in the field a code outside a list has. */
+  const codeChild = isCodeAttributeSchema(schema.attribute)
+  /** Laid out as a row per value rather than as chips in a single field. */
+  const rowChild = multilineChild || codeChild
   /** What has been given to attributes of this schema before, which is what a
    * value is picked from where the schema does not say. */
   const attributesQuery = useQuery({
@@ -152,13 +327,17 @@ export default function DisplayListAttribute({
         schema.attribute.uid,
       )
     },
-    enabled: !multilineChild && !enumChild,
+    enabled: !rowChild && !enumChild,
   })
   /** Why the last thing typed was not taken, if it was not. Held so the field
    * can say it: the text itself is cleared as soon as it is read, so a value
    * that is turned away leaves nothing behind to see. */
   const [refused, setRefused] = React.useState<string | null>(null)
-  if (!multilineChild && !enumChild && attributesQuery.data === undefined) {
+  /** How the entries are dragged, where what shows the list lets them be. */
+  const entryDrag = React.useContext(ListEntryDragContext)
+  /** The position something dragged is over, to be dropped at. */
+  const [dropAt, setDropAt] = React.useState<number | null>(null)
+  if (!rowChild && !enumChild && attributesQuery.data === undefined) {
     return <LinearProgress />
   }
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
@@ -191,25 +370,48 @@ export default function DisplayListAttribute({
       ),
     )
   }
+  const handleChildUpdate = (index: number, updated: CodeAttribute): void => {
+    const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
+    handleListChange(
+      children.map((item, itemIndex) =>
+        itemIndex === index ? withCodeDisplayValue(updated) : item,
+      ),
+    )
+  }
   const handleChildRemove = (index: number): void => {
     const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
     handleListChange(children.filter((_, itemIndex) => itemIndex !== index))
   }
   /** Add an empty one, which is a box to write in. Nothing is asked of it
    * first: an empty box is what the user is being given, and what is written
-   * in it goes straight into the list under it. */
+   * in it goes straight into the list under it. An empty code is no code at
+   * all rather than an empty one, a code being more than its text. */
   const handleChildAppend = (): void => {
     const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
     handleListChange([
       ...children,
-      newAttribute<AttributeValueTypes>(
-        schema.attribute.uid,
-        AttributeValueType.STRING,
-        '',
-        '',
-      ),
+      codeChild
+        ? newAttribute<AttributeValueTypes>(
+            schema.attribute.uid,
+            AttributeValueType.CODE,
+            null,
+            '',
+          )
+        : newAttribute<AttributeValueTypes>(
+            schema.attribute.uid,
+            AttributeValueType.STRING,
+            '',
+            '',
+          ),
     ])
   }
+  /** Whether a child says nothing: no text written, or for a code, no code
+   * picked nor text typed to map one by. */
+  const childEmpty = (child: Attribute<AttributeValueTypes>): boolean =>
+    codeChild
+      ? selectValueToDisplay(child, ValueDisplayType.CURRENT) === null &&
+        (child.mappableValue ?? '') === ''
+      : childText(child).trim() === ''
   /** A child the user can say in full by typing it into the field, the text
    * being the whole value and a line of it enough. The others are added by
    * opening one instead: a code or a measurement is more than text, and a
@@ -311,6 +513,13 @@ export default function DisplayListAttribute({
     }
     if (
       refusal === null &&
+      schema.uniqueItems &&
+      repeatedPositions(children).size > 0
+    ) {
+      refusal = `Each ${schema.attribute.displayName} can be added once.`
+    }
+    if (
+      refusal === null &&
       schema.maxItems !== null &&
       children.length > schema.maxItems
     ) {
@@ -332,7 +541,14 @@ export default function DisplayListAttribute({
     handleListChange(children)
   }
   const value = selectValueToDisplay(attribute, valueToDisplay)
+  /** The entries saying what one before them says, where each is to say
+   * something of its own. */
+  const repeated =
+    schema.uniqueItems && value !== null
+      ? repeatedPositions(value)
+      : new Set<number>()
   const invalid =
+    repeated.size > 0 ||
     ((value === null || value.length === 0) && !schema.optional) ||
     (schema.minItems !== null && value !== null && value.length < schema.minItems) ||
     (schema.maxItems !== null && value !== null && value.length > schema.maxItems)
@@ -362,13 +578,14 @@ export default function DisplayListAttribute({
         {schema.displayName}
       </Box>
     )
-  if (multilineChild) {
+  if (rowChild) {
     const children = value ?? []
     /** A value nobody has written is not a value. The list holds a place for
      * it either way, so it is the list that is out of order, not just the box
      * it is missing from. */
-    const emptyChild = children.some((child) => childText(child).trim() === '')
+    const emptyChild = children.some(childEmpty)
     const outOfOrder = invalid || emptyChild
+    const drag = readOnly ? null : entryDrag
     return (
       // A box holding the values, rather than a field standing for them: each
       // is written where it is read, and the rule around them says which list
@@ -406,25 +623,75 @@ export default function DisplayListAttribute({
         </Box>
         {!collapsed && (
           <Stack spacing={1}>
+            {schema.description !== null && schema.description !== '' && (
+              <FormHelperText sx={{ mt: 0 }}>{schema.description}</FormHelperText>
+            )}
             {children.map((child, index) => (
-              <ListChildRow
+              <EntryPlace
                 // By where it sits: a value just added has no uid of its own
                 // until it is written, so several of them say the same one.
                 key={index}
-                value={childText(child)}
-                readOnly={readOnly}
-                atMin={atMin}
-                removeTitle={`Remove ${schema.attribute.displayName}`}
-                onCommit={(written) => {
-                  handleChildValueUpdate(index, written)
-                }}
-                onRemove={() => {
-                  handleChildRemove(index)
-                }}
-              />
+                drag={drag}
+                position={index}
+                dropAt={dropAt}
+                setDropAt={setDropAt}
+                handleTitle={
+                  `Drag onto another ${schema.attribute.displayName} to swap ` +
+                  'the two, or past the last of a list to move it there'
+                }
+              >
+                {codeChild ? (
+                  <ListCodeChildRow
+                    repeated={repeated.has(index)}
+                    excludedCodes={
+                      schema.uniqueItems
+                        ? children
+                            .filter((_, other) => other !== index)
+                            .map((other) =>
+                              selectValueToDisplay(
+                                other as CodeAttribute,
+                                ValueDisplayType.CURRENT,
+                              ),
+                            )
+                            .filter((code): code is Code => code !== null)
+                        : undefined
+                    }
+                    child={child as CodeAttribute}
+                    schema={schema.attribute as CodeAttributeSchema}
+                    action={action}
+                    atMin={atMin}
+                    readOnly={readOnly}
+                    onUpdate={(updated) => {
+                      handleChildUpdate(index, updated)
+                    }}
+                    onRemove={() => {
+                      handleChildRemove(index)
+                    }}
+                  />
+                ) : (
+                  <ListChildRow
+                    repeated={repeated.has(index)}
+                    value={childText(child)}
+                    readOnly={readOnly}
+                    atMin={atMin}
+                    removeTitle={`Remove ${schema.attribute.displayName}`}
+                    onCommit={(written) => {
+                      handleChildValueUpdate(index, written)
+                    }}
+                    onRemove={() => {
+                      handleChildRemove(index)
+                    }}
+                  />
+                )}
+              </EntryPlace>
             ))}
             {!readOnly && (
-              <Box>
+              <EntryPlace
+                drag={drag}
+                position={children.length}
+                dropAt={dropAt}
+                setDropAt={setDropAt}
+              >
                 <Button
                   size="small"
                   startIcon={<Add />}
@@ -447,11 +714,24 @@ export default function DisplayListAttribute({
                 >
                   {`Add ${schema.attribute.displayName}`}
                 </Button>
-              </Box>
+                {drag !== null && dropAt === children.length && (
+                  <Box
+                    component="span"
+                    sx={{ typography: 'caption', color: 'primary.main', ml: 1 }}
+                  >
+                    Drop to add it here
+                  </Box>
+                )}
+              </EntryPlace>
             )}
             {emptyChild ? (
               <FormHelperText error>
                 {`Every ${schema.attribute.displayName} needs a value, or take it out of the list.`}
+              </FormHelperText>
+            ) : repeated.size > 0 ? (
+              <FormHelperText error>
+                {`Each ${schema.attribute.displayName} can be in the list once: ` +
+                  'change or take out the one marked.'}
               </FormHelperText>
             ) : (
               helperText !== undefined && (

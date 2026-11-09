@@ -18,6 +18,7 @@ from uuid import UUID
 from sqlalchemy import ColumnElement, ColumnExpressionArgument, and_, select
 from sqlalchemy.orm import Session
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseAttribute,
     DatabaseBatch,
@@ -56,11 +57,29 @@ class ValidationService:
         self,
         schema_service: SchemaService,
         database_service: DatabaseService,
+        application_policy: ApplicationPolicy,
     ):
         self._schema_service = schema_service
         self._database_service = database_service
+        self._application_policy = application_policy
         self._attribute_validator = AttributeValidator()
         self._relation_validator = RelationValidator(schema_service, database_service)
+
+    def import_is_complete(self, batch: DatabaseBatch) -> bool:
+        """Whether a batch holds all the import brings, so that what the review
+        unit says the import leaves out is held against its items."""
+        return batch.status >= self._import_complete_status
+
+    @property
+    def _import_complete_status(self) -> BatchStatus:
+        """The status from which a batch holds all the import brings.
+
+        Once its images are pre-processed: in their own step, or where they
+        are pre-processed on post-processing, once they are post-processed.
+        """
+        if self._application_policy.pre_processes_images_separately:
+            return BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        return BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
 
     def validate_item(
         self,
@@ -218,7 +237,7 @@ class ValidationService:
             unit is None
             or unit.completeness is None
             or item.batch is None
-            or item.batch.status >= BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+            or self.import_is_complete(item.batch)
         ):
             return item.valid
         return self.item_is_as_complete_as_expected(item, unit.completeness, session)
@@ -278,9 +297,7 @@ class ValidationService:
         # and put a metadata-search-complete batch on the wrong side of the
         # threshold.
         early = [
-            status
-            for status in BatchStatus
-            if status < BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+            status for status in BatchStatus if status < self._import_complete_status
         ]
         terms: list[ColumnExpressionArgument[bool]] = [
             DatabaseItem.valid_attributes.is_(False),

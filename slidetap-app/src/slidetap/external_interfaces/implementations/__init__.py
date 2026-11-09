@@ -14,6 +14,9 @@
 
 """Implementations of external interfaces."""
 
+from slidetap.external_interfaces.implementations.file_image_view import (
+    FileImageViewInterface,
+)
 from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
     JsonFileAuthInterface,
@@ -23,6 +26,7 @@ from slidetap.external_interfaces.implementations.json_mapper_injector import (
 )
 
 __all__ = [
+    "FileImageViewInterface",
     "JsonFileAuthConfig",
     "JsonFileAuthInterface",
     "JsonMapperInjector",

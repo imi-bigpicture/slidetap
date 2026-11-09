@@ -22,9 +22,10 @@ from uuid import UUID
 
 import pytest
 from decoy import Decoy
-from decoy.matchers import Anything
+from decoy.matchers import Anything, HasAttributes
 from slidetap_example import ExampleSchema
 
+from slidetap.application_policy import ApplicationPolicy
 from slidetap.database import (
     DatabaseBatch,
     DatabaseDataset,
@@ -132,14 +133,19 @@ def image_pipeline_service(
     stored_database_service: DatabaseService,
 ) -> ImagePipelineService:
     batch_service = BatchService(
-        schema_service=decoy.mock(cls=SchemaService),
+        schema_service=schema_service,
         validation_service=decoy.mock(cls=ValidationService),
         database_service=stored_database_service,
         review_service=decoy.mock(cls=ReviewService),
         verification_service=decoy.mock(cls=VerificationService),
+        application_policy=ApplicationPolicy(),
     )
     return ImagePipelineService(
-        scheduler, batch_service, schema_service, stored_database_service
+        scheduler,
+        batch_service,
+        schema_service,
+        stored_database_service,
+        application_policy=ApplicationPolicy(),
     )
 
 
@@ -317,6 +323,146 @@ class TestImagePipelineDeferral:
         assert (
             _batch_status(stored_database_service, stored.batch_uid)
             == BatchStatus.IMAGE_STORING
+        )
+
+
+@pytest.fixture()
+def not_separately_pipeline_service(
+    decoy: Decoy,
+    scheduler: Scheduler,
+    schema_service: SchemaService,
+    stored_database_service: DatabaseService,
+) -> ImagePipelineService:
+    """The pipeline of an application that does not pre-process images
+    separately."""
+    policy = ApplicationPolicy(pre_processes_images_separately=False)
+    batch_service = BatchService(
+        schema_service=schema_service,
+        validation_service=decoy.mock(cls=ValidationService),
+        database_service=stored_database_service,
+        review_service=decoy.mock(cls=ReviewService),
+        verification_service=decoy.mock(cls=VerificationService),
+        application_policy=policy,
+    )
+    return ImagePipelineService(
+        scheduler,
+        batch_service,
+        schema_service,
+        stored_database_service,
+        application_policy=policy,
+    )
+
+
+@pytest.mark.integration
+class TestNotPreProcessedSeparately:
+    @pytest.mark.parametrize(
+        ("status", "failed"),
+        [
+            (ImageStatus.NOT_STARTED, ImageStatus.DOWNLOADING_FAILED),
+            (ImageStatus.DOWNLOADED, ImageStatus.PRE_PROCESSING_FAILED),
+            (ImageStatus.PRE_PROCESSED, ImageStatus.POST_PROCESSING_FAILED),
+        ],
+    )
+    def test_an_image_that_cannot_be_queued_fails_at_its_step(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        not_separately_pipeline_service: ImagePipelineService,
+        scheduler: Scheduler,
+        schema: ExampleSchema,
+        status: ImageStatus,
+        failed: ImageStatus,
+    ):
+        """So that a retry goes on from where it is, rather than converting an
+        image that was never downloaded."""
+        # Arrange
+        stored = _add_batch(
+            stored_database_service, schema, BatchStatus.METADATA_SEARCH_COMPLETE
+        )
+        image_uid = _add_image(
+            stored_database_service, schema, stored, status, "PL1234-20-1"
+        )
+        decoy.when(scheduler.post_process_images(Anything())).then_raise(
+            DeferError({image_uid: ConnectionError("Queue unreachable")})
+        )
+
+        # Act
+        batch = not_separately_pipeline_service.export(stored.batch_uid)
+
+        # Assert
+        assert _image(stored_database_service, image_uid)[0] == failed
+        assert batch is not None
+        assert batch.status == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+
+    @pytest.mark.parametrize(
+        "batch_status",
+        [
+            BatchStatus.METADATA_SEARCH_COMPLETE,
+            BatchStatus.IMAGE_PRE_PROCESSING,
+            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+        ],
+    )
+    @pytest.mark.parametrize(
+        ("failed", "set_back"),
+        [
+            (ImageStatus.DOWNLOADING_FAILED, ImageStatus.NOT_STARTED),
+            (ImageStatus.PRE_PROCESSING_FAILED, ImageStatus.DOWNLOADED),
+        ],
+    )
+    def test_a_retry_before_the_batch_is_post_processed_only_sets_it_back(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        not_separately_pipeline_service: ImagePipelineService,
+        scheduler: Scheduler,
+        schema: ExampleSchema,
+        batch_status: BatchStatus,
+        failed: ImageStatus,
+        set_back: ImageStatus,
+    ):
+        """Post-processing the batch takes it on, so that it is not converted
+        before the batch is curated for it."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, batch_status)
+        image_uid = _add_image(
+            stored_database_service, schema, stored, failed, "PL1234-20-1"
+        )
+
+        # Act
+        not_separately_pipeline_service.retry(image_uid)
+
+        # Assert
+        assert _image(stored_database_service, image_uid)[0] == set_back
+        decoy.verify(scheduler.post_process_image(Anything()), times=0)
+        decoy.verify(scheduler.download_and_pre_process_image(Anything()), times=0)
+
+    def test_a_retry_while_the_batch_is_post_processed_converts_it(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        not_separately_pipeline_service: ImagePipelineService,
+        scheduler: Scheduler,
+        schema: ExampleSchema,
+    ):
+        # Arrange
+        stored = _add_batch(
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
+        image_uid = _add_image(
+            stored_database_service,
+            schema,
+            stored,
+            ImageStatus.DOWNLOADING_FAILED,
+            "PL1234-20-1",
+        )
+
+        # Act
+        not_separately_pipeline_service.retry(image_uid)
+
+        # Assert
+        assert _image(stored_database_service, image_uid)[0] == ImageStatus.NOT_STARTED
+        decoy.verify(
+            scheduler.post_process_image(HasAttributes({"uid": image_uid})), times=1
         )
 
 
