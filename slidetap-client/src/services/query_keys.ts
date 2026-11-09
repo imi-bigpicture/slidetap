@@ -66,6 +66,12 @@ export const queryKeys = {
       [...queryKeys.project.detail(projectUid), 'migration'] as const,
     actions: (projectUid: string) =>
       [...queryKeys.project.detail(projectUid), 'actions'] as const,
+    groups: (projectUid: string, batchUid?: string) =>
+      [
+        ...queryKeys.project.detail(projectUid),
+        'groups',
+        batchUid ?? 'project',
+      ] as const,
   },
 
   // Batches
@@ -174,6 +180,7 @@ export const queryKeys = {
       onlyInvalid?: boolean,
       pseudonymMode?: boolean,
       attributeValueFields?: Record<string, AttributeValueField>,
+      uids?: string[],
     ) =>
       [
         ...queryKeys.item.all,
@@ -187,6 +194,7 @@ export const queryKeys = {
         sorting,
         { recycled, onlyInvalid, pseudonymMode },
         attributeValueFields,
+        uids ?? null,
       ] as const,
     overview: (itemUid: string, overviewLayoutUid: string) =>
       [...queryKeys.item.detail(itemUid), 'overview', overviewLayoutUid] as const,

@@ -44,6 +44,7 @@ from slidetap.services import (
     DatabaseService,
     DatasetService,
     FileOperations,
+    ItemGroupingService,
     ItemService,
     MapperMigrationService,
     MapperService,
@@ -101,6 +102,7 @@ class BaseProvider(Provider):
         self.provide(DatabaseService)
         self.provide(DatasetService)
         self.provide(ItemService)
+        self.provide(ItemGroupingService)
         self.provide(ReviewService)
         self.provide(MapperService)
         self.provide(MapperMigrationService)

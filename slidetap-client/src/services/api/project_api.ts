@@ -19,6 +19,7 @@ import type { AttributeMigrationIssue, ProjectMigration } from 'src/models/migra
 import type { ProjectActions } from 'src/models/project_actions'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
+import type { ItemGrouping } from 'src/models/item_grouping'
 
 import {
   ApiError,
@@ -147,6 +148,11 @@ const projectApi = {
   clearSeed: async (projectUid: string) => {
     const response = await post(`projects/project/${projectUid}/clear_seed`)
     return await parseJsonResponse<Project>(response)
+  },
+  getGroups: async (projectUid: string, batchUid?: string) => {
+    const scope = batchUid !== undefined ? '?batchUid=' + batchUid : ''
+    const response = await get(`projects/project/${projectUid}/groups` + scope)
+    return await parseJsonResponse<ItemGrouping | null>(response)
   },
   getValidation: async (projectUid: string) => {
     const response = await get(`projects/project/${projectUid}/validation`)

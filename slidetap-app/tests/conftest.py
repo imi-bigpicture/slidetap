@@ -28,6 +28,7 @@ from sqlalchemy import URL, Engine, create_engine, make_url, text
 from slidetap.config import DatabaseConfig
 from slidetap.database import Base
 from slidetap.external_interfaces import (
+    ItemGrouper,
     SchemaInterface,
     SchemaMigration,
 )
@@ -244,12 +245,14 @@ def schema_service_of(
     decoy: Decoy, stored_database_service: DatabaseService
 ) -> Callable[..., SchemaService]:
     """Builds a schema service as the plugin's interfaces provide it: of the
-    root of new projects, the previous roots, and the migrations."""
+    root of new projects, the previous roots, the migrations, and the item
+    groupers."""
 
     def schema_service_of(
         root: RootSchema,
         *previous_roots: RootSchema,
         migrations: Mapping[UUID, SchemaMigration] | None = None,
+        item_groupers: Mapping[UUID, ItemGrouper] | None = None,
     ) -> SchemaService:
         schema_interface = decoy.mock(cls=SchemaInterface)
         decoy.when(schema_interface.root()).then_return(root)
@@ -259,6 +262,12 @@ def schema_service_of(
             if migration is not None:
                 decoy.when(schema_interface.migration_from(previous_root)).then_return(
                     migration
+                )
+        for provided in (root, *previous_roots):
+            grouper = (item_groupers or {}).get(provided.uid)
+            if grouper is not None:
+                decoy.when(schema_interface.item_grouper_of(provided)).then_return(
+                    grouper
                 )
         return SchemaService(schema_interface, stored_database_service)
 

@@ -72,6 +72,15 @@ from slidetap.model.item import (
     SampleForImageRequest,
     item_factory,
 )
+from slidetap.model.item_grouping import (
+    IncompleteGroupedItem,
+    IncompleteItem,
+    ItemGroup,
+    ItemGrouping,
+    ItemGroups,
+    ItemGroupSummary,
+    ItemGroupValuePart,
+)
 from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.model.mapper import (
@@ -134,6 +143,7 @@ from slidetap.model.schema.images_layout import (
     ImageOrder,
     ImagesLayout,
 )
+from slidetap.model.schema.item_grouping_policy import ItemGroupingPolicy
 from slidetap.model.schema.item_relation import (
     Cardinality,
     ImageToSampleRelation,
@@ -334,6 +344,14 @@ __all__ = [
     "ProjectSchema",
     "ReviewLayout",
     "ReviewUnitSchema",
+    "IncompleteGroupedItem",
+    "IncompleteItem",
+    "ItemGroup",
+    "ItemGroupValuePart",
+    "ItemGrouping",
+    "ItemGroupingPolicy",
+    "ItemGroups",
+    "ItemGroupSummary",
     "NonValidItem",
     "ReviewTabLayout",
     "ProjectStatus",

@@ -22,6 +22,7 @@ import {
 import { ItemValueType } from '../item_value_type'
 import { HierarchyLayout } from './hierarchy_layout'
 import { ImagesLayout } from './images_layout'
+import { ItemGroupingPolicy } from './item_grouping_policy'
 import { ReviewUnitSchema } from './review_unit_schema'
 import { OverviewLayout } from './overview_layout'
 import { ProjectSchema } from './project_schema'
@@ -41,6 +42,9 @@ export interface RootSchema {
   readonly hierarchyLayouts: HierarchyLayout[]
   readonly imagesLayouts: ImagesLayout[]
   readonly reviewUnit: ReviewUnitSchema | null
+  /** How the items of a project are grouped by what they share, and how many
+   * a group must hold. Null where they are not grouped. */
+  readonly itemGrouping: ItemGroupingPolicy | null
 }
 
 /** A root schema the application provides, without its content. */
@@ -55,7 +59,10 @@ export interface RootSchemaSummary {
 }
 
 /** A root schema as shown to a user: its name, and its version if it has one. */
-export function rootDisplayName(root: { name: string; version: string | null }): string {
+export function rootDisplayName(root: {
+  name: string
+  version: string | null
+}): string {
   return root.version === null ? root.name : `${root.name} ${root.version}`
 }
 

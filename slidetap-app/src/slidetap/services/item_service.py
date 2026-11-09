@@ -18,7 +18,7 @@ import logging
 import re
 import uuid
 from collections import deque
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import chain
@@ -1639,6 +1639,7 @@ class ItemService:
         validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
@@ -1659,6 +1660,7 @@ class ItemService:
                 review_status,
                 status_filter,
                 load_relations=True,
+                uids=uids,
             )
 
             # Said on the row rather than worked out again in the table: the
@@ -1725,6 +1727,7 @@ class ItemService:
         validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
+        uids: Collection[UUID] | None = None,
     ) -> int:
         with self._database_service.get_session() as session:
             root = self._schema_service.root_of_dataset(dataset_uid, session)
@@ -1747,6 +1750,7 @@ class ItemService:
                     root, item_schema
                 ),
                 status_filter=status_filter,
+                uids=uids,
             )
 
     def select_item(
@@ -2828,6 +2832,7 @@ class ItemService:
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseItem]:
         root = self._schema_service.root_of_dataset(dataset_uid, session)
         item_schema = root.items.get(item_schema_uid)
@@ -2857,6 +2862,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ImageSchema):
@@ -2877,6 +2883,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 status_filter=status_filter,
                 load_relations=load_relations,
             )
@@ -2898,6 +2905,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ObservationSchema):
@@ -2918,6 +2926,7 @@ class ItemService:
                 validity=validity,
                 pending_expression=pending_expression,
                 review_status=review_status,
+                uids=uids,
                 load_relations=load_relations,
             )
         else:

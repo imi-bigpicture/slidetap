@@ -37,7 +37,7 @@ from slidetap.model import (
     ProjectStatus,
     StringAttribute,
 )
-from slidetap.services import ItemService, MigrationService
+from slidetap.services import ItemGroupingService, ItemService, MigrationService
 from slidetap.services.project_service import ProjectService
 from slidetap.task import Scheduler
 from slidetap.web import SlideTapWebAppFactory
@@ -96,6 +96,11 @@ def metadata_export_service(decoy: Decoy):
 
 
 @pytest.fixture()
+def item_grouping_service(decoy: Decoy):
+    return decoy.mock(cls=ItemGroupingService)
+
+
+@pytest.fixture()
 def project_router_app(
     simple_app: FastAPI,
     login_service: LoginService,
@@ -105,6 +110,7 @@ def project_router_app(
     item_service: ItemService,
     image_pipeline_service: ImagePipelineService,
     metadata_export_service: MetadataExportService,
+    item_grouping_service: ItemGroupingService,
 ):
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
@@ -117,6 +123,9 @@ def project_router_app(
     )
     service_provider.provide(
         lambda: metadata_export_service, provides=MetadataExportService
+    )
+    service_provider.provide(
+        lambda: item_grouping_service, provides=ItemGroupingService
     )
 
     container = make_async_container(service_provider)
@@ -705,3 +714,26 @@ class TestSlideTapProjectRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert response.json()["uid"] == str(project.uid)
+
+    def test_the_groups_of_a_batch_are_got_by_the_batch_the_client_names(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        item_grouping_service: ItemGroupingService,
+        project: Project,
+    ):
+        # Arrange
+        batch_uid = uuid4()
+        decoy.when(item_grouping_service.get_grouping(project.uid, None)).then_return(
+            None
+        )
+
+        # Act
+        response = test_client.get(
+            f"api/projects/project/{project.uid}/groups",
+            params={"batchUid": str(batch_uid)},
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        decoy.verify(item_grouping_service.get_grouping(project.uid, batch_uid))

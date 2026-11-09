@@ -134,6 +134,13 @@ interface ItemTableProps {
   pagination?: PaginationState
   onPaginationChange?: (pagination: PaginationState) => void
   refresh: boolean
+  /** Only these items, such as those of a group. Any of the schema when left
+   * out. */
+  uids?: string[]
+  /** Leave out the tags and the counts of related items, for a table of a few
+   * items opened from somewhere that says what they are: the attributes are
+   * what it is read for, and the table then fits beside the side bar. */
+  compact?: boolean
 }
 
 /** The identifier column holds this width whatever it contains, so it sits in
@@ -172,6 +179,8 @@ export function ItemTable({
   pagination: controlledPagination,
   onPaginationChange,
   refresh,
+  uids,
+  compact,
 }: ItemTableProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
   // Held by the caller when it wants the page kept — leaving for an item view
@@ -342,6 +351,7 @@ export function ItemTable({
       displayOnlyInValid,
       pseudonymMode,
       attributeValueFields,
+      uids,
     ),
     queryFn: async () => {
       return await getItems<Item>(
@@ -357,6 +367,7 @@ export function ItemTable({
         displayRecycled,
         displayOnlyInValid ? true : undefined,
         pseudonymMode,
+        uids,
       )
     },
     refetchInterval: refresh ? 2000 : false,
@@ -381,6 +392,7 @@ export function ItemTable({
         displayRecycled,
         displayOnlyInValid ? true : undefined,
         pseudonymMode,
+        uids,
       ),
     )
   }, [
@@ -394,6 +406,7 @@ export function ItemTable({
     displayRecycled,
     displayOnlyInValid,
     pseudonymMode,
+    uids,
   ])
 
   const tagsQuery = useQuery({
@@ -681,6 +694,11 @@ export function ItemTable({
         },
       })
     })
+    if (compact === true) {
+      return columns.filter(
+        (column) => column.id !== 'tags' && !(column.id in relationships),
+      )
+    }
     return columns
   }, [
     schema,
@@ -689,6 +707,7 @@ export function ItemTable({
     identifierColumnSize,
     tagsQuery.data,
     relationships,
+    compact,
   ])
 
   const table = useDataTable<Item>({
@@ -867,7 +886,10 @@ interface IdentifierCellProps {
   pseudonymMode: boolean
 }
 
-function IdentifierCell({ item, pseudonymMode }: IdentifierCellProps): React.ReactElement {
+function IdentifierCell({
+  item,
+  pseudonymMode,
+}: IdentifierCellProps): React.ReactElement {
   const { rowActions, onRowView } = useContext(RowCallbacksContext)
   return (
     // The identifier is the way into the item and everything the row can do

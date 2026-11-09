@@ -12,20 +12,17 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import {
-    type ColumnFiltersState,
-    type SortingState
-} from '@tanstack/react-table'
+import { type ColumnFiltersState, type SortingState } from '@tanstack/react-table'
 import { Batch } from 'src/models/batch'
 import { Item } from 'src/models/item'
 import {
-    AttributeFilter,
-    AttributeValueField,
-    ItemValidity,
-    RelationFilter,
-    RelationFilterDefinition,
-    SortType,
-    TableRequest,
+  AttributeFilter,
+  AttributeValueField,
+  ItemValidity,
+  RelationFilter,
+  RelationFilterDefinition,
+  SortType,
+  TableRequest,
 } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 
@@ -36,23 +33,23 @@ import itemApi from 'src/services/api/item_api'
  * String(undefined) for an attribute or an empty bound for a relation range.
  */
 export const hasFilterValue = (value: unknown): boolean => {
-    if (value === null || value === undefined) {
-        return false
-    }
-    if (typeof value === 'string') {
-        return value.trim() !== ''
-    }
-    if (Array.isArray(value)) {
-        return value.some((entry) => hasFilterValue(entry))
-    }
-    return true
+  if (value === null || value === undefined) {
+    return false
+  }
+  if (typeof value === 'string') {
+    return value.trim() !== ''
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasFilterValue(entry))
+  }
+  return true
 }
 
 /** One term of a column filter: what to look for, and whether the row is
  * wanted for matching it or for not matching it. */
 interface FilterTerm {
-    value: string
-    negated: boolean
+  value: string
+  negated: boolean
 }
 
 /**
@@ -63,28 +60,28 @@ interface FilterTerm {
  * taken whole, and that has to be decided while splitting rather than after.
  */
 const splitTerms = (input: string): string[] => {
-    const terms: string[] = []
-    let current = ''
-    let quoted = false
-    for (const character of input) {
-        if (character === '"') {
-            quoted = !quoted
-        }
-        if (character === ',' && !quoted) {
-            terms.push(current)
-            current = ''
-            continue
-        }
-        current += character
+  const terms: string[] = []
+  let current = ''
+  let quoted = false
+  for (const character of input) {
+    if (character === '"') {
+      quoted = !quoted
     }
-    return [...terms, current]
+    if (character === ',' && !quoted) {
+      terms.push(current)
+      current = ''
+      continue
+    }
+    current += character
+  }
+  return [...terms, current]
 }
 
 /** A term with its quotes taken off, where it is quoted end to end. */
 const unquote = (term: string): string =>
-    term.length > 1 && term.startsWith('"') && term.endsWith('"')
-        ? term.slice(1, -1)
-        : term
+  term.length > 1 && term.startsWith('"') && term.endsWith('"')
+    ? term.slice(1, -1)
+    : term
 
 /**
  * What was typed into one filter input, read as terms.
@@ -99,179 +96,179 @@ const unquote = (term: string): string =>
  * saying plainly whether it is wanted or excluded.
  */
 export const parseFilterTerms = (input: string): FilterTerm[] =>
-    splitTerms(input)
-        .map((term) => term.trim())
-        .filter((term) => term !== '')
-        .map((term) =>
-            term.startsWith('!')
-                ? { value: unquote(term.slice(1).trim()), negated: true }
-                : { value: unquote(term), negated: false },
-        )
-        .filter((term) => term.value !== '')
+  splitTerms(input)
+    .map((term) => term.trim())
+    .filter((term) => term !== '')
+    .map((term) =>
+      term.startsWith('!')
+        ? { value: unquote(term.slice(1).trim()), negated: true }
+        : { value: unquote(term), negated: false },
+    )
+    .filter((term) => term.value !== '')
 
 export const buildTableRequest = (
-    relationships: Record<string, RelationFilterDefinition>,
-    start: number,
-    size: number,
-    unfilteredColumnFilters: ColumnFiltersState,
-    sorting: SortingState,
-    attributeValueFields: Record<string, AttributeValueField>,
-    recycled?: boolean,
-    invalid?: boolean,
-    pseudonymMode?: boolean,
+  relationships: Record<string, RelationFilterDefinition>,
+  start: number,
+  size: number,
+  unfilteredColumnFilters: ColumnFiltersState,
+  sorting: SortingState,
+  attributeValueFields: Record<string, AttributeValueField>,
+  recycled?: boolean,
+  invalid?: boolean,
+  pseudonymMode?: boolean,
+  uids?: string[],
 ): TableRequest => {
-    const filters = unfilteredColumnFilters.filter((filter) =>
-        hasFilterValue(filter.value),
+  const filters = unfilteredColumnFilters.filter((filter) =>
+    hasFilterValue(filter.value),
+  )
+  const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
+    ?.value as string[]
+  const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
+    string | null
+  // Both regular ("attributes.<tag>") and private ("privateAttributes.<tag>")
+  // attribute columns filter by tag; the backend matches the tag in either set.
+  // One filter per term rather than per column: a column can be asked for
+  // several codes at once, and for rows that carry none of another.
+  const attributeFilters = filters
+    .filter(
+      (filter) =>
+        filter.id.startsWith('attributes.') ||
+        filter.id.startsWith('privateAttributes.'),
     )
-    const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
-        ?.value as string[]
-    const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
-        | string
-        | null
-    // Both regular ("attributes.<tag>") and private ("privateAttributes.<tag>")
-    // attribute columns filter by tag; the backend matches the tag in either set.
-    // One filter per term rather than per column: a column can be asked for
-    // several codes at once, and for rows that carry none of another.
-    const attributeFilters = filters
-        .filter(
-            (filter) =>
-                filter.id.startsWith('attributes.') ||
-                filter.id.startsWith('privateAttributes.'),
-        )
-        .flatMap<AttributeFilter>((filter) =>
-            parseFilterTerms(String(filter.value)).map((term) => ({
-                tag: filter.id.substring(filter.id.indexOf('.') + 1),
-                value: term.value,
-                negated: term.negated,
-                field: attributeValueFields[filter.id] ?? AttributeValueField.DISPLAY,
-            })),
-        )
-    const relationFilters = filters
-        .filter((filter) => filter.id.startsWith('relation.'))
-        .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
-        .filter((filterObj) => filterObj.definition !== undefined)
-        .reduce<RelationFilter[]>((filters, filterObj) => {
-            const filterValue = filterObj.filter.value as [number | null, number | null]
-            const minCount = filterValue[0] as number | undefined | null
-            const maxCount = filterValue[1] as number | undefined | null
-            if (
-                (minCount === null || minCount === undefined) &&
-                (maxCount === null || maxCount === undefined)
-            ) {
-                return filters
-            }
-            return [
-                ...filters,
-                {
-                    relationSchemaUid: filterObj.definition.relationSchemaUid,
-                    relationType: filterObj.definition.relationType,
-                    minCount: minCount === undefined ? null : minCount,
-                    maxCount: maxCount === undefined ? null : maxCount,
-                },
-            ]
-        }, [])
-    const statusFilter = filters.find((filter) => filter.id === 'status')?.value
-        ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
-                (status) => parseInt(status),
-            )
-        : null
-    const validColumnFilter = filters.find((filter) => filter.id === 'valid')
-        ?.value as string | undefined
-    /** Asked of the database rather than of the page: the table holds one page
-     * and the answer is about the whole dataset. What the toolbar's own button
-     * asks for is what a curator has to see to, which is not everything that
-     * is short of something -- an image whose file has not been read yet is
-     * short of plenty and there is nothing to be done about it. */
-    let validityFilter: ItemValidity | null
-    if (
-        validColumnFilter === ItemValidity.VALID ||
-        validColumnFilter === ItemValidity.PENDING ||
-        validColumnFilter === ItemValidity.INVALID
-    ) {
-        validityFilter = validColumnFilter
-    } else if (invalid !== undefined) {
-        validityFilter = invalid ? ItemValidity.INVALID : ItemValidity.VALID
-    } else {
-        validityFilter = null
+    .flatMap<AttributeFilter>((filter) =>
+      parseFilterTerms(String(filter.value)).map((term) => ({
+        tag: filter.id.substring(filter.id.indexOf('.') + 1),
+        value: term.value,
+        negated: term.negated,
+        field: attributeValueFields[filter.id] ?? AttributeValueField.DISPLAY,
+      })),
+    )
+  const relationFilters = filters
+    .filter((filter) => filter.id.startsWith('relation.'))
+    .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
+    .filter((filterObj) => filterObj.definition !== undefined)
+    .reduce<RelationFilter[]>((filters, filterObj) => {
+      const filterValue = filterObj.filter.value as [number | null, number | null]
+      const minCount = filterValue[0] as number | undefined | null
+      const maxCount = filterValue[1] as number | undefined | null
+      if (
+        (minCount === null || minCount === undefined) &&
+        (maxCount === null || maxCount === undefined)
+      ) {
+        return filters
+      }
+      return [
+        ...filters,
+        {
+          relationSchemaUid: filterObj.definition.relationSchemaUid,
+          relationType: filterObj.definition.relationType,
+          minCount: minCount === undefined ? null : minCount,
+          maxCount: maxCount === undefined ? null : maxCount,
+        },
+      ]
+    }, [])
+  const statusFilter = filters.find((filter) => filter.id === 'status')?.value
+    ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
+        (status) => parseInt(status),
+      )
+    : null
+  const validColumnFilter = filters.find((filter) => filter.id === 'valid')?.value as
+    string | undefined
+  /** Asked of the database rather than of the page: the table holds one page
+   * and the answer is about the whole dataset. What the toolbar's own button
+   * asks for is what a curator has to see to, which is not everything that
+   * is short of something -- an image whose file has not been read yet is
+   * short of plenty and there is nothing to be done about it. */
+  let validityFilter: ItemValidity | null
+  if (
+    validColumnFilter === ItemValidity.VALID ||
+    validColumnFilter === ItemValidity.PENDING ||
+    validColumnFilter === ItemValidity.INVALID
+  ) {
+    validityFilter = validColumnFilter
+  } else if (invalid !== undefined) {
+    validityFilter = invalid ? ItemValidity.INVALID : ItemValidity.VALID
+  } else {
+    validityFilter = null
+  }
+  const sortingRequest = sorting.map((sort) => {
+    if (sort.id === 'id') {
+      return {
+        sortType: pseudonymMode ? SortType.PSEUDONYM : SortType.IDENTIFIER,
+        descending: sort.desc,
+      }
     }
-    const sortingRequest = sorting.map((sort) => {
-        if (sort.id === 'id') {
-            return {
-                sortType: pseudonymMode ? SortType.PSEUDONYM : SortType.IDENTIFIER,
-                descending: sort.desc,
-            }
-        }
-        if (sort.id === 'valid') {
-            return { sortType: SortType.VALID, descending: sort.desc }
-        }
-        if (
-            sort.id.startsWith('attributes.') ||
-            sort.id.startsWith('privateAttributes.')
-        ) {
-            const column = sort.id.substring(sort.id.indexOf('.') + 1)
-            return {
-                column: column,
-                field: attributeValueFields[sort.id] ?? AttributeValueField.DISPLAY,
-                descending: sort.desc,
-                sortType: SortType.ATTRIBUTE,
-            }
-        }
-        if (sort.id.startsWith('relation.')) {
-            const relation = relationships[sort.id]
-            return {
-                relationSchemaUid: relation.relationSchemaUid,
-                relationType: relation.relationType,
-                descending: sort.desc,
-                sortType: SortType.RELATION,
-            }
-        }
-        if (sort.id == 'status') {
-            return {
-                sortType: SortType.STATUS,
-                descending: sort.desc,
-            }
-        }
-        throw new Error(`Unknown sort type: ${sort.id}.`)
-    })
-    return {
-        start,
-        size,
-        identifierFilter: identifierFilter,
-        pseudonymMode: pseudonymMode ?? false,
-        attributeFilters: attributeFilters,
-        relationFilters: relationFilters,
-        statusFilter: statusFilter,
-        tagFilter: tagFilters,
-        sorting: sortingRequest,
-        included: recycled !== undefined ? !recycled : null,
-        validity: validityFilter,
+    if (sort.id === 'valid') {
+      return { sortType: SortType.VALID, descending: sort.desc }
     }
+    if (sort.id.startsWith('attributes.') || sort.id.startsWith('privateAttributes.')) {
+      const column = sort.id.substring(sort.id.indexOf('.') + 1)
+      return {
+        column: column,
+        field: attributeValueFields[sort.id] ?? AttributeValueField.DISPLAY,
+        descending: sort.desc,
+        sortType: SortType.ATTRIBUTE,
+      }
+    }
+    if (sort.id.startsWith('relation.')) {
+      const relation = relationships[sort.id]
+      return {
+        relationSchemaUid: relation.relationSchemaUid,
+        relationType: relation.relationType,
+        descending: sort.desc,
+        sortType: SortType.RELATION,
+      }
+    }
+    if (sort.id == 'status') {
+      return {
+        sortType: SortType.STATUS,
+        descending: sort.desc,
+      }
+    }
+    throw new Error(`Unknown sort type: ${sort.id}.`)
+  })
+  return {
+    start,
+    size,
+    identifierFilter: identifierFilter,
+    pseudonymMode: pseudonymMode ?? false,
+    attributeFilters: attributeFilters,
+    relationFilters: relationFilters,
+    statusFilter: statusFilter,
+    tagFilter: tagFilters,
+    sorting: sortingRequest,
+    included: recycled !== undefined ? !recycled : null,
+    validity: validityFilter,
+    uids: uids ?? null,
+  }
 }
 
 export const getItems = async <T extends Item>(
-    schemaUid: string,
-    datasetUid: string,
-    batch: Batch | null,
-    relationships: Record<string, RelationFilterDefinition>,
-    start: number,
-    size: number,
-    filters: ColumnFiltersState,
-    sorting: SortingState,
-    attributeValueFields: Record<string, AttributeValueField>,
-    recycled?: boolean,
-    invalid?: boolean,
-    pseudonymMode?: boolean,
-): Promise<{ items: T[]; count: number } > => {
-    const request = buildTableRequest(
-        relationships,
-        start,
-        size,
-        filters,
-        sorting,
-        attributeValueFields,
-        recycled,
-        invalid,
-        pseudonymMode,
-    )
-    return await itemApi.getItems<T>(schemaUid, datasetUid, batch?.uid, request)
+  schemaUid: string,
+  datasetUid: string,
+  batch: Batch | null,
+  relationships: Record<string, RelationFilterDefinition>,
+  start: number,
+  size: number,
+  filters: ColumnFiltersState,
+  sorting: SortingState,
+  attributeValueFields: Record<string, AttributeValueField>,
+  recycled?: boolean,
+  invalid?: boolean,
+  pseudonymMode?: boolean,
+  uids?: string[],
+): Promise<{ items: T[]; count: number }> => {
+  const request = buildTableRequest(
+    relationships,
+    start,
+    size,
+    filters,
+    sorting,
+    attributeValueFields,
+    recycled,
+    invalid,
+    pseudonymMode,
+    uids,
+  )
+  return await itemApi.getItems<T>(schemaUid, datasetUid, batch?.uid, request)
 }

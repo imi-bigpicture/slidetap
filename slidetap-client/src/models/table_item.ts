@@ -17,7 +17,6 @@ import { ImageStatus } from 'src/models/image_status'
 import { ProjectStatus } from 'src/models/project_status'
 import { Item } from './item'
 
-
 export interface BaseTableItem {
   readonly uid: string
 }
@@ -62,19 +61,19 @@ export interface ObservationTableItem extends TableItem {
   name: string
 }
 
-export interface ColumnFilter  {
+export interface ColumnFilter {
   id: string
   value: unknown
 }
 
 export enum SortType {
-  IDENTIFIER = "identifier",
-  PSEUDONYM = "pseudonym",
-  VALID = "valid",
-  STATUS = "status",
-  MESSAGE = "message",
-  ATTRIBUTE = "attribute",
-  RELATION = "relation"
+  IDENTIFIER = 'identifier',
+  PSEUDONYM = 'pseudonym',
+  VALID = 'valid',
+  STATUS = 'status',
+  MESSAGE = 'message',
+  ATTRIBUTE = 'attribute',
+  RELATION = 'relation',
 }
 
 export interface ColumnSort {
@@ -84,8 +83,8 @@ export interface ColumnSort {
 
 /** Value of an attribute to display, filter and sort an attribute column on. */
 export enum AttributeValueField {
-  DISPLAY = "display",
-  MAPPABLE = "mappable"
+  DISPLAY = 'display',
+  MAPPABLE = 'mappable',
 }
 
 /** One term a column was filtered by. A column can send several. */
@@ -111,12 +110,12 @@ export interface RelationSort extends ColumnSort {
 }
 
 export enum RelationFilterType {
-  PARENT = "parent",
-  CHILD = "child",
-  IMAGE = "image",
-  OBSERVATION = "observation",
-  ANNOTATION = "annotation",
-  SAMPLE = "sample"
+  PARENT = 'parent',
+  CHILD = 'child',
+  IMAGE = 'image',
+  OBSERVATION = 'observation',
+  ANNOTATION = 'annotation',
+  SAMPLE = 'sample',
 }
 
 export interface RelationFilterDefinition {
@@ -124,7 +123,6 @@ export interface RelationFilterDefinition {
   relationSchemaUid: string
   relationType: RelationFilterType
   valueGetter: (item: Item) => number
-
 }
 
 export interface RelationFilter {
@@ -155,8 +153,9 @@ export interface TableRequest {
   relationFilters: RelationFilter[] | null
   statusFilter: number[] | null
   tagFilter: string[] | null
-  sorting : ColumnSort[] | null
+  sorting: ColumnSort[] | null
   included: boolean | null
   validity: ItemValidity | null
-
+  /** Only these items, such as those of a group. Null or left out for any. */
+  uids?: string[] | null
 }

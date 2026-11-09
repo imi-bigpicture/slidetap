@@ -773,6 +773,7 @@ class TestSlideTapItemRouter:
                 None,
                 None,
                 status_filter=None,
+                uids=None,
             )
         ).then_return([sample])
         decoy.when(
@@ -788,6 +789,7 @@ class TestSlideTapItemRouter:
                 None,
                 None,
                 status_filter=None,
+                uids=None,
             )
         ).then_return(11)
 

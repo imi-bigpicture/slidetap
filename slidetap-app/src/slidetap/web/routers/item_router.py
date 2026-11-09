@@ -647,6 +647,7 @@ def get_items_get(
         table_request.included,
         table_request.validity,
         status_filter=table_request.status_filter,
+        uids=table_request.uids,
     )
     count = item_service.get_count_for_schema(
         item_schema_uid,
@@ -660,6 +661,7 @@ def get_items_get(
         table_request.included,
         table_request.validity,
         status_filter=table_request.status_filter,
+        uids=table_request.uids,
     )
     return ItemsResponse(items=list(items), count=count)
 

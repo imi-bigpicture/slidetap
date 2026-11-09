@@ -119,3 +119,5 @@ class TableRequest(FrozenBaseModel):
     validity: ItemValidity | None = None
     status_filter: Sequence[ImageStatus] | None = None
     tag_filter: Sequence[UUID] | None = None
+    uids: Sequence[UUID] | None = None
+    """Only these items, such as the items of a group. None for any."""

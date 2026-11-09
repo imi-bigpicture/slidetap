@@ -40,6 +40,7 @@ from sqlalchemy import (
     String,
     Table,
     and_,
+    bindparam,
     case,
     cast,
     create_engine,
@@ -845,6 +846,43 @@ class DatabaseService:
             )
             items.update((item.uid, item) for item in session.scalars(query))
         return items
+
+    def get_selected_items_with_models_loaded(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+        schema_uid: UUID,
+        batch_uid: UUID | None = None,
+    ) -> dict[UUID, DatabaseItem]:
+        """Get the selected items of a schema in a dataset, or in a batch of
+        it, with everything their `model` reads loaded up front, in one query
+        and the fixed number its load options add.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get them in.
+        dataset_uid: UUID
+            The uid of the dataset.
+        schema_uid: UUID
+            The uid of the item schema of the items.
+        batch_uid: UUID | None
+            Only the items of this batch, when given.
+
+        Returns
+        -------
+        dict[UUID, DatabaseItem]
+            The items, by uid.
+        """
+        query = select(DatabaseItem).where(
+            DatabaseItem.dataset_uid == dataset_uid,
+            DatabaseItem.schema_uid == schema_uid,
+            DatabaseItem.selected.is_(True),
+        )
+        if batch_uid is not None:
+            query = query.where(DatabaseItem.batch_uid == batch_uid)
+        query = query.options(*self._item_model_load_options())
+        return {item.uid: item for item in session.scalars(query)}
 
     def load_ancestors(
         self, session: Session, items: Iterable[DatabaseItem]
@@ -1682,6 +1720,7 @@ class DatabaseService:
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseImage]:
         return self._query_sort_and_limit_items(
             session,
@@ -1702,6 +1741,7 @@ class DatabaseService:
             validity=validity,
             pending_expression=pending_expression,
             review_status=review_status,
+            uids=uids,
             load_relations=load_relations,
         )
 
@@ -1724,6 +1764,7 @@ class DatabaseService:
         pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseSample]:
         return self._query_sort_and_limit_items(
             session,
@@ -1743,6 +1784,7 @@ class DatabaseService:
             validity=validity,
             pending_expression=pending_expression,
             review_status=review_status,
+            uids=uids,
             load_relations=load_relations,
         )
 
@@ -1765,6 +1807,7 @@ class DatabaseService:
         pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseObservation]:
         return self._query_sort_and_limit_items(
             session,
@@ -1784,6 +1827,7 @@ class DatabaseService:
             validity=validity,
             pending_expression=pending_expression,
             review_status=review_status,
+            uids=uids,
             load_relations=load_relations,
         )
 
@@ -1806,6 +1850,7 @@ class DatabaseService:
         pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ) -> Iterable[DatabaseAnnotation]:
         return self._query_sort_and_limit_items(
             session,
@@ -1825,6 +1870,7 @@ class DatabaseService:
             validity=validity,
             pending_expression=pending_expression,
             review_status=review_status,
+            uids=uids,
             load_relations=load_relations,
         )
 
@@ -1844,6 +1890,7 @@ class DatabaseService:
         pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
+        uids: Collection[UUID] | None = None,
     ) -> int:
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -1865,6 +1912,7 @@ class DatabaseService:
             validity=validity,
             pending_expression=pending_expression,
             review_status=review_status,
+            uids=uids,
         )
         return session.scalars(query).one()
 
@@ -3876,6 +3924,7 @@ class DatabaseService:
         pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
+        uids: Collection[UUID] | None = None,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -3896,6 +3945,7 @@ class DatabaseService:
             validity=validity,
             pending_expression=pending_expression,
             review_status=review_status,
+            uids=uids,
         )
         query = cls._sort_and_limit_item_query(
             query,
@@ -4000,6 +4050,7 @@ class DatabaseService:
         validity: ItemValidity | None = None,
         pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
+        uids: Collection[UUID] | None = None,
     ) -> Select:
 
         query = query.filter_by(schema_uid=schema.uid)
@@ -4038,6 +4089,22 @@ class DatabaseService:
             query = cls._validity_filter(query, schema, validity, pending_expression)
         if review_status is not None:
             query = query.filter_by(review_status=review_status)
+        if uids is not None:
+            # Only these items, such as those of a group. Written into the
+            # statement rather than bound one parameter each: a group can hold
+            # more than a statement takes parameters, and unlike a lookup this
+            # query is sorted and paged, so it cannot be split into several.
+            query = query.filter(
+                DatabaseItem.uid.in_(
+                    bindparam(
+                        "uids",
+                        list(uids),
+                        expanding=True,
+                        literal_execute=True,
+                        unique=True,
+                    )
+                )
+            )
         return query
 
     @staticmethod

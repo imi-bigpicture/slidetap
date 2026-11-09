@@ -21,6 +21,7 @@ import {
   Downloading,
   Flag,
   Grading,
+  GroupWork,
   HourglassBottom,
   HourglassEmpty,
   HourglassFull,
@@ -43,6 +44,7 @@ import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
 import Curate from 'src/components/project/curate'
+import Groups from 'src/components/project/groups'
 import Unmapped from 'src/components/project/unmapped'
 import Review from 'src/components/project/review'
 import HierarchyPage from 'src/pages/hierarchy'
@@ -432,6 +434,18 @@ export default function DisplayProject({
         icon: <QuestionMark />,
         description: 'Values in the project with no mapping',
       },
+      // Only where the schema groups the items: without a policy there is
+      // nothing to count.
+      ...(rootSchema.itemGrouping != null
+        ? [
+            {
+              name: rootSchema.itemGrouping.displayName,
+              path: 'groups_dataset',
+              icon: <GroupWork />,
+              description: 'Groups of items in the project, and those too small',
+            },
+          ]
+        : []),
       {
         name: 'Export',
         path: 'export',
@@ -504,6 +518,16 @@ export default function DisplayProject({
         icon: <QuestionMark />,
         description: 'Values in the batch with no mapping',
       },
+      ...(rootSchema.itemGrouping != null
+        ? [
+            {
+              name: rootSchema.itemGrouping.displayName,
+              path: 'groups_batch',
+              icon: <GroupWork />,
+              description: 'Groups of items in the batch, and those too small',
+            },
+          ]
+        : []),
       // Only where the server has the step: where it does not, the images are
       // downloaded as they are converted, and the batch never stops here.
       ...(preProcessImages
@@ -691,6 +715,16 @@ export default function DisplayProject({
       key="unmapped_batch"
       path="/unmapped_batch"
       element={<Unmapped project={project} batch={batch} />}
+    />,
+    <Route
+      key="groups_dataset"
+      path="/groups_dataset"
+      element={<Groups project={project} />}
+    />,
+    <Route
+      key="groups_batch"
+      path="/groups_batch"
+      element={<Groups project={project} batch={batch} />}
     />,
     <Route
       key="curate_dataset"

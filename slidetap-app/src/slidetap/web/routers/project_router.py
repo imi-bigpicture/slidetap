@@ -24,11 +24,12 @@ from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from slidetap.model import (
     AnyAttribute,
     AttributeMigrationIssue,
+    ItemGrouping,
     NotAllowedActionError,
     Project,
     ProjectActions,
@@ -38,6 +39,7 @@ from slidetap.model import (
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
+    ItemGroupingService,
     ItemService,
     MigrationService,
     ProjectService,
@@ -785,3 +787,27 @@ def get_project_validation(
     validation = validation_service.get_validation_for_project(project_uid)
     logger.debug(f"Validation of project {project_uid}: {validation}")
     return validation
+
+
+@project_router.get("/project/{project_uid}/groups")
+def get_project_groups(
+    project_uid: UUID,
+    item_grouping_service: FromDishka[ItemGroupingService],
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+) -> ItemGrouping | None:
+    """Get the groups the selected items of a project fall into by what they
+    share, smallest first.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project to group the items of.
+    batch_uid: UUID | None
+        Only the items of this batch, when given.
+
+    Returns
+    ----------
+    ItemGrouping | None
+        The groups, or None where the project's root groups nothing.
+    """
+    return item_grouping_service.get_grouping(project_uid, batch_uid)

@@ -30,6 +30,7 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseProject,
 )
+from slidetap.external_interfaces.item_grouping import ItemGrouper
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
@@ -91,7 +92,8 @@ class SchemaService:
             The plugin's schema interface: its `root()` is the root of new
             projects, its `previous_roots()` are view only, and its
             `migration_from()` moves the projects on a previous root to the
-            root of new projects.
+            root of new projects, and its `item_grouper_of()` groups the
+            items of a root with an item grouping policy.
         database_service: DatabaseService
             Where the projects are, which have to be on a provided root.
 
@@ -117,6 +119,12 @@ class SchemaService:
             for root in self._provided[1:]
             if (migration := schema_interface.migration_from(root.schema)) is not None
         }
+        self._item_groupers: dict[UUID, ItemGrouper] = {
+            root.uid: grouper
+            for root in self._provided
+            if root.schema.item_grouping is not None
+            and (grouper := schema_interface.item_grouper_of(root.schema)) is not None
+        }
         self._validate()
 
     @property
@@ -128,6 +136,11 @@ class SchemaService:
     def migration_of(self, root_schema_uid: UUID) -> SchemaMigration | None:
         """The migration of the projects on a root, if there is one."""
         return self._migrations.get(root_schema_uid)
+
+    def item_grouper_of(self, root_schema_uid: UUID) -> ItemGrouper | None:
+        """How the items of a root are grouped by its `ItemGroupingPolicy`,
+        None where the root has no policy or the application no grouper."""
+        return self._item_groupers.get(root_schema_uid)
 
     @property
     def default_root(self) -> RootSchemaIndex:
@@ -502,13 +515,15 @@ class SchemaService:
             If a root is provided twice or defines one item schema uid twice,
             an attribute schema uid has two definitions, a migration leaves
             out an item schema that changed or names one its root does not
-            have, a project in the
+            have, an item grouper reads a schema its root does not have or
+            not that of the policy, a project in the
             database is on a root that is not provided, the projects on a
             root hold items or attributes on schemas the root does not have.
         """
         self._validate_roots()
         self._validate_attributes()
         self._validate_migrations()
+        self._validate_item_groupers()
         self._validate_projects()
         self._validate_stored_schemas()
 
@@ -541,6 +556,35 @@ class SchemaService:
                 )
         if problems:
             raise ValueError(f"The migrations cannot be used: {'; '.join(problems)}.")
+
+    def _validate_item_groupers(self) -> None:
+        """Refuse an item grouper that reads a schema its root does not have,
+        or not the schema its policy groups: either would group the items
+        wrong, or none of them, without saying so."""
+        problems: list[str] = []
+        for root in self._provided:
+            grouper = self._item_groupers.get(root.uid)
+            policy = root.schema.item_grouping
+            if grouper is None or policy is None:
+                continue
+            read = set(grouper.schema_uids())
+            unknown = read - root.items.keys()
+            if unknown:
+                problems.append(
+                    f"the item grouper of {root.display_name} reads "
+                    f"{', '.join(sorted(map(str, unknown)))}, which are not item "
+                    f"schemas of it"
+                )
+            grouped = policy.schema_uid
+            if grouped not in read:
+                problems.append(
+                    f"the item grouper of {root.display_name} does not read "
+                    f"{grouped}, which its policy groups"
+                )
+        if problems:
+            raise ValueError(
+                f"The item groupers cannot be used: {'; '.join(problems)}."
+            )
 
     def _validate_stored_schemas(self) -> None:
         """Refuse to start with projects holding items or attributes on schemas
