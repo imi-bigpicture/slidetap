@@ -49,7 +49,13 @@ import React, {
   useState,
   type ReactElement,
 } from 'react'
+import { dragHandleCursor } from 'src/components/drag_cursor'
 import AttributeDetails from 'src/components/attribute/attribute_details'
+import {
+  ListEntryDragContext,
+  type ListEntryDrag,
+} from 'src/components/attribute/value/list_entry_drag'
+import { selectValueToDisplay } from 'src/components/attribute/value/value_to_display'
 import ItemViewHeader from 'src/components/item/item_view_header'
 import { useSelectWithPreview } from 'src/components/item/use_select_with_preview'
 import { useError } from 'src/contexts/error/error_context'
@@ -76,6 +82,7 @@ import type {
   OverviewSectionLayout,
 } from 'src/models/schema/overview_layout'
 import type { TableRequest } from 'src/models/table_item'
+import { ValueDisplayType } from 'src/models/value_display_type'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import { getContainerSpanSx } from 'src/components/container_span'
@@ -282,6 +289,26 @@ export default function OverviewView({
       attributeTag: string
       targetItemUid: string
     }) => await itemApi.moveAttribute(sourceItemUid, attributeTag, targetItemUid),
+    onSuccess: invalidateOverview,
+  })
+
+  /** Moves a value from a place on an item to a place on an item, such as an
+   * entry of a list: swapped with the value there, or appended past the last
+   * of a list. */
+  const moveValueMutation = useMutation({
+    mutationFn: async ({
+      source,
+      target,
+    }: {
+      source: AttributePlace
+      target: AttributePlace
+    }) =>
+      await itemApi.moveAttributeValue(
+        source.itemUid,
+        source.path,
+        target.itemUid,
+        target.path,
+      ),
     onSuccess: invalidateOverview,
   })
 
@@ -522,6 +549,9 @@ export default function OverviewView({
           onMoveAttribute={(sourceItemUid, attributeTag, targetItemUid) => {
             moveAttributeMutation.mutate({ sourceItemUid, attributeTag, targetItemUid })
           }}
+          onMoveValue={(source, target) => {
+            moveValueMutation.mutate({ source, target })
+          }}
           onMoveItem={(itemUid, targetParentUid) => {
             moveItemMutation.mutate({ itemUid, targetParentUid })
           }}
@@ -542,6 +572,7 @@ export default function OverviewView({
             addChildMutation.isPending ||
             copyToParentMutation.isPending ||
             moveAttributeMutation.isPending ||
+            moveValueMutation.isPending ||
             moveItemMutation.isPending ||
             selectWithPreview.isPending
           }
@@ -683,6 +714,8 @@ interface OverviewSectionCardProps {
     attributeTag: string,
     targetItemUid: string,
   ) => void
+  /** Move a value from a place to a place, such as an entry of a list. */
+  onMoveValue: (source: AttributePlace, target: AttributePlace) => void
   onMoveItem: (itemUid: string, targetParentUid: string) => void
   onDelete: (groupItemUid: string) => void
   /** Take one entry out of the group — the diagnose under the specimen, not
@@ -719,6 +752,23 @@ interface AttributeDragPayload {
   /** The value belongs to the item itself, not to an item inside it, so it
    * swaps with the other item rather than with an observation in it. */
   parentAttribute: boolean
+  /** Where the value is one entry of the list at the tag, its position. */
+  position?: number
+}
+
+/** A place on an item a value is moved from or to: the tag of an attribute of
+ * the item, then the tags and list positions down to the value. */
+interface AttributePlace {
+  itemUid: string
+  path: Array<string | number>
+}
+
+/** The path down to the attribute at a compound tag, such as
+ * `statement.diagnoses`, and on to a position in it where given. */
+function pathOf(compoundTag: string, position?: number): Array<string | number> {
+  const path: Array<string | number> = compoundTag.split('.')
+  if (position !== undefined) path.push(position)
+  return path
 }
 
 interface ItemDragPayload {
@@ -822,6 +872,7 @@ function OverviewSectionCard({
   onAddChild,
   onCopyToParent,
   onMoveAttribute,
+  onMoveValue,
   onMoveItem,
   onDelete,
   onDeleteItem,
@@ -962,6 +1013,27 @@ function OverviewSectionCard({
     // Same item: nothing to swap with.
     if (targetItemUid === payload.itemUid || ownItemUids.has(payload.itemUid)) return
     e.preventDefault()
+    if (payload.position !== undefined) {
+      // An entry of a list, dropped on the card rather than on an entry: it
+      // goes last in the list here.
+      const targetItem = payload.parentAttribute ? group.parentItem : group.items[0]
+      const list =
+        targetItem?.attributes[payload.compoundTag] ??
+        targetItem?.privateAttributes[payload.compoundTag]
+      const entries =
+        list !== undefined
+          ? selectValueToDisplay(list, ValueDisplayType.CURRENT)
+          : null
+      const length = Array.isArray(entries) ? entries.length : 0
+      onMoveValue(
+        {
+          itemUid: payload.itemUid,
+          path: pathOf(payload.compoundTag, payload.position),
+        },
+        { itemUid: targetItemUid, path: pathOf(payload.compoundTag, length) },
+      )
+      return
+    }
     onMoveAttribute(payload.itemUid, payload.compoundTag, targetItemUid)
   }
 
@@ -1061,6 +1133,7 @@ function OverviewSectionCard({
               draggableAttributes={
                 section.reassignable ? section.reassignableAttributes : undefined
               }
+              onMoveValue={section.reassignable ? onMoveValue : undefined}
               parentAttributes
               editable={editable}
               fillHeight={fillHeight}
@@ -1078,6 +1151,7 @@ function OverviewSectionCard({
               draggableAttributes={
                 section.reassignable ? section.reassignableAttributes : undefined
               }
+              onMoveValue={section.reassignable ? onMoveValue : undefined}
               draggableItem={section.reassignable}
               editable={editable}
               fillHeight={fillHeight}
@@ -1341,6 +1415,9 @@ interface OverviewItemRowProps {
   /** Compound tags that get their own drag handle, putting an
    * AttributeDragPayload on the dataTransfer. Empty means all of them. */
   draggableAttributes?: string[]
+  /** Move a value from a place to a place, which a draggable list gives each
+   * of its entries a handle for. */
+  onMoveValue?: (source: AttributePlace, target: AttributePlace) => void
   /** These attributes belong to the item itself, so they swap with the other
    * item rather than with an item inside it. */
   parentAttributes?: boolean
@@ -1428,6 +1505,7 @@ function OverviewItemRow({
   editedAttributes,
   onAttributeUpdate,
   draggableAttributes,
+  onMoveValue,
   parentAttributes = false,
   draggableItem = false,
   editable = true,
@@ -1503,9 +1581,65 @@ function OverviewItemRow({
           compoundTag,
           parentAttribute: parentAttributes,
         }
+        // A list moved one entry at a time, as well as whole: an entry onto
+        // another to swap the two, on this item or another, or past the last.
+        const entryDrag: ListEntryDrag | null =
+          draggable &&
+          onMoveValue !== undefined &&
+          schemas[childTag]?.attributeValueType === AttributeValueType.LIST
+            ? {
+                onDragStart: (event, position) => {
+                  event.dataTransfer.setData(
+                    ATTRIBUTE_DRAG_MIME,
+                    JSON.stringify({ ...payload, position }),
+                  )
+                  event.dataTransfer.effectAllowed = 'move'
+                },
+                accepts: (event) =>
+                  event.dataTransfer.types.includes(ATTRIBUTE_DRAG_MIME),
+                onDrop: (event, position) => {
+                  let dropped: AttributeDragPayload
+                  try {
+                    dropped = JSON.parse(
+                      event.dataTransfer.getData(ATTRIBUTE_DRAG_MIME),
+                    ) as AttributeDragPayload
+                  } catch {
+                    return false
+                  }
+                  // A whole value, or another list's: for the card to take.
+                  if (
+                    dropped.position === undefined ||
+                    dropped.compoundTag !== compoundTag
+                  ) {
+                    return false
+                  }
+                  if (
+                    dropped.itemUid === targetItem.itemUid &&
+                    dropped.position === position
+                  ) {
+                    return true
+                  }
+                  onMoveValue(
+                    {
+                      itemUid: dropped.itemUid,
+                      path: pathOf(compoundTag, dropped.position),
+                    },
+                    {
+                      itemUid: targetItem.itemUid,
+                      path: pathOf(compoundTag, position),
+                    },
+                  )
+                  return true
+                },
+              }
+            : null
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>{content}</Box>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <ListEntryDragContext.Provider value={entryDrag}>
+                {content}
+              </ListEntryDragContext.Provider>
+            </Box>
             {draggable ? (
               <Tooltip title="Drag to swap this value with another item">
                 <Box
@@ -1514,16 +1648,17 @@ function OverviewItemRow({
                     e.dataTransfer.setData(ATTRIBUTE_DRAG_MIME, JSON.stringify(payload))
                     e.dataTransfer.effectAllowed = 'move'
                   }}
-                  sx={{
-                    ...DRAG_HANDLE_SLOT,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'grab',
-                    userSelect: 'none',
-                    color: 'action.active',
-                    '&:active': { cursor: 'grabbing' },
-                  }}
+                  sx={[
+                    {
+                      ...DRAG_HANDLE_SLOT,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      userSelect: 'none',
+                      color: 'action.active',
+                    },
+                    dragHandleCursor,
+                  ]}
                 >
                   <DragIndicator fontSize="small" />
                 </Box>
@@ -1562,15 +1697,16 @@ function OverviewItemRow({
               event.dataTransfer.setData(ITEM_DRAG_MIME, JSON.stringify(payload))
               event.dataTransfer.effectAllowed = 'move'
             }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'grab',
-              userSelect: 'none',
-              color: 'text.secondary',
-              pt: 0.5,
-              '&:active': { cursor: 'grabbing' },
-            }}
+            sx={[
+              {
+                display: 'flex',
+                alignItems: 'center',
+                userSelect: 'none',
+                color: 'text.secondary',
+                pt: 0.5,
+              },
+              dragHandleCursor,
+            ]}
           >
             <DragHandle fontSize="small" />
           </Box>

@@ -1472,18 +1472,45 @@ class MapperService:
                     self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     attribute.display_value = mapping.attribute.display_value
+        # Held attributes are mapped as the root maps them, into the mapped
+        # value of the one holding them: each is mapped as a copy, and a copy
+        # that is not kept is a mapping lost, such as for a code in a list in
+        # an object.
         elif (
             isinstance(attribute, ListAttribute)
             and attribute.original_value is not None
+            and RejectedValues.ORIGINAL not in attribute.rejected
         ):
-            for child_attribute in attribute.original_value:
-                self._recursive_mapping(session, mappers, child_attribute, cache=cache)
+            mapped_list = [
+                self._recursive_mapping(session, mappers, item, cache=cache)
+                for item in attribute.original_value
+            ]
+            attribute.mapped_value = (
+                mapped_list if mapped_list != attribute.original_value else None
+            )
+        elif (
+            isinstance(attribute, UnionAttribute)
+            and attribute.original_value is not None
+            and RejectedValues.ORIGINAL not in attribute.rejected
+        ):
+            mapped_held = self._recursive_mapping(
+                session, mappers, attribute.original_value, cache=cache
+            )
+            attribute.mapped_value = (
+                mapped_held if mapped_held != attribute.original_value else None
+            )
         elif (
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
+            and RejectedValues.ORIGINAL not in attribute.rejected
         ):
-            for child_attribute in attribute.original_value.values():
-                self._recursive_mapping(session, mappers, child_attribute, cache=cache)
+            mapped_dict = {
+                tag: self._recursive_mapping(session, mappers, item, cache=cache)
+                for tag, item in attribute.original_value.items()
+            }
+            attribute.mapped_value = (
+                mapped_dict if mapped_dict != attribute.original_value else None
+            )
         self._attribute_service.set_display_value(attribute)
         return attribute
 

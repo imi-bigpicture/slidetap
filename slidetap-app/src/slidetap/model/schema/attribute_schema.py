@@ -272,6 +272,11 @@ class ListAttributeSchema(AttributeSchema[list[AnyAttribute]]):
     ]
     min_items: int | None = None
     max_items: int | None = None
+    unique_items: bool = False
+    """Whether every entry must be different. A list with two entries that
+    are the same is not valid. Entries are compared by what they are exported
+    as: a code by its scheme and code (not its meaning), and a value not yet
+    mapped by the text it is mapped from. See `AttributeValidator._has_repeats()`."""
     attribute_value_type: Literal[AttributeValueType.LIST] = AttributeValueType.LIST
 
     def create_display_value(self, value: Sequence[AnyAttribute]) -> str:

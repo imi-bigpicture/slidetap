@@ -34,6 +34,7 @@ from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
     AnyAttributeSchema,
+    AttributePath,
     AttributeSchema,
     NotFoundError,
     Project,
@@ -425,6 +426,54 @@ class SchemaService:
             return self._private_attributes[attribute_schema_uid]
         raise ValueError(f"Attribute schema with UID {attribute_schema_uid} not found.")
 
+    def assert_paths_hold_same_kind(
+        self,
+        schema_uid: UUID,
+        path: AttributePath,
+        other_schema_uid: UUID,
+        other_path: AttributePath,
+    ) -> None:
+        """Refuse two paths inside attributes that do not lead to the same kind
+        of attribute, so that what is held at the end of one could not be put
+        at the end of the other.
+
+        The same kind is an attribute of the same schema, held by an attribute
+        of the same schema, such as two entries of one list on items of
+        different kinds. Entries of two lists that hold the same schema but
+        mean different things are not the same kind.
+
+        Parameters
+        ----------
+        schema_uid: UUID
+            The schema of the attribute the path goes down inside.
+        path: AttributePath
+            The path, at least one step down.
+        other_schema_uid: UUID
+            The schema of the attribute the other path goes down inside.
+        other_path: AttributePath
+            The other path, at least one step down.
+
+        Raises
+        ------
+        ValueError
+            If a path has no steps, goes through something that is not an
+            object or a list, or the two do not lead to the same kind.
+        """
+        schema = self.get_any_attribute(schema_uid)
+        other_schema = self.get_any_attribute(other_schema_uid)
+        for held, other_held in (
+            (path.schema_in(schema), other_path.schema_in(other_schema)),
+            (
+                path.parent.schema_in(schema),
+                other_path.parent.schema_in(other_schema),
+            ),
+        ):
+            if held.uid != other_held.uid:
+                raise ValueError(
+                    f"A path to {held.display_name} does not lead to the same "
+                    f"kind as one to {other_held.display_name}."
+                )
+
     @cached_property
     def _attributes(self) -> dict[UUID, AnyAttributeSchema]:
         """Every public attribute schema, across roots."""
@@ -445,7 +494,7 @@ class SchemaService:
 
     def _validate(self) -> None:
         """Refuse what the plugin provides that cannot be used, every check
-        in one place.
+        in one path.
 
         Raises
         ------

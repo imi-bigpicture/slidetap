@@ -32,6 +32,7 @@ from slidetap.model.attribute import (
     UnionAttribute,
     attribute_factory,
 )
+from slidetap.model.attribute_path import AttributePath
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.batch import Batch, BatchCreate, BatchStoringProgress
 from slidetap.model.batch_status import BatchStatus
@@ -221,6 +222,7 @@ __all__ = [
     "AttributeFilter",
     "AttributeValueField",
     "ItemValidity",
+    "AttributePath",
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",

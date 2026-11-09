@@ -119,6 +119,9 @@ export interface ListAttributeSchema extends AttributeSchema {
   attribute: AttributeSchema
   minItems: number | null
   maxItems: number | null
+  /** Whether every entry must be different. A list with two entries that are
+   * the same is not valid. See `entryKey`. */
+  uniqueItems: boolean
   attributeValueType: AttributeValueType.LIST
 }
 

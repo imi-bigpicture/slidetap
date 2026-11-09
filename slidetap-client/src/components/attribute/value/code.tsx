@@ -28,6 +28,12 @@ interface DisplayCodeValueProps {
   action: ItemDetailAction
   valueToDisplay: ValueDisplayType
   handleAttributeUpdate: (attribute: CodeAttribute) => void
+  /** Says what an entry before it in its list says, which a list of unique
+   * entries is not valid with. */
+  repeated?: boolean
+  /** Codes not offered, such as those already in the list, but for the one
+   * the field holds. */
+  excludedCodes?: Code[]
 }
 
 function formatCode(code: Code): string {
@@ -45,6 +51,8 @@ export default function DisplayCodeValue({
   action,
   valueToDisplay,
   handleAttributeUpdate,
+  repeated = false,
+  excludedCodes,
 }: DisplayCodeValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const displayedCode = selectValueToDisplay<Code>(attribute, valueToDisplay)
@@ -115,9 +123,10 @@ export default function DisplayCodeValue({
   // filled in.
   const pendingMappable = mappableValue !== '' && mappableValue === typedMappable
   const nullIsOk = schema.optional && !validValue
-  const error = !validValue && !pendingMappable && !nullIsOk
+  const error = repeated || (!validValue && !pendingMappable && !nullIsOk)
 
   const helperText = (() => {
+    if (repeated) return 'Already in the list'
     if (validValue) return undefined
     if (pendingMappable) return 'Unmapped — will be resolved on save'
     // Named, since what the curator does about it is add a mapping for this
@@ -193,7 +202,18 @@ export default function DisplayCodeValue({
       size="small"
       readOnly={readOnly}
       loading={loading}
-      options={options}
+      options={
+        excludedCodes === undefined
+          ? options
+          : options.filter(
+              (option) =>
+                !excludedCodes.some(
+                  (code) =>
+                    code.code === option.code.code &&
+                    code.scheme === option.code.scheme,
+                ),
+            )
+      }
       value={currentValue}
       inputValue={inputValue}
       onInputChange={(_, value) => setInputValue(value)}

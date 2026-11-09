@@ -51,6 +51,7 @@ import {
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState, type ReactElement } from 'react'
+import { dragHandleCursor } from 'src/components/drag_cursor'
 import { useDetailDock } from 'src/components/item/detail_dock'
 import { useSelectWithPreview } from 'src/components/item/use_select_with_preview'
 import { useError } from 'src/contexts/error/error_context'
@@ -1095,14 +1096,15 @@ function ItemCell({
               onDrag(payload)
             }}
             onDragEnd={() => onDrag(null)}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'grab',
-              userSelect: 'none',
-              color: 'text.secondary',
-              '&:active': { cursor: 'grabbing' },
-            }}
+            sx={[
+              {
+                display: 'flex',
+                alignItems: 'center',
+                userSelect: 'none',
+                color: 'text.secondary',
+              },
+              dragHandleCursor,
+            ]}
           >
             <DragHandle fontSize="small" />
           </Box>

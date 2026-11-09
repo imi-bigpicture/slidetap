@@ -307,6 +307,25 @@ const itemApi = {
     })
   },
 
+  /** Move the value at a place on an item to a place on an existing item, the
+   * same one or another: swapped with the value there, or, past the last of a
+   * list, appended to it. A path is the tag of an attribute of the item, then
+   * the tags and list positions down to the value, such as
+   * `['statement', 'diagnoses', 2]`. */
+  moveAttributeValue: async (
+    sourceItemUid: string,
+    sourcePath: Array<string | number>,
+    targetItemUid: string,
+    targetPath: Array<string | number>,
+  ) => {
+    await post('items/move-attribute', {
+      sourceItemUid,
+      sourcePath,
+      targetItemUid,
+      targetPath,
+    })
+  },
+
   /** Move an item to another parent, keeping the item and everything on it. */
   move: async (itemUid: string, targetParentUid: string) => {
     const query = new Map<string, string>([['targetParentUid', targetParentUid]])

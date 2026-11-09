@@ -23,7 +23,7 @@ from typing import (
 )
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
@@ -229,11 +229,43 @@ class NewChildSuggestion(CamelCaseBaseModel):
 
 
 class MoveAttributeRequest(CamelCaseBaseModel):
-    """Swap an attribute value between two existing items."""
+    """Move an attribute value between places on existing items, swapping it
+    with the value at the target where there is one.
+
+    The places are given either by `attribute_tag`, the same on both items, or
+    by `source_path` and `target_path`: the tag of an attribute of the item,
+    then the tags and list positions down to the value, such as
+    `["statement", "diagnoses", 2]`. A target past the last of a list appends
+    to it.
+    """
 
     source_item_uid: UUID
-    attribute_tag: str
     target_item_uid: UUID
+    attribute_tag: str | None = None
+    """A top-level tag, or a compound `parent.child` tag, on both items."""
+    source_path: list[str | int] | None = None
+    target_path: list[str | int] | None = None
+
+    @model_validator(mode="after")
+    def _one_way_of_giving_the_places(self) -> "MoveAttributeRequest":
+        by_paths = self.source_path is not None and self.target_path is not None
+        if self.attribute_tag is not None and (
+            self.source_path is not None or self.target_path is not None
+        ):
+            raise ValueError("Give either an attribute tag or paths, not both.")
+        if self.attribute_tag is None and not by_paths:
+            raise ValueError("Give an attribute tag, or a source and a target path.")
+        return self
+
+    @property
+    def paths(self) -> tuple[list[str | int], list[str | int]]:
+        """The source and the target path."""
+        if self.attribute_tag is not None:
+            path: list[str | int] = list(self.attribute_tag.split("."))
+            return path, path
+        if self.source_path is None or self.target_path is None:
+            raise ValueError("Give an attribute tag, or a source and a target path.")
+        return self.source_path, self.target_path
 
 
 class SampleForImageRequest(CamelCaseBaseModel):

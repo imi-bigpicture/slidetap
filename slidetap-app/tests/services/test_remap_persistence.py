@@ -117,15 +117,38 @@ def union_schema(child_schema: CodeAttributeSchema) -> UnionAttributeSchema:
 
 
 @pytest.fixture()
+def object_with_list_schema(list_schema: ListAttributeSchema) -> ObjectAttributeSchema:
+    """A root holding a list of the nested attribute, two levels down."""
+    return ObjectAttributeSchema(
+        uid=uuid4(),
+        tag="statement_with_list",
+        name="statement_with_list",
+        display_name="Statement with list",
+        optional=False,
+        read_only=False,
+        display_attributes_in_parent=False,
+        display_value_tags=["diagnoses"],
+        attributes={"diagnoses": list_schema},
+    )
+
+
+@pytest.fixture()
 def schema_service(
     decoy: Decoy,
     child_schema: CodeAttributeSchema,
     object_schema: ObjectAttributeSchema,
     list_schema: ListAttributeSchema,
     union_schema: UnionAttributeSchema,
+    object_with_list_schema: ObjectAttributeSchema,
 ) -> SchemaService:
     service = decoy.mock(cls=SchemaService)
-    for schema in (child_schema, object_schema, list_schema, union_schema):
+    for schema in (
+        child_schema,
+        object_schema,
+        list_schema,
+        union_schema,
+        object_with_list_schema,
+    ):
         decoy.when(service.get_any_attribute(schema.uid)).then_return(schema)
         decoy.when(service.get_attribute(schema.uid)).then_return(schema)
     return service
@@ -304,6 +327,63 @@ class TestNestedRemapIsPersisted:
             child = reloaded.model.value[0]
             assert child.mapped_value == MAPPED_CODE
             assert child.mapping_item_uid == mapping_uid
+
+    def test_value_mapped_inside_a_list_inside_an_object_survives_the_session(
+        self,
+        stored_database_service: DatabaseService,
+        mapper_service: MapperService,
+        child_schema: CodeAttributeSchema,
+        list_schema: ListAttributeSchema,
+        object_with_list_schema: ObjectAttributeSchema,
+    ):
+        """What a held attribute maps of what it holds is kept in its own
+        mapped value, however far down it is held."""
+        # Arrange
+        with stored_database_service.get_session() as session:
+            mapper_uid, mapping_uid = _add_mapper(
+                stored_database_service,
+                session,
+                child_schema,
+                object_with_list_schema.uid,
+            )
+            attribute = ObjectAttribute(
+                uid=uuid4(),
+                schema_uid=object_with_list_schema.uid,
+                original_value={
+                    "diagnoses": ListAttribute(
+                        uid=uuid4(),
+                        schema_uid=list_schema.uid,
+                        original_value=[
+                            CodeAttribute(
+                                uid=uuid4(),
+                                schema_uid=child_schema.uid,
+                                mappable_value="Hudstans",
+                            ),
+                            CodeAttribute(
+                                uid=uuid4(),
+                                schema_uid=child_schema.uid,
+                                mappable_value="Unknown",
+                            ),
+                        ],
+                    )
+                },
+            )
+            attribute_uid = stored_database_service.add_attribute(
+                session, attribute, object_with_list_schema
+            ).uid
+            session.commit()
+
+        # Act
+        _remap(mapper_service, stored_database_service, attribute_uid, mapper_uid)
+
+        # Assert
+        with stored_database_service.get_session() as session:
+            reloaded = stored_database_service.get_attribute(session, attribute_uid)
+            mapped, unmapped = reloaded.model.value["diagnoses"].value
+            assert mapped.mapped_value == MAPPED_CODE
+            assert mapped.mapping_item_uid == mapping_uid
+            assert unmapped.mapped_value is None
+            assert unmapped.mapping_item_uid is None
 
     def test_value_mapped_inside_a_union_survives_the_session(
         self,

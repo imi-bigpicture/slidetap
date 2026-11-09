@@ -2359,13 +2359,37 @@ class ItemService:
         """Swap a single attribute value between two existing items.
 
         ``attribute_tag`` may be a top-level tag or a compound
-        ``parent.child`` tag pointing at an ObjectAttribute child.
+        ``parent.child`` tag pointing at an ObjectAttribute child. See
+        :py:meth:`move_attribute_value` for a place inside a list.
 
         Only swaps: an item to swap with has to exist already. Creating one
         here used to be supported, but it produced an item with none of the
         source's other attributes — for a diagnosis, everything except the code
         being dragged. Moving the whole item to the other parent is what that
         case actually wants, so use :py:meth:`move_to_parent` for it.
+        """
+        path = attribute_tag.split(".")
+        self.move_attribute_value(
+            source_item_uid, path, target_item_uid, path, session=session
+        )
+
+    def move_attribute_value(
+        self,
+        source_item_uid: UUID,
+        source_path: Sequence[str | int],
+        target_item_uid: UUID,
+        target_path: Sequence[str | int],
+        session: Session | None = None,
+    ) -> None:
+        """Move the value at a place on an item to a place on an existing item,
+        the same one or another: swapped with the value there, or, where there
+        is none, such as past the last of a list, moved there.
+
+        A place is the tag of an attribute of the item, then the tags and list
+        positions down to the value, such as ``["statement", "diagnoses", 2]``.
+        Both places hold attributes of the same schema; a whole attribute of
+        the item is swapped only with the same attribute of an item of the
+        same schema. See :py:meth:`AttributeService.move_attribute_value`.
         """
         with self._database_service.get_session(session) as session:
             source = self._database_service.get_item(session, source_item_uid)
@@ -2376,29 +2400,34 @@ class ItemService:
                 raise ValueError(f"Target item {target_item_uid} not found")
             self._schema_service.assert_can_change(source, session)
             self._schema_service.assert_can_change(target, session)
-            if target.schema_uid != source.schema_uid:
+            if (
+                len(source_path) == 1
+                and len(target_path) == 1
+                and target.schema_uid != source.schema_uid
+            ):
                 raise ValueError(
                     f"Cannot swap attribute between items of different "
                     f"schemas (source {source.schema_uid}, target "
                     f"{target.schema_uid})"
                 )
+            items = [source] if source is target else [source, target]
 
-            # Read before the swap, and for both ends: a value moved off one
+            # Read before the move, and for both ends: a value moved off one
             # item and onto the other can make the one it lands on valid and
             # leave the one it left invalid, which is the whole point of moving
             # it. Whichever way it goes, both have to say so.
             was_valid = {
                 item.uid: self._validation_service.item_is_valid_for_now(item, session)
-                for item in (source, target)
+                for item in items
             }
 
-            self._attribute_service.swap_attribute_value(
-                source, target, attribute_tag, session
+            self._attribute_service.move_attribute_value(
+                source, source_path, target, target_path, session
             )
 
-            self._validation_service.validate_item_attributes(source, session)
-            self._validation_service.validate_item_attributes(target, session)
-            for item in (source, target):
+            for item in items:
+                self._validation_service.validate_item_attributes(item, session)
+            for item in items:
                 self._review_service.item_validity_changed(
                     item.uid,
                     was_valid[item.uid],
