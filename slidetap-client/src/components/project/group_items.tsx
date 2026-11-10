@@ -102,9 +102,11 @@ export default function GroupItems({
   const batchScope = batch !== undefined ? `?batchUid=${batch.uid}` : ''
   const itemPage = (item: Item | string): string =>
     `/project/${project.uid}/item/${typeof item === 'string' ? item : item.uid}${batchScope}`
-  const activeTab = shown.some((candidate) => candidate.schemaUid === tabValue)
-    ? tabValue
-    : (shown[0]?.schemaUid ?? '')
+  const activeTab =
+    tabValue !== undefined &&
+    shown.some((candidate) => candidate.schemaUid === tabValue)
+      ? tabValue
+      : (shown[0]?.schemaUid ?? '')
 
   return (
     <Paper variant="outlined" sx={{ p: 1 }}>
