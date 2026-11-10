@@ -699,3 +699,71 @@ class TestImportIsComplete:
 
         # Assert
         assert is_complete is complete
+
+
+@pytest.mark.unittest
+class TestBatchValidation:
+    """An image short only of what processing reads from its file does not hold
+    back the batch, as processing is the only way that comes in."""
+
+    @pytest.fixture()
+    def batch_of_the_image(
+        self,
+        decoy: Decoy,
+        session: Session,
+        root: RootSchemaIndex,
+        review_unit: ReviewUnitSchema,
+        database_service: DatabaseService,
+        image_schema: ImageSchema,
+        image_schema_uid: UUID,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+    ) -> DatabaseBatch:
+        """The batch, with the image as all it holds."""
+        decoy.when(root.review_unit).then_return(review_unit)
+        decoy.when(root.items).then_return({image_schema_uid: image_schema})
+        decoy.when(batch.uid).then_return(uuid4())
+        decoy.when(image.batch).then_return(batch)
+        decoy.when(image.selected).then_return(True)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_batch(session, batch)).then_return(batch)
+        decoy.when(
+            database_service.get_items(
+                session, image_schema, batch=batch, selected=True
+            )
+        ).then_return([image])
+        return batch
+
+    def test_an_image_awaiting_its_attributes_does_not_hold_the_batch_back(
+        self,
+        validation_service: ValidationService,
+        image: DatabaseImage,
+        batch_of_the_image: DatabaseBatch,
+    ) -> None:
+        # Act
+        validation = validation_service.get_validation_for_batch(batch_of_the_image)
+
+        # Assert
+        assert validation.valid
+        assert validation.non_valid_items == []
+        assert not image.valid
+
+    def test_the_image_holds_the_batch_back_once_the_images_are_in(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        image: DatabaseImage,
+        batch_of_the_image: DatabaseBatch,
+    ) -> None:
+        """As when the batch is locked, which is only once it is processed."""
+        # Arrange
+        decoy.when(batch_of_the_image.status).then_return(
+            BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
+
+        # Act
+        validation = validation_service.get_validation_for_batch(batch_of_the_image)
+
+        # Assert
+        assert not validation.valid
+        assert [item.uid for item in validation.non_valid_items] == [image.uid]

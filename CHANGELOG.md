@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A batch whose images are pre-processed during post-processing can be started: its validation no longer counts image attributes that only processing reads.
 - A batch with an image that failed to download finishes post-processing once its other images are done.
 - The thumbnail of an image that failed to be stored is made from its converted files.
 - Drag handles show their own hand cursor, visible on both themes.

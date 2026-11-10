@@ -374,6 +374,13 @@ class ValidationService:
         self,
         batch: UUID | Batch | DatabaseBatch,
     ) -> BatchValidation:
+        """What in the batch is not valid now.
+
+        An item short only of what the import has not brought in yet, such as
+        image attributes read from the file on processing, is not counted until
+        then, see `item_is_valid_for_now`. A batch is only locked after that, so
+        locking still requires every item to be valid.
+        """
         with self._database_service.get_session() as session:
             batch = self._database_service.get_batch(session, batch)
             return self._get_validation_for_batch(batch, session)
@@ -464,7 +471,7 @@ class ValidationService:
                 uid=item.uid, identifier=item.identifier, schema_uid=item.schema_uid
             )
             for item in items
-            if not item.valid
+            if not self.item_is_valid_for_now(item, session)
         ]
 
         return BatchValidation(
