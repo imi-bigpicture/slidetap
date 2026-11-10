@@ -9,7 +9,8 @@ WORKDIR /app
 
 # Dependencies first, so source edits don't invalidate the install layer.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN npm install -g "$(node -p "require('./package.json').packageManager")" \
+    && pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm run build
