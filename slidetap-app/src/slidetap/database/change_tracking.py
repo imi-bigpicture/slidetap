@@ -55,6 +55,7 @@ _NOT_CHANGES_TO_ITEMS = frozenset(
         # to the outbox when the project is completed, or processing it for
         # another batch it is shared with, leaves its case as it was verified.
         "status",
+        "status_updated",
         "status_message",
         "folder_path",
         "thumbnail_path",
@@ -98,7 +99,6 @@ def _has_changed(entity: Any, ignored: frozenset[str]) -> bool:
     return any(state.attrs[key].history.has_changes() for key in touched)
 
 
-@event.listens_for(Session, "before_flush")
 def _stamp_changed_items(session: Session, *_: Any) -> None:
     """Stamp the items changed in the flush, and everything above them.
 
@@ -160,3 +160,12 @@ def stamp_with_ancestors(item: DatabaseItem, now: datetime, stamped: set[Any]) -
             current.last_changed = now
             above.extend(direct_parents(current))
         level = above
+
+
+def register() -> None:
+    """Stamp changed items on every flush of every session.
+
+    Called when the database package is imported; calling it again does nothing.
+    """
+    if not event.contains(Session, "before_flush", _stamp_changed_items):
+        event.listen(Session, "before_flush", _stamp_changed_items)

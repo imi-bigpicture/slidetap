@@ -34,3 +34,14 @@ class ApplicationPolicy(FrozenBaseModel):
     downloaded and pre-processed right before it is converted, in the same
     task. What the import leaves for the files to say is then not held against
     an item until the batch is post-processed."""
+
+    allows_batch_export: bool = False
+    """Whether a locked batch may be stored and exported on its own, before the
+    rest of its project. Set through :py:class:`BaseProvider`, off by default.
+    Allow it only where the export of a batch does not change with batches
+    exported later, and the export implements
+    :py:meth:`MetadataExportInterface.export_batch`.
+
+    Where allowed, each project still chooses on its Export page whether to
+    export as a whole or a batch at a time. Otherwise a project is exported as
+    a whole once every batch is locked."""

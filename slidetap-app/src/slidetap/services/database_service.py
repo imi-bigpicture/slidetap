@@ -229,10 +229,16 @@ class DatabaseService:
     """How many of a unit's open issues the queue is given the reasons for."""
 
     STORED_BATCH_STATUSES: ClassVar[frozenset[BatchStatus]] = frozenset(
-        {BatchStatus.LOCKED, BatchStatus.COMPLETED}
+        {
+            BatchStatus.LOCKED,
+            BatchStatus.COMPLETED,
+            BatchStatus.EXPORTING,
+            BatchStatus.EXPORTED,
+        }
     )
     """Batch statuses where the images are stored, or locked to be: a locked
-    batch holds what goes into its bundle, and is reopened to be changed."""
+    batch holds what goes into its bundle, and is reopened to be changed.
+    Exporting and exported batches are stored in bundles of their own."""
 
     BUSY_BATCH_STATUSES: ClassVar[frozenset[BatchStatus]] = frozenset(
         {
@@ -1183,13 +1189,15 @@ class DatabaseService:
         session: Session,
         dataset_uid: UUID,
         schema_uids: Sequence[UUID],
+        batch_uid: UUID | None = None,
     ) -> int:
-        """How many selected items of these schemas in the dataset have none.
+        """How many selected items of these schemas in the dataset, or in one
+        batch of it, have none.
 
         Counted rather than read: the caller is asking whether there are any,
         and a dataset has as many items as it has.
         """
-        count = session.scalar(
+        query = (
             select(func.count())
             .select_from(DatabaseItem)
             .where(
@@ -1199,6 +1207,9 @@ class DatabaseService:
                 DatabaseItem.pseudonym.is_(None),
             )
         )
+        if batch_uid is not None:
+            query = query.where(DatabaseItem.batch_uid == batch_uid)
+        count = session.scalar(query)
         return count or 0
 
     def get_private_attributes_in_dataset(
@@ -1287,6 +1298,17 @@ class DatabaseService:
             What it hangs directly under, and what hangs directly under it.
         """
         return [*direct_parents(item), *cls.get_children(item)]
+
+    @staticmethod
+    def get_parents(item: DatabaseItem) -> Iterable[DatabaseItem]:
+        """Everything ``item`` hangs directly under, in no particular order.
+
+        Sample → parent samples.
+        Image  → samples.
+        Annotation → image.
+        Observation → the sample, image or annotation it is made on.
+        """
+        return direct_parents(item)
 
     @staticmethod
     def get_children(item: DatabaseItem) -> Iterable[DatabaseItem]:
@@ -1923,7 +1945,9 @@ class DatabaseService:
         status: BatchStatus | None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseBatch]:
-        query = select(DatabaseBatch)
+        """The batches, optionally of a project and status, ordered by creation
+        time and then uid so the order is stable."""
+        query = select(DatabaseBatch).order_by(DatabaseBatch.created, DatabaseBatch.uid)
         if project is not None:
             if isinstance(project, (Project, DatabaseProject)):
                 project = project.uid

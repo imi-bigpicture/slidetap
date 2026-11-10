@@ -63,6 +63,7 @@ from slidetap.task import scheduler as scheduler_module
 from slidetap.task.tasks import (
     delete_batch,
     delete_project,
+    process_batch_metadata_export,
     process_metadata_export,
     process_metadata_import,
 )
@@ -255,6 +256,163 @@ class TestProcessMetadataExport:
         # Assert
         decoy.verify(
             project_service.revert_export(Anything(), Anything()), times=reverted
+        )
+
+
+@pytest.mark.integration
+class TestProcessBatchMetadataExport:
+    @pytest.mark.parametrize(
+        ["will_retry", "reverted"], [(_not_retried, 1), (_retried, 0)]
+    )
+    def test_a_transient_failure_is_reverted_only_on_the_last_attempt(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+        will_retry: Callable[[BaseException], bool],
+        reverted: int,
+    ):
+        """Reverted, with the reason, so that it can be exported again."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.EXPORTING)
+        metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
+        decoy.when(
+            metadata_export_interface.batch_export_refusal(Anything())
+        ).then_return(None)
+        decoy.when(
+            metadata_export_interface.export_batch(Anything(), Anything(), Anything())
+        ).then_raise(TransientTaskError("Outbox unreachable"))
+        batch_service = decoy.mock(cls=BatchService)
+
+        # Act
+        try:
+            process_batch_metadata_export.func.__wrapped__(  # type: ignore[attr-defined]
+                batch_uid=stored.batch_uid,
+                metadata_export_interface=metadata_export_interface,
+                batch_service=batch_service,
+                database_service=stored_database_service,
+                schema_service=schema_service,
+                application_policy=ApplicationPolicy(allows_batch_export=True),
+                will_retry=will_retry,
+            )
+        except TransientTaskError:
+            assert reverted == 0
+
+        # Assert
+        decoy.verify(
+            batch_service.revert_export(
+                Anything(), Anything(), message="Export failed: Outbox unreachable"
+            ),
+            times=reverted,
+        )
+
+    def test_a_batch_the_export_refuses_now_is_reverted_with_why(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+    ):
+        """Something outside the batch may have changed since it was set
+        exporting, such as a later batch hanging something under it."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.EXPORTING)
+        metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
+        decoy.when(
+            metadata_export_interface.batch_export_refusal(Anything())
+        ).then_return("Something is in another batch.")
+        batch_service = decoy.mock(cls=BatchService)
+
+        # Act
+        process_batch_metadata_export.func.__wrapped__(  # type: ignore[attr-defined]
+            batch_uid=stored.batch_uid,
+            metadata_export_interface=metadata_export_interface,
+            batch_service=batch_service,
+            database_service=stored_database_service,
+            schema_service=schema_service,
+            application_policy=ApplicationPolicy(allows_batch_export=True),
+        )
+
+        # Assert
+        decoy.verify(
+            batch_service.revert_export(
+                Anything(),
+                Anything(),
+                message="Not exported: Something is in another batch.",
+            ),
+            times=1,
+        )
+        decoy.verify(
+            metadata_export_interface.export_batch(Anything(), Anything(), Anything()),
+            times=0,
+        )
+
+    def test_a_batch_of_an_application_that_does_not_export_batches_is_reverted(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+    ):
+        """Such as one queued before the application was set not to."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.EXPORTING)
+        metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
+        batch_service = decoy.mock(cls=BatchService)
+
+        # Act
+        process_batch_metadata_export.func.__wrapped__(  # type: ignore[attr-defined]
+            batch_uid=stored.batch_uid,
+            metadata_export_interface=metadata_export_interface,
+            batch_service=batch_service,
+            database_service=stored_database_service,
+            schema_service=schema_service,
+            application_policy=ApplicationPolicy(),
+        )
+
+        # Assert
+        decoy.verify(
+            batch_service.revert_export(
+                Anything(),
+                Anything(),
+                message=(
+                    "Not exported: this application does not export a batch on its own"
+                ),
+            ),
+            times=1,
+        )
+        decoy.verify(
+            metadata_export_interface.export_batch(Anything(), Anything(), Anything()),
+            times=0,
+        )
+
+    def test_a_batch_not_exporting_is_left_as_it_is(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        schema_service: SchemaService,
+        schema: ExampleSchema,
+    ):
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.COMPLETED)
+        metadata_export_interface = decoy.mock(cls=MetadataExportInterface)
+        batch_service = decoy.mock(cls=BatchService)
+
+        # Act
+        process_batch_metadata_export.func.__wrapped__(  # type: ignore[attr-defined]
+            batch_uid=stored.batch_uid,
+            metadata_export_interface=metadata_export_interface,
+            batch_service=batch_service,
+            database_service=stored_database_service,
+            schema_service=schema_service,
+            application_policy=ApplicationPolicy(allows_batch_export=True),
+        )
+
+        # Assert
+        decoy.verify(
+            metadata_export_interface.export_batch(Anything(), Anything(), Anything()),
+            times=0,
         )
 
 

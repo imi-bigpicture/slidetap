@@ -20,6 +20,8 @@ export interface Project {
   readonly uid: string
   readonly name: string
   readonly status: ProjectStatus
+  /** When the status last changed, null if unknown. */
+  readonly statusUpdated: string | null
   readonly validAttributes: boolean
   readonly schemaUid: string
   readonly datasetUid: string

@@ -31,6 +31,10 @@ export enum BatchStatus {
   /** Being taken out of the project; its items are being removed. */
   DELETING = 12,
   DELETED = 13,
+  /** Metadata being written to the batch's own bundle. */
+  EXPORTING = 14,
+  /** The batch's own bundle is complete. */
+  EXPORTED = 15,
 }
 
 export const BatchStatusStrings = {
@@ -47,6 +51,8 @@ export const BatchStatusStrings = {
   [BatchStatus.FAILED]: 'Failed',
   [BatchStatus.DELETING]: 'Deleting',
   [BatchStatus.DELETED]: 'Deleted',
+  [BatchStatus.EXPORTING]: 'Exporting',
+  [BatchStatus.EXPORTED]: 'Exported',
 }
 
 export const BatchStatusList = [
@@ -63,6 +69,8 @@ export const BatchStatusList = [
   BatchStatus.FAILED,
   BatchStatus.DELETING,
   BatchStatus.DELETED,
+  BatchStatus.EXPORTING,
+  BatchStatus.EXPORTED,
 ]
 
 /** Whether a batch can be started converting its images: once they are

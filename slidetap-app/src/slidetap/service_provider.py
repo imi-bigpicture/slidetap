@@ -70,12 +70,19 @@ from slidetap.services.tag_service import TagService
 
 
 def _application_policy(
-    image_import_interface: ImageImportInterface,
-) -> ApplicationPolicy:
-    """How the application behaves, as the interfaces of its plugin say."""
-    return ApplicationPolicy(
-        pre_processes_images_separately=image_import_interface.pre_processes_separately
-    )
+    allows_batch_export: bool,
+) -> Callable[[ImageImportInterface], ApplicationPolicy]:
+    """The application policy, from the plugin's interfaces and settings."""
+
+    def policy(image_import_interface: ImageImportInterface) -> ApplicationPolicy:
+        return ApplicationPolicy(
+            pre_processes_images_separately=(
+                image_import_interface.pre_processes_separately
+            ),
+            allows_batch_export=allows_batch_export,
+        )
+
+    return policy
 
 
 class BaseProvider(Provider):
@@ -92,9 +99,20 @@ class BaseProvider(Provider):
             ..., ItemNamingFactoryInterface | None
         ] = lambda: None,
         mapper_injector: Callable[..., MapperInjectorInterface | None] = lambda: None,
+        allows_batch_export: bool = False,
     ):
+        """Provide the services and interfaces the web and task apps share.
+
+        Parameters
+        ----------
+        allows_batch_export: bool = False
+            Whether a locked batch can be exported on its own, see
+            :py:attr:`ApplicationPolicy.allows_batch_export`.
+        """
         super().__init__(scope=Scope.APP)
-        self.provide(_application_policy, provides=ApplicationPolicy)
+        self.provide(
+            _application_policy(allows_batch_export), provides=ApplicationPolicy
+        )
 
         self.provide(schema_interface, provides=SchemaInterface)
         self.provide(AttributeService)

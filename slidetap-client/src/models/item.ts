@@ -75,6 +75,8 @@ export enum ImageFormat {
 export interface Image extends Item {
   status: ImageStatus
   statusMessage: string | null
+  /** When the status last changed, null if unknown. */
+  statusUpdated: string | null
   files: ImageFile[]
   samples: Record<string, string[]>
   annotations: Record<string, string[]>

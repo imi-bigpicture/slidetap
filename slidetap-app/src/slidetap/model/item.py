@@ -92,6 +92,8 @@ class ImageFormat(Enum):
 
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
+    status_updated: datetime | None = None
+    """When the status last changed, None if unchanged since this was added."""
     folder_path: str | None = Field(default=None, exclude=True)
     thumbnail_path: str | None = Field(default=None, exclude=True)
     status_message: str | None = None

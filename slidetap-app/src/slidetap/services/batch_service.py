@@ -38,6 +38,7 @@ from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
 from slidetap.services.verification_service import VerificationService
 
@@ -631,8 +632,227 @@ class BatchService:
                     f"{BatchStatus.IMAGE_STORING.name}, was {batch.status.name}"
                 )
                 raise NotAllowedActionError(error)
+            if batch.status == BatchStatus.LOCKED and any(
+                other.stored_alone for other in batch.project.batches
+            ):
+                raise NotAllowedActionError(
+                    f"Can not store batch {batch.uid} with its project: a batch "
+                    "of the project is stored on its own. Store each batch on "
+                    "its own."
+                )
             batch.status = BatchStatus.IMAGE_STORING
             self._logger.info(f"Batch {batch.uid} set as storing.")
+            session.commit()
+            return batch.model
+
+    def set_as_storing_alone(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        shared_item_uids: Iterable[UUID] = (),
+        session: Session | None = None,
+    ) -> Batch:
+        """Start storing a locked batch into a bundle of its own.
+
+        Items of other batches it is exported with (`batch_shared_items`) are
+        moved into it and locked; an invalid one refuses the batch. One already
+        in another batch stored on its own stays there. After this the batch
+        cannot be reopened.
+
+        Refused where a batch of the project is stored with the project, as that
+        bundle would name items whose images are in another. Calling it again
+        while storing resumes storing.
+
+        Parameters
+        ----------
+        batch: UUID | Batch | DatabaseBatch
+            The batch to store on its own.
+        shared_item_uids: Iterable[UUID]
+            The items of other batches the batch is exported with.
+        session: Session | None = None
+            Session to use.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the batch cannot be stored on its own, with the reason.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            self._schema_service.assert_can_change(batch, session)
+            if batch.image_storing and batch.stored_alone:
+                return batch.model
+            if batch.status != BatchStatus.LOCKED:
+                raise NotAllowedActionError(
+                    f"Can only store a {BatchStatus.LOCKED.name} batch on its own, "
+                    f"was {batch.status.name}."
+                )
+            project = batch.project
+            if project.status not in (
+                ProjectStatus.IN_PROGRESS,
+                ProjectStatus.COMPLETED,
+            ):
+                raise NotAllowedActionError(
+                    f"Can not store batch {batch.uid} on its own: project "
+                    f"{project.uid} is {project.status.name}."
+                )
+            stored_with_project = next(
+                (
+                    other
+                    for other in project.batches
+                    if other.status
+                    in (
+                        BatchStatus.IMAGE_STORING,
+                        BatchStatus.COMPLETED,
+                    )
+                    and not other.stored_alone
+                ),
+                None,
+            )
+            if stored_with_project is not None:
+                raise NotAllowedActionError(
+                    f"Can not store batch {batch.uid} on its own: batch "
+                    f"{stored_with_project.name} is stored with the project."
+                )
+            self._take_over_shared_items(batch, shared_item_uids, session)
+            batch.storage_folder = StorageService.batch_folder_name(
+                batch.model,
+                (
+                    other.storage_folder
+                    for other in project.batches
+                    if other.storage_folder is not None and other.uid != batch.uid
+                ),
+            )
+            batch.status = BatchStatus.IMAGE_STORING
+            self._logger.info(
+                f"Batch {batch.uid} set as storing on its own, into "
+                f"{batch.storage_folder}."
+            )
+            session.commit()
+            return batch.model
+
+    def _take_over_shared_items(
+        self,
+        batch: DatabaseBatch,
+        shared_item_uids: Iterable[UUID],
+        session: Session,
+    ) -> None:
+        """Move the shared items into the batch and lock them, see
+        `set_as_storing_alone`."""
+        taken_over: list[DatabaseItem] = []
+        not_valid: list[str] = []
+        for uid in shared_item_uids:
+            item = self._database_service.get_item(session, uid)
+            if item.batch_uid == batch.uid:
+                continue
+            if item.batch is not None and item.batch.stored_alone:
+                continue
+            if not item.valid:
+                not_valid.append(item.identifier)
+                continue
+            taken_over.append(item)
+        if not_valid:
+            named = ", ".join(not_valid[:10])
+            raise NotAllowedActionError(
+                f"Can not store batch {batch.uid} on its own: it is exported with "
+                f"{len(not_valid)} items of other batches that are not valid "
+                f"({named}). Curate them first."
+            )
+        for item in taken_over:
+            self._logger.info(
+                f"Handing item {item.uid} of batch {item.batch_uid} over to batch "
+                f"{batch.uid}, which it is exported with."
+            )
+            item.batch_uid = batch.uid
+            item.locked = True
+            for attribute in item.attributes:
+                attribute.locked = True
+
+    def set_as_exporting(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> Batch:
+        """Start exporting the metadata of a batch stored on its own.
+
+        Requires every selected image of it to be stored.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the batch is not stored on its own, or has unstored images.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            self._schema_service.assert_can_change(batch, session)
+            if not batch.stored_alone:
+                raise NotAllowedActionError(
+                    f"Can only export batch {batch.uid} on its own once it is "
+                    "stored on its own."
+                )
+            if not batch.completed:
+                raise NotAllowedActionError(
+                    f"Can only export a {BatchStatus.COMPLETED.name} batch, "
+                    f"was {batch.status.name}."
+                )
+            root = self._schema_service.root_of(batch.project, session)
+            for image_schema in root.images.values():
+                not_stored = self._database_service.get_item_count(
+                    session, image_schema, batch=batch.uid, selected=True
+                ) - self._database_service.get_item_count(
+                    session,
+                    image_schema,
+                    batch=batch.uid,
+                    selected=True,
+                    status_filter=[ImageStatus.STORED],
+                )
+                if not_stored > 0:
+                    raise NotAllowedActionError(
+                        f"Cannot export batch {batch.uid}: {not_stored} selected "
+                        f"{image_schema.name} image(s) are not stored."
+                    )
+            batch.status = BatchStatus.EXPORTING
+            batch.status_message = None
+            self._logger.info(f"Batch {batch.uid} set as exporting.")
+            session.commit()
+            return batch.model
+
+    def set_as_exported(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> Batch:
+        """Finish exporting a batch on its own: its bundle is complete."""
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if not batch.exporting:
+                raise NotAllowedActionError(
+                    f"Can only set {BatchStatus.EXPORTING.name} batch as "
+                    f"{BatchStatus.EXPORTED.name}, was {batch.status.name}"
+                )
+            batch.status = BatchStatus.EXPORTED
+            self._logger.info(f"Batch {batch.uid} set as exported.")
+            self._handle_project_status(batch.project)
+            session.commit()
+            return batch.model
+
+    def revert_export(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+        message: str | None = None,
+    ) -> Batch:
+        """Set a batch whose export failed back to completed, with a message
+        for the user."""
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if not batch.exporting:
+                raise NotAllowedActionError(
+                    f"Can only revert {BatchStatus.EXPORTING.name} batch to "
+                    f"{BatchStatus.COMPLETED.name}, was {batch.status.name}"
+                )
+            batch.status = BatchStatus.COMPLETED
+            batch.status_message = message[:512] if message is not None else None
+            self._logger.info(f"Batch {batch.uid} export reverted to completed.")
             session.commit()
             return batch.model
 
@@ -833,7 +1053,11 @@ class BatchService:
                     f"Cannot delete batch {batch.uid} while it is {status}; "
                     "reopen it first."
                 )
-            if batch.status == BatchStatus.COMPLETED:
+            if batch.status in (
+                BatchStatus.COMPLETED,
+                BatchStatus.EXPORTING,
+                BatchStatus.EXPORTED,
+            ):
                 raise NotAllowedActionError(
                     f"Cannot delete batch {batch.uid} while it is {status}; "
                     "its images are in the outbox."
@@ -870,7 +1094,13 @@ class BatchService:
         # the project is completed, so waiting for them here would be waiting
         # for something this decides to start.
         any_all_completed_batch_in_project = all(
-            batch.status in (BatchStatus.LOCKED, BatchStatus.COMPLETED)
+            batch.status
+            in (
+                BatchStatus.LOCKED,
+                BatchStatus.COMPLETED,
+                BatchStatus.EXPORTING,
+                BatchStatus.EXPORTED,
+            )
             for batch in batches
         )
         # Nested rather than chained: written as `if done and not completed /

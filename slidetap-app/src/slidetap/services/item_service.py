@@ -1856,9 +1856,13 @@ class ItemService:
             return cleared
 
     def items_missing_pseudonym(
-        self, dataset_uid: UUID, session: Session | None = None
+        self,
+        dataset_uid: UUID,
+        session: Session | None = None,
+        batch_uid: UUID | None = None,
     ) -> int:
-        """How many items the dataset would go out with that cannot be named.
+        """How many items the dataset, or one batch of it exported on its own,
+        would go out with that cannot be named.
 
         An item is referred to in a bundle by its pseudonym and by nothing
         else, and one written without a pseudonym goes in as an element that
@@ -1880,7 +1884,7 @@ class ItemService:
             if not schema_uids:
                 return 0
             return self._database_service.count_items_without_pseudonym(
-                session, dataset_uid, schema_uids
+                session, dataset_uid, schema_uids, batch_uid
             )
 
     def repseudonymize(self, dataset_uid: UUID, session: Session | None = None) -> int:

@@ -18,7 +18,7 @@ to queue a task for."""
 import datetime
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
@@ -33,10 +33,18 @@ from slidetap.database import (
     DatabaseProject,
 )
 from slidetap.external_interfaces import MetadataExportInterface
-from slidetap.model import BatchStatus, ImageFormat, ImageStatus, Project
+from slidetap.model import (
+    Batch,
+    BatchStatus,
+    ImageFormat,
+    ImageStatus,
+    NotAllowedActionError,
+    Project,
+)
 from slidetap.services import (
     BatchService,
     DatabaseService,
+    ItemService,
     ProjectService,
     ReviewService,
     SchemaService,
@@ -325,6 +333,35 @@ class TestImagePipelineDeferral:
             == BatchStatus.IMAGE_STORING
         )
 
+    def test_a_project_with_a_batch_stored_alone_is_not_stored_whole(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        image_pipeline_service: ImagePipelineService,
+        scheduler: Scheduler,
+        schema: ExampleSchema,
+    ):
+        """Its bundle would name items whose images are in the batch's bundle."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.LOCKED)
+        with stored_database_service.get_session() as session:
+            alone = DatabaseBatch(
+                "alone", stored.project_uid, datetime.datetime(2026, 10, 28)
+            )
+            alone.status = BatchStatus.EXPORTED
+            alone.storage_folder = "BATCH_alone"
+            session.add(alone)
+            session.commit()
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError, match="stored on its own"):
+            image_pipeline_service.store_project(stored.project_uid)
+        decoy.verify(scheduler.store_images_in_batch(Anything()), times=0)
+        assert (
+            _batch_status(stored_database_service, stored.batch_uid)
+            == BatchStatus.LOCKED
+        )
+
 
 @pytest.fixture()
 def not_separately_pipeline_service(
@@ -468,23 +505,217 @@ class TestNotPreProcessedSeparately:
 
 @pytest.mark.unittest
 class TestMetadataExportDeferral:
+    @pytest.fixture()
+    def project_service(self, decoy: Decoy) -> ProjectService:
+        return decoy.mock(cls=ProjectService)
+
+    @pytest.fixture()
+    def batch_service(self, decoy: Decoy) -> BatchService:
+        return decoy.mock(cls=BatchService)
+
+    @pytest.fixture()
+    def item_service(self, decoy: Decoy) -> ItemService:
+        return decoy.mock(cls=ItemService)
+
+    @pytest.fixture()
+    def metadata_export_interface(self, decoy: Decoy) -> MetadataExportInterface:
+        return decoy.mock(cls=MetadataExportInterface)
+
+    @pytest.fixture()
+    def metadata_export_service(
+        self,
+        decoy: Decoy,
+        scheduler: Scheduler,
+        project_service: ProjectService,
+        batch_service: BatchService,
+        item_service: ItemService,
+        metadata_export_interface: MetadataExportInterface,
+    ) -> MetadataExportService:
+        return MetadataExportService(
+            scheduler=scheduler,
+            project_service=project_service,
+            batch_service=batch_service,
+            item_service=item_service,
+            database_service=decoy.mock(cls=DatabaseService),
+            schema_service=decoy.mock(cls=SchemaService),
+            metadata_export_interface=metadata_export_interface,
+            application_policy=ApplicationPolicy(allows_batch_export=True),
+        )
+
+    @pytest.fixture()
+    def batch(self, project: Project) -> Batch:
+        return Batch(
+            uid=uuid4(),
+            name="batch",
+            status=BatchStatus.LOCKED,
+            project_uid=project.uid,
+            is_default=False,
+            created=datetime.datetime(2026, 10, 28),
+        )
+
+    @pytest.fixture()
+    def exportable(
+        self,
+        decoy: Decoy,
+        project: Project,
+        project_service: ProjectService,
+        batch_service: BatchService,
+        item_service: ItemService,
+        metadata_export_interface: MetadataExportInterface,
+        batch: Batch,
+    ) -> Batch:
+        """The batch, as the export exports it on its own."""
+        decoy.when(batch_service.get(batch.uid)).then_return(batch)
+        decoy.when(metadata_export_interface.batch_export_refusal(batch)).then_return(
+            None
+        )
+        decoy.when(project_service.get(project.uid)).then_return(project)
+        decoy.when(
+            item_service.items_missing_pseudonym(
+                project.dataset_uid, batch_uid=batch.uid
+            )
+        ).then_return(0)
+        return batch
+
     def test_an_export_that_cannot_be_queued_is_reverted(
-        self, decoy: Decoy, scheduler: Scheduler, project: Project
+        self,
+        decoy: Decoy,
+        scheduler: Scheduler,
+        project: Project,
+        project_service: ProjectService,
+        metadata_export_service: MetadataExportService,
     ):
         # Arrange
-        project_service = decoy.mock(cls=ProjectService)
         decoy.when(scheduler.metadata_project_export(project)).then_raise(
             ConnectionError("Queue unreachable")
-        )
-        metadata_export_service = MetadataExportService(
-            scheduler,
-            project_service,
-            decoy.mock(cls=DatabaseService),
-            decoy.mock(cls=SchemaService),
-            decoy.mock(cls=MetadataExportInterface),
         )
 
         # Act & Assert
         with pytest.raises(ConnectionError):
             metadata_export_service.export(project)
         decoy.verify(project_service.revert_export(project.uid), times=1)
+
+    def test_a_batch_export_that_cannot_be_queued_is_reverted_with_why(
+        self,
+        decoy: Decoy,
+        scheduler: Scheduler,
+        batch_service: BatchService,
+        metadata_export_service: MetadataExportService,
+        exportable: Batch,
+    ):
+        # Arrange
+        decoy.when(batch_service.set_as_exporting(exportable.uid)).then_return(
+            exportable
+        )
+        decoy.when(scheduler.metadata_batch_export(exportable)).then_raise(
+            ConnectionError("Queue unreachable")
+        )
+
+        # Act & Assert
+        with pytest.raises(ConnectionError):
+            metadata_export_service.export_batch(exportable.uid)
+        decoy.verify(
+            batch_service.revert_export(
+                exportable.uid,
+                message="Export could not be queued: Queue unreachable",
+            ),
+            times=1,
+        )
+
+    def test_a_batch_is_stored_alone_with_what_it_is_exported_with(
+        self,
+        decoy: Decoy,
+        scheduler: Scheduler,
+        batch_service: BatchService,
+        metadata_export_interface: MetadataExportInterface,
+        metadata_export_service: MetadataExportService,
+        exportable: Batch,
+    ):
+        # Arrange
+        shared = [uuid4()]
+        decoy.when(
+            metadata_export_interface.batch_shared_items(exportable)
+        ).then_return(shared)
+        decoy.when(
+            batch_service.set_as_storing_alone(exportable.uid, shared)
+        ).then_return(exportable)
+
+        # Act
+        metadata_export_service.store_batch(exportable.uid)
+
+        # Assert
+        decoy.verify(scheduler.store_images_in_batch(exportable), times=1)
+
+    def test_a_batch_the_export_refuses_is_neither_stored_nor_exported(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        metadata_export_interface: MetadataExportInterface,
+        metadata_export_service: MetadataExportService,
+        exportable: Batch,
+    ):
+        # Arrange
+        decoy.when(
+            metadata_export_interface.batch_export_refusal(exportable)
+        ).then_return("A case of it has a specimen in another batch.")
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError, match="specimen in another batch"):
+            metadata_export_service.store_batch(exportable.uid)
+        with pytest.raises(NotAllowedActionError, match="specimen in another batch"):
+            metadata_export_service.export_batch(exportable.uid)
+        decoy.verify(
+            batch_service.set_as_storing_alone(Anything(), Anything()), times=0
+        )
+        decoy.verify(batch_service.set_as_exporting(Anything()), times=0)
+
+    def test_an_application_that_does_not_export_batches_refuses_every_batch(
+        self,
+        decoy: Decoy,
+        scheduler: Scheduler,
+        project_service: ProjectService,
+        batch_service: BatchService,
+        item_service: ItemService,
+        metadata_export_interface: MetadataExportInterface,
+        exportable: Batch,
+    ):
+        # Arrange
+        metadata_export_service = MetadataExportService(
+            scheduler=scheduler,
+            project_service=project_service,
+            batch_service=batch_service,
+            item_service=item_service,
+            database_service=decoy.mock(cls=DatabaseService),
+            schema_service=decoy.mock(cls=SchemaService),
+            metadata_export_interface=metadata_export_interface,
+            application_policy=ApplicationPolicy(),
+        )
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError, match="does not export a batch"):
+            metadata_export_service.store_batch(exportable.uid)
+        with pytest.raises(NotAllowedActionError, match="does not export a batch"):
+            metadata_export_service.export_batch(exportable.uid)
+        decoy.verify(
+            batch_service.set_as_storing_alone(Anything(), Anything()), times=0
+        )
+        decoy.verify(batch_service.set_as_exporting(Anything()), times=0)
+
+    def test_a_batch_with_an_item_without_a_pseudonym_is_refused(
+        self,
+        decoy: Decoy,
+        project: Project,
+        item_service: ItemService,
+        metadata_export_service: MetadataExportService,
+        exportable: Batch,
+    ):
+        # Arrange
+        decoy.when(
+            item_service.items_missing_pseudonym(
+                project.dataset_uid, batch_uid=exportable.uid
+            )
+        ).then_return(2)
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError, match="2 items .* no pseudonym"):
+            metadata_export_service.export_batch(exportable.uid)

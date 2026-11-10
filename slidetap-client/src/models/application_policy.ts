@@ -21,4 +21,7 @@ export interface ApplicationPolicy {
    * straight to the curation before conversion, and its images are
    * pre-processed as they are converted. */
   readonly preProcessesImagesSeparately: boolean
+  /** Whether a locked batch can be stored and exported on its own, before the
+   * rest of its project. */
+  readonly allowsBatchExport: boolean
 }

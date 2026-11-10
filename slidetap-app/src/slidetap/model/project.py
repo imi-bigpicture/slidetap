@@ -34,6 +34,8 @@ class Project(CamelCaseBaseModel):
     dataset_uid: UUID
     created: datetime.datetime
     status: ProjectStatus = ProjectStatus.IN_PROGRESS
+    status_updated: datetime.datetime | None = None
+    """When the status last changed, None if unchanged since this was added."""
     valid_attributes: bool | None = None
     attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)

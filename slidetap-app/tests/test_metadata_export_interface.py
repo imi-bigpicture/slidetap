@@ -17,7 +17,14 @@ from uuid import uuid4
 import pytest
 
 from slidetap.external_interfaces import MetadataExportInterface
-from slidetap.model import Dataset, ExportPreviewFile, Item, Project, Sample
+from slidetap.model import (
+    Batch,
+    Dataset,
+    ExportPreviewFile,
+    Item,
+    Project,
+    Sample,
+)
 
 
 class PreviewingExport(MetadataExportInterface):
@@ -69,3 +76,7 @@ class TestMetadataExportInterface:
 
         # Assert
         assert files == []
+
+    def test_a_batch_is_not_exported_on_its_own_by_default(self, batch: Batch):
+        # Act & Assert
+        assert PreviewingExport(None).batch_export_refusal(batch) is not None

@@ -14,8 +14,7 @@
 
 """Module containing entities stored in database."""
 
-# Imported for what it registers: when items changed is kept on every flush.
-from slidetap.database import change_tracking  # noqa: F401
+from slidetap.database import change_tracking, status_tracking
 from slidetap.database.attribute import (
     DatabaseAttribute,
     DatabaseBooleanAttribute,
@@ -61,6 +60,10 @@ from slidetap.database.verification import (
     DatabaseVerificationEntry,
     DatabaseVerificationRound,
 )
+
+# Stamp changed items on every flush, and status changes as they are set.
+change_tracking.register()
+status_tracking.register()
 
 __all__ = [
     "Base",

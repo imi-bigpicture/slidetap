@@ -204,6 +204,8 @@ export default function ListBatches({
                       [BatchStatus.FAILED]: 'error',
                       [BatchStatus.DELETING]: 'warning',
                       [BatchStatus.DELETED]: 'secondary',
+                      [BatchStatus.EXPORTING]: 'primary',
+                      [BatchStatus.EXPORTED]: 'success',
                     }}
                     onClick={() => handleBatchSelect(row)}
                   />
@@ -215,6 +217,16 @@ export default function ListBatches({
                     value: status.toString(),
                   })),
                 },
+              },
+              {
+                id: 'statusUpdated',
+                header: 'Status updated',
+                accessorKey: 'statusUpdated',
+                Cell: ({ row }) =>
+                  row.statusUpdated === null
+                    ? ''
+                    : new Date(row.statusUpdated).toLocaleString('en-gb'),
+                filter: { variant: 'date-range' },
               },
               {
                 id: 'isDefault',

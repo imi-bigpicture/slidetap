@@ -409,6 +409,14 @@ class ProjectService:
                 f"Can only export a {ProjectStatus.COMPLETED.name} project, "
                 f"was {project.status.name}."
             )
+        alone = next((batch for batch in project.batches if batch.stored_alone), None)
+        if alone is not None:
+            # The project bundle would name items whose images are elsewhere.
+            # Checked first, as fixing anything else would not help.
+            raise NotAllowedActionError(
+                f"Cannot export project {project.uid}: batch {alone.name} "
+                "is stored on its own. Export each batch on its own."
+            )
         for batch in project.batches:
             if batch.status in (BatchStatus.DELETING, BatchStatus.DELETED):
                 raise NotAllowedActionError(

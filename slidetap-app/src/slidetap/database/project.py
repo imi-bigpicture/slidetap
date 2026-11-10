@@ -71,6 +71,9 @@ class DatabaseProject(Base):
     is stored or orphan what is already stored there.
     """
     status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus))
+    status_updated: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    """When the status last changed, kept by `slidetap.database.status_tracking`.
+    None if unchanged since the column was added."""
     valid_attributes: Mapped[bool | None] = mapped_column(Boolean)
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
     root_schema_uid: Mapped[UUID] = mapped_column(Uuid)
@@ -218,6 +221,7 @@ class DatabaseProject(Base):
             uid=self.uid,
             name=self.name,
             status=self.status,
+            status_updated=self.status_updated,
             valid_attributes=self.valid_attributes,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
@@ -313,8 +317,13 @@ class DatabaseBatch(Base):
     name: Mapped[str] = mapped_column(String(128))
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     status: Mapped[BatchStatus] = mapped_column(Enum(BatchStatus))
+    status_updated: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    """When the status last changed, kept by `slidetap.database.status_tracking`.
+    None if unchanged since the column was added."""
     status_message: Mapped[str | None] = mapped_column(String(512))
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
+    storage_folder: Mapped[str | None] = mapped_column(String(256))
+    """Folder of the batch's own bundle, see `Batch.storage_folder`."""
 
     # Relations
     project: Mapped[DatabaseProject] = relationship(
@@ -409,14 +418,29 @@ class DatabaseBatch(Base):
     def completed(self) -> bool:
         return self.status == BatchStatus.COMPLETED
 
+    @hybrid_property
+    def exporting(self) -> bool:
+        return self.status == BatchStatus.EXPORTING
+
+    @hybrid_property
+    def exported(self) -> bool:
+        return self.status == BatchStatus.EXPORTED
+
+    @property
+    def stored_alone(self) -> bool:
+        """Whether the batch is stored and exported on its own."""
+        return self.storage_folder is not None
+
     @property
     def model(self) -> Batch:
         return Batch(
             uid=self.uid,
             name=self.name,
             status=self.status,
+            status_updated=self.status_updated,
             status_message=self.status_message,
             project_uid=self.project_uid,
             is_default=self.project.default_batch_uid == self.uid,
             created=self.created,
+            storage_folder=self.storage_folder,
         )

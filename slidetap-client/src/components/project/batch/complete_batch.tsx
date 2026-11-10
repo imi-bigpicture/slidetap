@@ -16,6 +16,7 @@ import { Alert, Button, Stack, Typography } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ReactElement } from 'react'
+import { useAllowsBatchExport } from 'src/hooks/use_allows_batch_export'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import { ApiError } from 'src/services/api/api_methods'
@@ -36,6 +37,7 @@ function refusal(error: Error | null): string | undefined {
 
 export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactElement {
   const queryClient = useQueryClient()
+  const allowsBatchExport = useAllowsBatchExport()
   // Said before completing is tried rather than only as the refusal: what is
   // left to verify is work to go and do, not a fault.
   const verificationQuery = useQuery({
@@ -66,6 +68,8 @@ export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactE
     BatchStatus.LOCKED,
     BatchStatus.IMAGE_STORING,
     BatchStatus.COMPLETED,
+    BatchStatus.EXPORTING,
+    BatchStatus.EXPORTED,
   ].includes(shownBatch.status)
   const handleCompleteBatch = (): void => {
     completeBatchMutation.mutate(batch.uid)
@@ -79,12 +83,18 @@ export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactE
           Everything in it has to be valid, or taken out of the project, and where the
           project verifies batches, the units drawn have to be verified. A locked batch
           can be reopened from the batch list until its images are stored to the outbox,
-          which is done for the whole project from its Export page.
+          which is done from the project's Export page
+          {allowsBatchExport
+            ? ', for the whole project or this batch alone.'
+            : ' for the whole project.'}
         </Typography>
         {locked && (
           <Alert severity="success">
             The batch is locked. Store its images to the outbox from the project's
-            Export page once every batch is locked.
+            Export page
+            {allowsBatchExport
+              ? ', for this batch alone or once every batch is locked.'
+              : ' once every batch is locked.'}
           </Alert>
         )}
         {!locked && blockedByVerification && (

@@ -69,6 +69,7 @@ from slidetap.external_interfaces import (
 )
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
 from slidetap.model import (
+    Batch,
     Dataset,
     Image,
     ImageFile,
@@ -715,6 +716,8 @@ def store_batch_images_to_outbox(
         root = schema_service.root_of(database_batch)
         project = database_batch.project.model
         dataset = database_service.get_dataset(session, project.dataset_uid).model
+        # Into the batch's own bundle, if it is stored on its own.
+        bundled_batch = database_batch.model if database_batch.stored_alone else None
 
         image_models = []
         for image_schema in root.images.values():
@@ -739,6 +742,7 @@ def store_batch_images_to_outbox(
                 storage_service,
                 image_export_interface,
                 dicom_metadata_writer,
+                bundled_batch,
             )
             with database_service.get_session() as session:
                 database_image = database_service.get_image(session, image_model.uid)
@@ -786,8 +790,11 @@ def _store_image(
     storage_service: StorageService,
     image_export_interface: ImageExportInterface,
     dicom_metadata_writer: DicomMetadataWriter,
+    batch: Batch | None = None,
 ) -> None:
     """Store the image in the outbox, updating its paths, files and digest.
+
+    Into the bundle of the batch where one is given, else that of the project.
 
     What goes in the files is asked for again here rather than trusted from the
     export: the items it was read from have been curated since. The files are
@@ -801,7 +808,7 @@ def _store_image(
     An image stored by an attempt that did not get to record it is taken up as
     it was stored, see ``StorageService.recover_stored_image``.
     """
-    if storage_service.recover_stored_image(project, image, dataset):
+    if storage_service.recover_stored_image(project, image, dataset, batch):
         return
     base = dicom_metadata_writer.recorded(image.source_metadata)
     metadata = (
@@ -812,10 +819,12 @@ def _store_image(
     digest = None if metadata is None else dicom_metadata_writer.digest(metadata)
     unchanged = digest is not None and digest == image.metadata_digest
     if metadata is None or unchanged:
-        storage_service.store_image_to_outbox(project, image, dataset)
+        storage_service.store_image_to_outbox(project, image, dataset, batch)
     else:
         source = Path(image.folder_path or "")
-        with storage_service.stage_image_in_outbox(project, image, dataset) as staged:
+        with storage_service.stage_image_in_outbox(
+            project, image, dataset, batch
+        ) as staged:
             written_files = dicom_metadata_writer.resave(source, staged, metadata)
         # DICOM names its files after the instances in them, and the instances
         # written are new ones, so the files that were stored are not the files
@@ -1034,6 +1043,66 @@ def process_metadata_export(
                 f"Failed to export metadata for project {project_id}", exc_info=True
             )
             project_service.revert_export(database_project, session)
+
+
+@dishka_task(
+    slidetap_tasks,
+    name="process_batch_metadata_export",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.NORMAL,
+    inject_will_retry=True,
+    retry=_TRANSIENT_RETRY,
+)
+def process_batch_metadata_export(
+    batch_uid: UUID | str,
+    metadata_export_interface: FromDishka[MetadataExportInterface],
+    batch_service: FromDishka[BatchService],
+    database_service: FromDishka[DatabaseService],
+    schema_service: FromDishka[SchemaService],
+    application_policy: FromDishka[ApplicationPolicy],
+    will_retry: Callable[[BaseException], bool] = _not_retried,
+) -> None:
+    """Export the metadata of an exporting batch into its own bundle.
+
+    A failed export, including a transient failure that will not be retried,
+    reverts the batch to completed so it can be exported again. So does a
+    refusal, as something outside the batch may have changed since.
+    """
+    if isinstance(batch_uid, str):
+        batch_uid = UUID(batch_uid)
+    logger.info(f"Exporting metadata for batch {batch_uid}")
+    with database_service.get_session() as session:
+        database_batch = database_service.get_batch(session, batch_uid)
+        if not database_batch.exporting:
+            return
+        refusal = schema_service.change_refusal(database_batch)
+        if refusal is None and not application_policy.allows_batch_export:
+            refusal = "this application does not export a batch on its own"
+        if refusal is None:
+            refusal = metadata_export_interface.batch_export_refusal(
+                database_batch.model
+            )
+        if refusal is not None:
+            logger.warning(f"Batch {batch_uid} is not exported: {refusal}")
+            batch_service.revert_export(
+                database_batch, session, message=f"Not exported: {refusal}"
+            )
+            return
+        project = database_batch.project
+        try:
+            metadata_export_interface.export_batch(
+                project.model, project.dataset.model, database_batch.model
+            )
+            batch_service.set_as_exported(database_batch, session)
+        except Exception as exception:
+            if will_retry(exception):
+                raise
+            logger.error(
+                f"Failed to export metadata for batch {batch_uid}", exc_info=True
+            )
+            batch_service.revert_export(
+                database_batch, session, message=f"Export failed: {exception}"
+            )
 
 
 @dishka_task(

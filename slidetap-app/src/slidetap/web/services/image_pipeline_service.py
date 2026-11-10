@@ -24,6 +24,7 @@ from slidetap.model import (
     Image,
     ImageSchema,
     ImageStatus,
+    NotAllowedActionError,
     NotFoundError,
 )
 from slidetap.services import BatchService, DatabaseService, SchemaService
@@ -213,13 +214,23 @@ class ImagePipelineService:
         Every batch is tried. A batch whose storing cannot be queued is left
         storing, to be stored by completing the project again, and raises once
         the other batches are queued.
+
+        Refused where a batch of the project is stored on its own, as the
+        project bundle would name items whose images are in that batch's bundle.
         """
         with self._database_service.get_session() as session:
             self._schema_service.assert_can_change(
                 self._database_service.get_project(session, project_uid), session
             )
+        batches = list(self._batch_service.get_all(project_uid=project_uid))
+        alone = next((batch for batch in batches if batch.stored_alone), None)
+        if alone is not None:
+            raise NotAllowedActionError(
+                f"Batch {alone.name} is stored on its own, so the project is not "
+                "stored as a whole. Store and export each batch on its own."
+            )
         failures: dict[UUID, Exception] = {}
-        for batch in self._batch_service.get_all(project_uid=project_uid):
+        for batch in batches:
             if batch.status in (
                 BatchStatus.LOCKED,
                 BatchStatus.IMAGE_STORING,

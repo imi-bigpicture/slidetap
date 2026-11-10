@@ -99,6 +99,19 @@ const batchApi = {
     return await parseJsonResponse<Batch>(response)
   },
 
+  /** Store the images of a locked batch into its own bundle. Also resumes
+   * storing. */
+  storeAlone: async (batchUid: string) => {
+    const response = await post(`batches/batch/${batchUid}/store`)
+    return await parseJsonResponse<Batch>(response)
+  },
+
+  /** Export the metadata of a batch stored on its own into its bundle. */
+  exportAlone: async (batchUid: string) => {
+    const response = await post(`batches/batch/${batchUid}/export`)
+    return await parseJsonResponse<Batch>(response)
+  },
+
   /** How verifying the batch stands: what was drawn, what was decided, and
    * what holds the batch back from being completed. */
   getVerification: async (batchUid: string) => {

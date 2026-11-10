@@ -39,6 +39,7 @@ describe('usePreProcessImages', () => {
     // Arrange
     vi.mocked(applicationApi.getPolicy).mockResolvedValue({
       preProcessesImagesSeparately: false,
+      allowsBatchExport: false,
     })
 
     // Act

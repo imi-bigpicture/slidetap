@@ -35,11 +35,23 @@ class Batch(CamelCaseBaseModel):
     uid: UUID
     name: str
     status: BatchStatus
+    status_updated: datetime.datetime | None = None
+    """When the status last changed, None if unchanged since this was added."""
     project_uid: UUID
     is_default: bool
     created: datetime.datetime
     status_message: str | None = None
     """Why the batch is in its current status, if it failed."""
+    storage_folder: str | None = None
+    """Folder of the batch's own bundle, None if it is exported with its project.
+
+    Set when the batch is first stored on its own and never changed, so what is
+    in the outbox stays where it was put."""
+
+    @property
+    def stored_alone(self) -> bool:
+        """Whether the batch is stored and exported in a bundle of its own."""
+        return self.storage_folder is not None
 
 
 class BatchStoringProgress(CamelCaseBaseModel):

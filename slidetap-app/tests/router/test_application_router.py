@@ -32,7 +32,9 @@ def test_client(decoy: Decoy, simple_app: FastAPI):
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(
-        lambda: ApplicationPolicy(pre_processes_images_separately=False),
+        lambda: ApplicationPolicy(
+            pre_processes_images_separately=False, allows_batch_export=True
+        ),
         provides=ApplicationPolicy,
     )
     container = make_async_container(service_provider)
@@ -44,7 +46,7 @@ def test_client(decoy: Decoy, simple_app: FastAPI):
 
 @pytest.mark.unittest
 class TestSlideTapApplicationRouter:
-    def test_the_policy_says_whether_images_are_pre_processed_separately(
+    def test_the_policy_says_how_images_are_pre_processed_and_batches_exported(
         self, test_client: TestClient
     ):
         # Act
@@ -52,4 +54,7 @@ class TestSlideTapApplicationRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert response.json() == {"preProcessesImagesSeparately": False}
+        assert response.json() == {
+            "preProcessesImagesSeparately": False,
+            "allowsBatchExport": True,
+        }

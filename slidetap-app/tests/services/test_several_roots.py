@@ -988,9 +988,12 @@ class TestViewOnlyRoot:
         metadata_export_service = MetadataExportService(
             decoy.mock(cls=Scheduler),
             project_service,
+            decoy.mock(cls=BatchService),
+            decoy.mock(cls=ItemService),
             stored_database_service,
             schema_service,
             decoy.mock(cls=MetadataExportInterface),
+            ApplicationPolicy(),
         )
         image_pipeline_service = ImagePipelineService(
             decoy.mock(cls=Scheduler),
@@ -1086,9 +1089,12 @@ class TestViewOnlyRoot:
         metadata_export_service = MetadataExportService(
             decoy.mock(cls=Scheduler),
             decoy.mock(cls=ProjectService),
+            decoy.mock(cls=BatchService),
+            decoy.mock(cls=ItemService),
             stored_database_service,
             schema_service,
             metadata_export_interface,
+            ApplicationPolicy(),
         )
 
         # Act
@@ -1114,9 +1120,12 @@ class TestViewOnlyRoot:
         metadata_export_service = MetadataExportService(
             decoy.mock(cls=Scheduler),
             decoy.mock(cls=ProjectService),
+            decoy.mock(cls=BatchService),
+            decoy.mock(cls=ItemService),
             stored_database_service,
             schema_service,
             metadata_export_interface,
+            ApplicationPolicy(),
         )
 
         # Act
@@ -1142,9 +1151,12 @@ class TestViewOnlyRoot:
         metadata_export_service = MetadataExportService(
             decoy.mock(cls=Scheduler),
             decoy.mock(cls=ProjectService),
+            decoy.mock(cls=BatchService),
+            decoy.mock(cls=ItemService),
             stored_database_service,
             schema_service,
             metadata_export_interface,
+            ApplicationPolicy(),
         )
 
         # Act

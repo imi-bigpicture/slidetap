@@ -48,6 +48,7 @@ class BatchStatus(IntEnum):
 
     They go to the outbox when the project is completed, so that a batch
     unlocked until then leaves nothing behind in a bundle already handed over.
+    A batch exported on its own goes into its own bundle when it is stored.
     """
 
     IMAGE_STORING = 9
@@ -64,6 +65,13 @@ class BatchStatus(IntEnum):
 
     DELETED = 13
     """Taken out of the project."""
+
+    EXPORTING = 14
+    """Its metadata is being written into its own bundle. Only for a batch
+    exported on its own; one exported with its project stays completed."""
+
+    EXPORTED = 15
+    """Its own bundle, images and metadata, is complete and ready to hand over."""
 
 
 RUNNING_BATCH_STATUSES = frozenset(

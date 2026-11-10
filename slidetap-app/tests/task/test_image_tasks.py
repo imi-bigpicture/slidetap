@@ -31,7 +31,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
-from decoy.matchers import Anything
+from decoy.matchers import Anything, Captor
 from procrastinate.jobs import Job
 from slidetap_example import ExampleSchema
 from sqlalchemy.orm import Session
@@ -1260,7 +1260,9 @@ class TestStoreBatchImagesToOutbox:
             folder_path=str(tmp_path),
         )
         decoy.when(
-            storage_service.store_image_to_outbox(Anything(), Anything(), Anything())
+            storage_service.store_image_to_outbox(
+                Anything(), Anything(), Anything(), None
+            )
         ).then_raise(TransientTaskError("Outbox unreachable"))
 
         # Act
@@ -1283,6 +1285,51 @@ class TestStoreBatchImagesToOutbox:
             == BatchStatus.IMAGE_STORING
         )
 
+    def test_an_image_of_a_batch_stored_alone_is_stored_into_its_bundle(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        storage_service: StorageService,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        """Given the batch, which names the bundle of its own."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
+        with stored_database_service.get_session() as session:
+            stored_database_service.get_batch(
+                session, stored.batch_uid
+            ).storage_folder = "BATCH_batch"
+            session.commit()
+        _add_image(
+            stored_database_service,
+            schema,
+            stored,
+            ImageStatus.POST_PROCESSED,
+            folder_path=str(tmp_path),
+        )
+        batch = Captor()
+
+        # Act
+        self._store(
+            stored.batch_uid,
+            stored_database_service,
+            batch_service,
+            schema_service,
+            storage_service,
+            _not_retried,
+        )
+
+        # Assert
+        decoy.verify(
+            storage_service.store_image_to_outbox(
+                Anything(), Anything(), Anything(), batch
+            )
+        )
+        assert batch.value.storage_folder == "BATCH_batch"
+
     def test_a_transient_failure_that_is_retried_leaves_the_image_storing(
         self,
         decoy: Decoy,
@@ -1303,7 +1350,9 @@ class TestStoreBatchImagesToOutbox:
             folder_path=str(tmp_path),
         )
         decoy.when(
-            storage_service.store_image_to_outbox(Anything(), Anything(), Anything())
+            storage_service.store_image_to_outbox(
+                Anything(), Anything(), Anything(), None
+            )
         ).then_raise(TransientTaskError("Outbox unreachable"))
 
         # Act & Assert
@@ -1342,7 +1391,9 @@ class TestStoreBatchImagesToOutbox:
             folder_path=str(processing),
         )
 
-        def recover_stored_image(project: Any, image: Image, dataset: Any) -> bool:
+        def recover_stored_image(
+            project: Any, image: Image, dataset: Any, batch: Any
+        ) -> bool:
             image.folder_path = str(outbox)
             image.files = [
                 ImageFile(uid=uuid4(), filename=filename)
@@ -1352,7 +1403,9 @@ class TestStoreBatchImagesToOutbox:
             return True
 
         decoy.when(
-            storage_service.recover_stored_image(Anything(), Anything(), Anything())
+            storage_service.recover_stored_image(
+                Anything(), Anything(), Anything(), None
+            )
         ).then_do(recover_stored_image)
 
         # Act

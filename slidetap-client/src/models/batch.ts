@@ -23,10 +23,19 @@ export interface Batch {
     readonly uid: string
     readonly name: string
     readonly status: BatchStatus
+    /** When the status last changed, null if unknown. */
+    readonly statusUpdated: string | null
     readonly statusMessage: string | null
     readonly projectUid: string
     readonly isDefault: boolean
     readonly created: string
+    /** Folder of the batch's own bundle, null if stored with its project. */
+    readonly storageFolder: string | null
+}
+
+/** Whether the batch is stored and exported on its own, not with its project. */
+export function storedAlone(batch: Batch): boolean {
+    return batch.storageFolder !== null && batch.storageFolder !== undefined
 }
 
 /** How far storing the images of a batch to the outbox has come, counted over

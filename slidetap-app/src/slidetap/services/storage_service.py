@@ -28,7 +28,7 @@ from uuid import UUID, uuid4
 from slidetap.config import StorageConfig
 from slidetap.database import DatabaseDataset, DatabaseProject
 from slidetap.external_interfaces.exceptions import TransientTaskError
-from slidetap.model import Dataset, Image, ImageFile, Project
+from slidetap.model import Batch, Dataset, Image, ImageFile, Project
 from slidetap.services.database_service import DatabaseService, ImagePaths
 from slidetap.services.file_operations import FileOperations
 
@@ -39,6 +39,9 @@ class StorageService:
     UNSAFE_PATH_CHARACTERS = re.compile(r"[\\/\x00]")
     """Characters that would let a name reach outside the folder it is joined
     to, or that no file system allows in a name."""
+
+    BATCH_FOLDER_PREFIX = "BATCH_"
+    """Prefix of the bundle folder of a batch stored on its own."""
 
     def __init__(
         self,
@@ -107,6 +110,7 @@ class StorageService:
         project: Project,
         data: dict[str | Path, StringIO | BytesIO],
         dataset: Dataset,
+        batch: Batch | None = None,
     ):
         """Store data in the dataset's bundle folder.
 
@@ -118,8 +122,10 @@ class StorageService:
             Data to store.
         dataset: Dataset
             Dataset the data belongs to; determines the bundle folder.
+        batch: Batch | None = None
+            Batch stored on its own, whose bundle to use, see `project_bundle`.
         """
-        outbox = self.project_bundle(project, dataset)
+        outbox = self.project_bundle(project, dataset, batch)
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
             self._make_folder(full_path.parent)
@@ -223,9 +229,17 @@ class StorageService:
             return
         self._remove_path(path)
 
-    def store_pseudonyms(self, project: Project, pseudonyms: dict[str, dict[str, Any]]):
-        """Store pseudonyms for project."""
-        pseudonym_folder = self._project_pseudonym_outbox(project)
+    def store_pseudonyms(
+        self,
+        project: Project,
+        pseudonyms: dict[str, dict[str, Any]],
+        batch: Batch | None = None,
+    ):
+        """Store pseudonyms for project, or for a batch of it stored on its own.
+
+        Those of a batch go in a subfolder named as its bundle, outside every
+        bundle."""
+        pseudonym_folder = self._pseudonym_outbox(project, batch)
         pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
         self._make_folder(pseudonym_path.parent)
         with open(pseudonym_path, "w") as pseudonym_file:
@@ -240,13 +254,16 @@ class StorageService:
         processing_folder = self._project_processing(project)
         self._remove_path(processing_folder)
 
-    def cleanup_metadata(self, project: Project, dataset: Dataset):
-        """Remove the metadata folders from the dataset bundle.
+    def cleanup_metadata(
+        self, project: Project, dataset: Dataset, batch: Batch | None = None
+    ):
+        """Remove the metadata folders from the dataset bundle, or from that of
+        a batch stored on its own.
 
         These are ``metadata_path`` plus ``additional_metadata_paths``. Images
         are stored separately, are never among them, and so are preserved.
         """
-        bundle = self.project_bundle(project, dataset)
+        bundle = self.project_bundle(project, dataset, batch)
         folders = (
             self._config.metadata_path,
             *self._config.additional_metadata_paths,
@@ -254,9 +271,10 @@ class StorageService:
         for folder in folders:
             self._remove_path(bundle.joinpath(folder))
 
-    def cleanup_pseudonyms(self, project: Project):
-        """Remove pseudonyms for project."""
-        pseudonym_folder = self._project_pseudonym_outbox(project)
+    def cleanup_pseudonyms(self, project: Project, batch: Batch | None = None):
+        """Remove pseudonyms for project, or only those of a batch stored on its
+        own."""
+        pseudonym_folder = self._pseudonym_outbox(project, batch)
         self._remove_path(pseudonym_folder)
 
     def project_outbox(self, project: Project) -> Path:
@@ -377,16 +395,50 @@ class StorageService:
             )
         return prefix + alias
 
-    def project_bundle(self, project: Project, dataset: Dataset) -> Path:
+    def project_bundle(
+        self, project: Project, dataset: Dataset, batch: Batch | None = None
+    ) -> Path:
         """Return the folder that bundle content (images, metadata) is stored in.
 
         This is the project outbox, optionally nested in the per-dataset bundle
         folder from the storage config. Supporting folders (thumbnails,
         pseudonyms) stay at the project outbox root and do not use this.
+
+        A batch stored on its own has a bundle of its own in the project outbox:
+        ``<project>/<batch>/<dataset bundle>``.
+
+        Raises
+        ------
+        ValueError
+            If the batch is given but is not stored on its own.
         """
         outbox = self.project_outbox(project)
+        if batch is not None:
+            if batch.storage_folder is None:
+                raise ValueError(f"Batch {batch.uid} is not stored on its own.")
+            outbox = outbox.joinpath(batch.storage_folder)
         folder = self.dataset_folder(dataset)
         return outbox.joinpath(folder) if folder else outbox
+
+    @classmethod
+    def batch_folder_name(cls, batch: Batch, taken: Iterable[str]) -> str:
+        """The bundle folder name of a batch stored on its own.
+
+        ``BATCH_`` plus the batch name, made safe as a folder name, with the
+        batch uid appended where another batch of the project has taken it. The
+        prefix keeps it apart from the other folders of the project outbox.
+
+        Parameters
+        ----------
+        batch: Batch
+            The batch to name the folder of.
+        taken: Iterable[str]
+            The folders other batches of the project have taken.
+        """
+        name = cls._path_name(f"{cls.BATCH_FOLDER_PREFIX}{batch.name}")
+        if name in set(taken):
+            return cls._path_name(f"{name}.{batch.uid}")
+        return name
 
     def _project_download(self, project: Project) -> Path:
         return self._config.download.joinpath(self.project_folder(project))
@@ -440,7 +492,11 @@ class StorageService:
         return thumbnail_path
 
     def recover_stored_image(
-        self, project: Project, image: Image, dataset: Dataset
+        self,
+        project: Project,
+        image: Image,
+        dataset: Dataset,
+        batch: Batch | None = None,
     ) -> bool:
         """Take up an image stored by an attempt that did not get to record it.
 
@@ -458,6 +514,8 @@ class StorageService:
             Image to recover.
         dataset: Dataset
             Dataset the image is bundled in.
+        batch: Batch | None = None
+            Batch stored on its own, whose bundle to use, see `project_bundle`.
 
         Returns
         -------
@@ -475,7 +533,7 @@ class StorageService:
             Path(image.folder_path)
         ):
             return False
-        self.store_image_to_outbox(project, image, dataset)
+        self.store_image_to_outbox(project, image, dataset, batch)
         if image.folder_path is not None:
             stored = Path(image.folder_path)
             image.files = [
@@ -486,7 +544,11 @@ class StorageService:
         return True
 
     def store_image_to_outbox(
-        self, project: Project, image: Image, dataset: Dataset
+        self,
+        project: Project,
+        image: Image,
+        dataset: Dataset,
+        batch: Batch | None = None,
     ) -> None:
         """Move processed image and thumbnail from processing dir to outbox.
 
@@ -507,12 +569,14 @@ class StorageService:
             Image to store.
         dataset: Dataset
             Dataset the image is bundled in.
+        batch: Batch | None = None
+            Batch stored on its own, whose bundle to use, see `project_bundle`.
         """
         if image.folder_path is not None:
             image.folder_path = str(
                 self._move_to_outbox(
                     Path(image.folder_path),
-                    self._project_images_outbox(project, dataset),
+                    self._project_images_outbox(project, dataset, batch),
                 )
             )
         if image.thumbnail_path is not None:
@@ -524,7 +588,11 @@ class StorageService:
 
     @contextmanager
     def stage_image_in_outbox(
-        self, project: Project, image: Image, dataset: Dataset
+        self,
+        project: Project,
+        image: Image,
+        dataset: Dataset,
+        batch: Batch | None = None,
     ) -> Iterator[Path]:
         """A folder to write an image into, put in its place on the way out.
 
@@ -539,7 +607,8 @@ class StorageService:
         into place afterwards has no such limit.
 
         The thumbnail is moved as it is, and the image's paths are left pointing
-        at what was stored, as they are by store_image_to_outbox.
+        at what was stored, as they are by store_image_to_outbox. Uses the
+        bundle of the batch where one is given.
         """
         if image.folder_path is None:
             raise ValueError(f"Image {image.uid} has no files to store.")
@@ -551,7 +620,7 @@ class StorageService:
         except Exception:
             self._remove_path(staged)
             raise
-        destination = self._project_images_outbox(project, dataset).joinpath(
+        destination = self._project_images_outbox(project, dataset, batch).joinpath(
             source.name
         )
         try:
@@ -745,8 +814,12 @@ class StorageService:
         self._make_folder(path)
         return path
 
-    def _project_images_outbox(self, project: Project, dataset: Dataset) -> Path:
-        path = self.project_bundle(project, dataset).joinpath(self._config.image_path)
+    def _project_images_outbox(
+        self, project: Project, dataset: Dataset, batch: Batch | None = None
+    ) -> Path:
+        path = self.project_bundle(project, dataset, batch).joinpath(
+            self._config.image_path
+        )
         self._make_folder(path)
         return path
 
@@ -757,6 +830,17 @@ class StorageService:
 
     def _project_pseudonym_outbox(self, project: Project) -> Path:
         path = self.project_outbox(project).joinpath(self._config.psuedonym_path)
+        self._make_folder(path)
+        return path
+
+    def _pseudonym_outbox(self, project: Project, batch: Batch | None) -> Path:
+        """The pseudonym folder of the project, or its subfolder for a batch
+        stored on its own."""
+        if batch is None:
+            return self._project_pseudonym_outbox(project)
+        if batch.storage_folder is None:
+            raise ValueError(f"Batch {batch.uid} is not stored on its own.")
+        path = self._project_pseudonym_outbox(project).joinpath(batch.storage_folder)
         self._make_folder(path)
         return path
 

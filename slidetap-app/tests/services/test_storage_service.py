@@ -21,6 +21,7 @@ it performs, in which order, and what it does to recover when one of them fails.
 """
 
 import dataclasses
+import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -30,7 +31,15 @@ from decoy.matchers import Anything, Captor
 
 from slidetap.config import StorageConfig
 from slidetap.external_interfaces.exceptions import TransientTaskError
-from slidetap.model import Dataset, Image, ImageFormat, Project, RootSchema
+from slidetap.model import (
+    Batch,
+    BatchStatus,
+    Dataset,
+    Image,
+    ImageFormat,
+    Project,
+    RootSchema,
+)
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.file_operations import FileOperations
 from slidetap.services.storage_service import StorageService
@@ -742,3 +751,135 @@ class TestCleanupImageSource:
 
         # Assert
         decoy.verify(file_operations.remove(Anything()), times=0)
+
+
+def a_batch(project: Project, name: str = "first", folder: str | None = "BATCH_first"):
+    return Batch(
+        uid=uuid4(),
+        name=name,
+        status=BatchStatus.IMAGE_STORING,
+        project_uid=project.uid,
+        is_default=False,
+        created=datetime.datetime(2026, 10, 28),
+        storage_folder=folder,
+    )
+
+
+@pytest.mark.unittest
+class TestBatchBundle:
+    """What is in the bundle of a batch stored on its own is in no other."""
+
+    def test_the_bundle_of_a_batch_is_in_a_folder_of_its_own(
+        self,
+        storage_service: StorageService,
+        config: StorageConfig,
+        project: Project,
+        dataset: Dataset,
+    ):
+        # Arrange
+        batch = a_batch(project)
+
+        # Act
+        bundle = storage_service.project_bundle(project, dataset, batch)
+
+        # Assert
+        assert bundle == config.outbox.joinpath(
+            project.storage_folder or "", "BATCH_first"
+        )
+        assert bundle != storage_service.project_bundle(project, dataset)
+
+    def test_the_bundle_of_a_batch_nests_the_dataset_bundle(
+        self,
+        config: StorageConfig,
+        database_service: DatabaseService,
+        file_operations: FileOperations,
+        project: Project,
+        dataset: Dataset,
+    ):
+        """Each bundle is named as the dataset, as the bundle of the project is."""
+        # Arrange
+        storage_service = StorageService(
+            dataclasses.replace(config, bundle_prefix="DATASET_"),
+            database_service,
+            file_operations,
+        )
+        dataset.storage_folder = "DATASET_dataset_name"
+
+        # Act
+        bundle = storage_service.project_bundle(project, dataset, a_batch(project))
+
+        # Assert
+        assert bundle == config.outbox.joinpath(
+            project.storage_folder or "", "BATCH_first", "DATASET_dataset_name"
+        )
+
+    def test_a_batch_not_stored_on_its_own_has_no_bundle_of_its_own(
+        self,
+        storage_service: StorageService,
+        project: Project,
+        dataset: Dataset,
+    ):
+        with pytest.raises(ValueError, match="not stored on its own"):
+            storage_service.project_bundle(
+                project, dataset, a_batch(project, folder=None)
+            )
+
+    def test_an_image_of_a_batch_is_stored_into_its_bundle(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        config: StorageConfig,
+        project: Project,
+        dataset: Dataset,
+        processed_image: Image,
+    ):
+        # Arrange
+        batch = a_batch(project)
+        destination = storage_service.project_bundle(project, dataset, batch).joinpath(
+            config.image_path, "image identifier"
+        )
+        decoy.when(file_operations.exists(destination)).then_return(False)
+
+        # Act
+        storage_service.store_image_to_outbox(project, processed_image, dataset, batch)
+
+        # Assert
+        assert processed_image.folder_path == str(destination)
+
+    def test_the_pseudonyms_of_a_batch_are_beside_those_of_the_project(
+        self,
+        storage_service: StorageService,
+        config: StorageConfig,
+        project: Project,
+    ):
+        """Kept out of every bundle, as the pseudonyms of the project are."""
+        # Arrange
+        expected = config.outbox.joinpath(
+            project.storage_folder or "",
+            config.psuedonym_path,
+            "BATCH_first",
+            "pseudonyms.json",
+        )
+        # The folders are made through the file operations, which are mocked.
+        expected.parent.mkdir(parents=True)
+
+        # Act
+        storage_service.store_pseudonyms(project, {"a": {}}, a_batch(project))
+
+        # Assert
+        assert expected.exists()
+
+    def test_the_folder_of_a_batch_is_named_from_the_batch(self, project: Project):
+        assert (
+            StorageService.batch_folder_name(a_batch(project, "Batch 1/2"), [])
+            == "BATCH_Batch 1_2"
+        )
+
+    def test_a_folder_already_claimed_is_told_apart_by_the_uid(self, project: Project):
+        batch = a_batch(project, "first")
+
+        assert (
+            StorageService.batch_folder_name(batch, ["BATCH_first"])
+            == f"BATCH_first.{batch.uid}"
+        )

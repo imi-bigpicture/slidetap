@@ -616,6 +616,9 @@ class DatabaseImage(DatabaseItem[Image]):
     than from what the application last wrote."""
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
+    status_updated: Mapped[datetime | None] = mapped_column(DateTime)
+    """When the status last changed, kept by `slidetap.database.status_tracking`.
+    None if unchanged since the column was added."""
     status_message: Mapped[str | None] = mapped_column(String(512))
     format: Mapped[ImageFormat] = mapped_column(Enum(ImageFormat))
     # Relationship
@@ -821,6 +824,7 @@ class DatabaseImage(DatabaseItem[Image]):
             folder_path=self.folder_path,
             thumbnail_path=self.thumbnail_path,
             status=self.status,
+            status_updated=self.status_updated,
             status_message=self.status_message,
             metadata_digest=self.metadata_digest,
             source_metadata=self.source_metadata,

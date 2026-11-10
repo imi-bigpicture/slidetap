@@ -67,6 +67,7 @@ import { Dataset } from 'src/models/dataset'
 import { Project } from 'src/models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
 import { rootDisplayName } from 'src/models/schema/root_schema'
+import { useAllowsBatchExport } from 'src/hooks/use_allows_batch_export'
 import { usePreProcessImages } from 'src/hooks/use_pre_process_images'
 import batchApi from 'src/services/api/batch.api'
 import datasetApi from 'src/services/api/dataset_api'
@@ -137,7 +138,9 @@ function batchIsProcessingOrCompleted(
 ): boolean {
   return (
     batchIsProcessing(batchStatus, preProcessImages) ||
-    batchStatus === BatchStatus.COMPLETED
+    batchStatus === BatchStatus.COMPLETED ||
+    batchStatus === BatchStatus.EXPORTING ||
+    batchStatus === BatchStatus.EXPORTED
   )
 }
 
@@ -251,6 +254,7 @@ export default function DisplayProject({
   const itemIdentifier = itemQuery.data?.identifier
   const rootSchema = useSchemaContext()
   const preProcessImages = usePreProcessImages()
+  const allowsBatchExport = useAllowsBatchExport()
   // Whether the project can be changed: its root schema is editable, with the
   // project's state applied.
   const actions = useProjectActions()
@@ -351,6 +355,7 @@ export default function DisplayProject({
         BatchStatus.IMAGE_PRE_PROCESSING,
         BatchStatus.IMAGE_POST_PROCESSING,
         BatchStatus.IMAGE_STORING,
+        BatchStatus.EXPORTING,
         BatchStatus.DELETING,
       ]
       return status !== undefined && activeStatuses.includes(status) ? 2000 : false
@@ -449,7 +454,11 @@ export default function DisplayProject({
       {
         name: 'Export',
         path: 'export',
-        enabled: actions.edit && projectIsCompleted(project.status),
+        // Also while in progress where batches can be exported on their own.
+        enabled:
+          actions.edit &&
+          (projectIsCompleted(project.status) ||
+            (allowsBatchExport && project.status === ProjectStatus.IN_PROGRESS)),
         icon: <MoveToInbox />,
         description: 'Export project data',
       },

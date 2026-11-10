@@ -55,6 +55,7 @@ from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.responses import StatusResponse
 from slidetap.web.services import (
     ImagePipelineService,
+    MetadataExportService,
     MetadataImportService,
 )
 from slidetap.web.services.login_service import require_valid_token
@@ -432,6 +433,82 @@ def reopen(
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+
+
+@batch_router.post("/batch/{batch_uid}/store")
+def store_alone(
+    batch_uid: UUID,
+    metadata_export_service: FromDishka[MetadataExportService],
+    logger: Logger,
+) -> Batch:
+    """Store the images of a locked batch into a bundle of its own.
+
+    Step one of two, see `export_alone`. After this the batch cannot be
+    reopened. Calling it again while storing resumes storing.
+
+    Refused (409) if the batch cannot be exported on its own, is not locked, or
+    a batch of the project is stored with the project.
+
+    Parameters
+    ----------
+    batch_uid: UUID
+        Id of batch.
+
+    Returns
+    ----------
+    Batch
+        The batch, storing.
+    """
+    logger.info(f"Storing batch {batch_uid} on its own.")
+    try:
+        return metadata_export_service.store_batch(batch_uid)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    except Exception as exception:
+        # The batch is left storing; storing it again requeues it.
+        logger.error(f"Failed to queue storing of batch {batch_uid}", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to queue storing the batch, store it again",
+        ) from exception
+
+
+@batch_router.post("/batch/{batch_uid}/export")
+def export_alone(
+    batch_uid: UUID,
+    metadata_export_service: FromDishka[MetadataExportService],
+    logger: Logger,
+) -> Batch:
+    """Export the metadata of a batch stored on its own into its bundle.
+
+    Refused (409) if the batch is not wholly stored on its own, or cannot be
+    exported on its own.
+
+    Parameters
+    ----------
+    batch_uid: UUID
+        Id of batch.
+
+    Returns
+    ----------
+    Batch
+        The batch, exporting.
+    """
+    logger.info(f"Exporting batch {batch_uid} on its own.")
+    try:
+        return metadata_export_service.export_batch(batch_uid)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
 
 

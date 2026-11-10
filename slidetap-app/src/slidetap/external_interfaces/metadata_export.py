@@ -13,8 +13,16 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
+from uuid import UUID
 
-from slidetap.model import Dataset, ExportNotice, ExportPreviewFile, Item, Project
+from slidetap.model import (
+    Batch,
+    Dataset,
+    ExportNotice,
+    ExportPreviewFile,
+    Item,
+    Project,
+)
 
 
 class MetadataExportInterface(metaclass=ABCMeta):
@@ -24,7 +32,9 @@ class MetadataExportInterface(metaclass=ABCMeta):
     - export: Serialize all metadata for the project to storage.
 
     And may implement `preview_export`, to show what the export writes for an
-    item together with everything connected to it.
+    item together with everything connected to it, and `batch_export_refusal`,
+    `batch_shared_items` and `export_batch`, to export a batch on its own, see
+    :py:attr:`ApplicationPolicy.allows_batch_export`.
     """
 
     @abstractmethod
@@ -94,5 +104,61 @@ class MetadataExportInterface(metaclass=ABCMeta):
             The project to export metadata for.
         dataset: Dataset
             The dataset to export metadata for.
+        """
+        raise NotImplementedError()
+
+    def batch_export_refusal(self, batch: Batch) -> str | None:
+        """
+        Why the batch cannot be exported on its own, None if it can.
+
+        A batch exported on its own is handed over before the rest of its
+        project and cannot be taken back, so its export must not depend on
+        anything outside it that can change or is exported later, such as an
+        item of it with something from another batch under it.
+
+        Asked before the batch's images are stored and again before its metadata
+        is exported. The default refuses every batch; override this and
+        `export_batch` to support it.
+
+        Parameters
+        ----------
+        batch: Batch
+            The batch to export on its own.
+        """
+        return "The metadata export does not export a batch on its own."
+
+    def batch_shared_items(self, batch: Batch) -> list[UUID]:
+        """
+        Items of other batches the batch is exported with, such as the
+        biological being a case of it is from. Empty by default.
+
+        They are moved into the batch and locked when it is stored, so its
+        export cannot change afterwards.
+
+        Parameters
+        ----------
+        batch: Batch
+            The batch to export on its own.
+        """
+        return []
+
+    def export_batch(self, project: Project, dataset: Dataset, batch: Batch) -> None:
+        """
+        Export the metadata of a batch exported on its own into its bundle.
+
+        As `export`, but only for the batch and its `batch_shared_items`. Its
+        images are already in its bundle, see `StorageService.project_bundle`;
+        its metadata and pseudonyms go there too.
+
+        Must throw an exception if the metadata cannot be exported.
+
+        Parameters
+        ----------
+        project: Project
+            The project the batch is of.
+        dataset: Dataset
+            The dataset of the project.
+        batch: Batch
+            The batch to export metadata for.
         """
         raise NotImplementedError()

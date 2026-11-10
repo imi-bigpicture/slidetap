@@ -39,6 +39,7 @@ from slidetap.web.routers import batch_router
 from slidetap.web.services import (
     ImagePipelineService,
     LoginService,
+    MetadataExportService,
     MetadataImportService,
 )
 
@@ -64,6 +65,11 @@ def metadata_import_service(decoy: Decoy):
 
 
 @pytest.fixture()
+def metadata_export_service(decoy: Decoy):
+    return decoy.mock(cls=MetadataExportService)
+
+
+@pytest.fixture()
 def scheduler(decoy: Decoy):
     return decoy.mock(cls=Scheduler)
 
@@ -75,6 +81,7 @@ def batch_router_app(
     batch_service: BatchService,
     image_pipeline_service: ImagePipelineService,
     metadata_import_service: MetadataImportService,
+    metadata_export_service: MetadataExportService,
     scheduler: Scheduler,
 ):
     service_provider = Provider(scope=Scope.APP)
@@ -87,6 +94,9 @@ def batch_router_app(
     )
     service_provider.provide(
         lambda: metadata_import_service, provides=MetadataImportService
+    )
+    service_provider.provide(
+        lambda: metadata_export_service, provides=MetadataExportService
     )
 
     container = make_async_container(service_provider)
@@ -490,3 +500,71 @@ class TestSlideTapBatchRouter:
         response = test_client.post(f"/api/batches/batch/{uid}/pre_process")
         # Assert
         assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.unittest
+class TestExportAlone:
+    @pytest.mark.parametrize(
+        ("path", "method"), [("store", "store_batch"), ("export", "export_batch")]
+    )
+    def test_a_batch_is_stored_and_exported_on_its_own(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        metadata_export_service: MetadataExportService,
+        path: str,
+        method: str,
+    ):
+        # Arrange
+        decoy.when(getattr(metadata_export_service, method)(batch.uid)).then_return(
+            batch
+        )
+
+        # Act
+        response = test_client.post(f"api/batches/batch/{batch.uid}/{path}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+
+    @pytest.mark.parametrize(
+        ("path", "method"), [("store", "store_batch"), ("export", "export_batch")]
+    )
+    def test_a_batch_refused_is_refused_with_why(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        metadata_export_service: MetadataExportService,
+        path: str,
+        method: str,
+    ):
+        # Arrange
+        decoy.when(getattr(metadata_export_service, method)(batch.uid)).then_raise(
+            NotAllowedActionError("A case of it has a specimen in another batch.")
+        )
+
+        # Act
+        response = test_client.post(f"api/batches/batch/{batch.uid}/{path}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "specimen in another batch" in response.json()["detail"]
+
+    def test_a_store_that_cannot_be_queued_is_an_error(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        metadata_export_service: MetadataExportService,
+    ):
+        # Arrange
+        decoy.when(metadata_export_service.store_batch(batch.uid)).then_raise(
+            ConnectionError("Queue unreachable")
+        )
+
+        # Act
+        response = test_client.post(f"api/batches/batch/{batch.uid}/store")
+
+        # Assert
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR

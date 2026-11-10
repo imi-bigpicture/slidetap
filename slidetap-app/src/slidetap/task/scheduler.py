@@ -30,6 +30,7 @@ from slidetap.task.tasks import (
     download_and_pre_process_image,
     plan_schema_migration,
     post_process_image,
+    process_batch_metadata_export,
     process_metadata_export,
     process_metadata_import,
     remap_batch_attributes,
@@ -151,6 +152,18 @@ class Scheduler:
         process_metadata_export.configure(
             lock=f"export-{project.uid}",
         ).defer(project_id=str(project.uid))
+
+    def metadata_batch_export(self, batch: Batch):
+        """Defer metadata export for a batch exported on its own.
+
+        Shares the ``export-{project_uid}`` lock with
+        :meth:`metadata_project_export`, so a project's exports run one at a
+        time. Raises if the task cannot be deferred.
+        """
+        self._logger.info(f"Exporting metadata for batch {batch.uid}")
+        process_batch_metadata_export.configure(
+            lock=f"export-{batch.project_uid}",
+        ).defer(batch_uid=str(batch.uid))
 
     def plan_migration(self, project_uid: UUID) -> None:
         """Defer planning the migration of a project to another root schema.
