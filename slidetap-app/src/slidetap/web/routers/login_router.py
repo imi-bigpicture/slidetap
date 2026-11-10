@@ -22,7 +22,7 @@ from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from slidetap.external_interfaces import AuthInterface
@@ -143,6 +143,7 @@ def logout(
 
 @login_router.post("/keepAlive")
 def keep_alive(
+    request: Request,
     response: Response,
     auth_interface: FromDishka[AuthInterface],
     login_service: FromDishka[LoginService],
@@ -155,7 +156,9 @@ def keep_alive(
     Keeps the auth interface session alive while the access token is valid,
     and issues new login cookies if the user has been active, so that how
     long a user can be idle is set by the access token expiration, not by
-    the keep alive timeout of the auth interface. A session that has been
+    the keep alive timeout of the auth interface. The CSRF token is kept, as
+    clients that hold it, such as the image viewer, are not told of a new
+    one. A session that has been
     logged out, or whose user the auth interface no longer accepts, is
     answered with unauthorized.
 
@@ -183,7 +186,9 @@ def keep_alive(
             detail="Session is no longer valid",
         )
     if keep_alive_request is None or keep_alive_request.active:
-        login_service.set_login_cookies(response, session)
+        login_service.set_login_cookies(
+            response, session, request.cookies.get("csrf_token")
+        )
     return KeepAliveResponse()
 
 

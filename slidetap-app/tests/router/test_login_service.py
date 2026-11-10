@@ -72,6 +72,25 @@ class TestLoginService:
         assert payload["sub"] == "user"
         assert LoginService.session_from_payload(payload) == session
 
+    def test_a_given_csrf_token_is_kept(self):
+        """A renewed login keeps the CSRF token, so that a client holding it
+        stays valid."""
+        # Arrange
+        login_service = LoginService(LoginConfig(SECRET_KEY))
+        session = UserSession(username="user", token="session token")
+        first_response = Response()
+        login_service.set_login_cookies(first_response, session)
+        csrf_token = _request_with_cookies(first_response).cookies["csrf_token"]
+        renewed_response = Response()
+
+        # Act
+        login_service.set_login_cookies(renewed_response, session, csrf_token)
+
+        # Assert
+        renewed_request = _request_with_cookies(renewed_response)
+        assert renewed_request.cookies["csrf_token"] == csrf_token
+        login_service.verify_access_and_csrf_tokens(renewed_request)
+
     @pytest.mark.parametrize(
         "payload", [{}, {"sub": "user"}, {LoginService.SESSION_CLAIM: "token"}]
     )

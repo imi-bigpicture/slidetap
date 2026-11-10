@@ -238,6 +238,7 @@ class TestSlideTapBasicAuthLoginRouter:
         )
         decoy.when(auth_interface.valid(session)).then_return(True)
         decoy.when(auth_interface.keep_alive(session)).then_return(True)
+        test_client.cookies["csrf_token"] = "csrf token"
 
         # Act
         response = test_client.post("/api/auth/keepAlive", json=body)
@@ -245,7 +246,7 @@ class TestSlideTapBasicAuthLoginRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
         decoy.verify(
-            login_service.set_login_cookies(Anything(), session),
+            login_service.set_login_cookies(Anything(), session, "csrf token"),
             times=1 if renewed else 0,
         )
 

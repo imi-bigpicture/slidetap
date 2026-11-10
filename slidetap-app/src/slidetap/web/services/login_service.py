@@ -106,7 +106,12 @@ class LoginService:
             )
         return self._verify_jwt_token(access_token_cookie)
 
-    def set_login_cookies(self, response: Response, session: UserSession):
+    def set_login_cookies(
+        self,
+        response: Response,
+        session: UserSession,
+        csrf_token: str | None = None,
+    ):
         """Set login cookies in the response.
 
         The access token names the user and carries the token of the session
@@ -114,6 +119,10 @@ class LoginService:
         with the auth interface while the access token is valid, and its keep
         alive timeout, so that the client can be told how often to keep the
         session alive.
+
+        The CSRF token is kept if one is given, so that a client holding it,
+        such as an image viewer that sends it with every tile request, stays
+        valid when the login is renewed. A new one is made otherwise.
         """
         claims: dict[str, Any] = {
             "sub": session.username,
@@ -122,7 +131,8 @@ class LoginService:
         if session.keep_alive_timeout_seconds is not None:
             claims[self.KEEP_ALIVE_TIMEOUT_CLAIM] = session.keep_alive_timeout_seconds
         jwt_token = self._create_jwt_token(claims)
-        crsf_token = secrets.token_urlsafe(32)
+        if csrf_token is None:
+            csrf_token = secrets.token_urlsafe(32)
         response.set_cookie(
             key="access_token",
             value=jwt_token,
@@ -132,7 +142,7 @@ class LoginService:
         )
         response.set_cookie(
             key="csrf_token",
-            value=crsf_token,
+            value=csrf_token,
             httponly=False,
             secure=True,
             samesite="strict",
