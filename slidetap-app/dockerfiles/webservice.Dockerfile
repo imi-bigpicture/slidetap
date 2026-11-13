@@ -1,7 +1,7 @@
 # Base images are pinned to exact tags; Dependabot's docker ecosystem bumps
 # them. Build and production use the same Python image, so the interpreter the
 # venv links to exists in production.
-FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
 
 # build stage
 FROM python:3.15.0-slim-trixie AS build
