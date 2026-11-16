@@ -969,3 +969,68 @@ def test_a_mapper_keeps_its_lowest_group_on_downgrade_to_one_group(
     assert session.execute(
         sa.select(single_group.c.uid, single_group.c.mapper_group_uid)
     ).all() == [(mapper_uid, lowest_group_uid)]
+
+
+def test_a_mapping_expression_is_unbounded_after_upgrade(session: Session):
+    """A regex expression runs to several hundred characters, which a string of
+    128 refused on Postgres, so the expression and its literal are text."""
+    # Act
+    command.upgrade(config(), "head")
+
+    # Assert
+    columns = {
+        column["name"]: column["type"]
+        for column in sa.inspect(session.get_bind()).get_columns("mapping_item")
+    }
+    for name in ("expression", "literal"):
+        assert isinstance(columns[name], sa.Text)
+        assert columns[name].length is None
+
+
+def test_a_long_mapping_expression_is_stored_after_upgrade(session: Session):
+    """The expression that a string of 128 refused on Postgres is stored."""
+    # Arrange
+    command.upgrade(config(), "head")
+    mapper = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("root_attribute_schema_uid", sa.Uuid()),
+    )
+    mapping_item = sa.table(
+        "mapping_item",
+        sa.column("uid", sa.Uuid()),
+        sa.column("mapper_uid", sa.Uuid()),
+        sa.column("expression", sa.Text()),
+        sa.column("attribute", sa.JSON()),
+        sa.column("hits", sa.Integer()),
+    )
+    mapper_uid = uuid4()
+    schema_uid = uuid4()
+    session.execute(
+        sa.insert(mapper).values(
+            uid=mapper_uid,
+            name="Clark level",
+            attribute_schema_uid=schema_uid,
+            root_attribute_schema_uid=schema_uid,
+        )
+    )
+    expression = "^(?:" + "|".join(f"level {number}" for number in range(40)) + ")$"
+    assert len(expression) > 128
+
+    # Act
+    session.execute(
+        sa.insert(mapping_item).values(
+            uid=uuid4(),
+            mapper_uid=mapper_uid,
+            expression=expression,
+            attribute={},
+            hits=0,
+        )
+    )
+    session.commit()
+
+    # Assert
+    stored = session.execute(sa.select(mapping_item.c.expression)).scalar_one()
+    assert stored == expression

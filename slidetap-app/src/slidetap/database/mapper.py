@@ -27,6 +27,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    Text,
     UniqueConstraint,
     Uuid,
     inspect,
@@ -117,8 +118,11 @@ class DatabaseMapper(Base, Generic[AttributeType]):
 class DatabaseMappingItem(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("mapper.uid"), index=True)
-    expression: Mapped[str] = mapped_column(String(128))
-    literal: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Text, not a bounded string: an expression is a regex, and those that
+    # read past qualifiers and guard against a second answer run to several
+    # hundred characters.
+    expression: Mapped[str] = mapped_column(Text)
+    literal: Mapped[str | None] = mapped_column(Text, nullable=True)
     """The one string `expression` matches exactly under `re.match`, or `None`
     when `expression` is a genuine regex (see `literal_key`). Lets the
     resolver find an exact hit via an indexed `(mapper_uid, literal)` lookup
