@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The thumbnail of an image that failed to be stored is made from its converted files.
 - Drag handles show their own hand cursor, visible on both themes.
 - Codes two levels down, such as in a list inside an object, are mapped.
+- Storing moves a converted image whose metadata has not changed, instead of writing it again. Its digest is now taken the same way at conversion as at storing.
+- Locking a batch is refused while a selected sample lacks a parent its schema requires, such as a slide with no block. This is read from the links themselves, so a sample still marked valid after losing its parent is caught.
+- Resuming storing of a batch stores its images that failed to store again, without retrying each first. Resume storing is offered whenever no store of the batch is queued or running, also when images were set back by hand.
 
 ## [0.4.0-rc.1] - 2026-10-26
 

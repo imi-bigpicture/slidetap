@@ -180,14 +180,21 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
 
+    @pytest.mark.parametrize("queued", [True, False])
     def test_storing_progress_is_got(
-        self, decoy: Decoy, test_client: TestClient, batch_service: BatchService
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch_service: BatchService,
+        scheduler: Scheduler,
+        queued: bool,
     ):
         # Arrange
         uid = uuid4()
         decoy.when(batch_service.get_storing_progress(uid)).then_return(
             BatchStoringProgress(batch_uid=uid, total=10, stored=4, failed=1)
         )
+        decoy.when(scheduler.storing_is_queued(uid)).then_return(queued)
 
         # Act
         response = test_client.get(f"api/batches/batch/{uid}/storing")
@@ -199,6 +206,7 @@ class TestSlideTapBatchRouter:
             "total": 10,
             "stored": 4,
             "failed": 1,
+            "running": queued,
         }
 
     def test_delete_batch_not_found(

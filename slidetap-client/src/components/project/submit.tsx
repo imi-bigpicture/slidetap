@@ -105,8 +105,8 @@ function storingProgressQuery(batch: Batch) {
   })
 }
 
-/** Whether storing stopped part-way: every image tried and some failed, so it
- * waits to be resumed. False while progress is unknown. */
+/** Whether storing stopped part-way: nothing stores the batch, and images are
+ * left to store, so it waits to be resumed. False while progress is unknown. */
 function storingStopped(
   batch: Batch,
   progress: BatchStoringProgress | undefined,
@@ -114,8 +114,8 @@ function storingStopped(
   return (
     progress !== undefined &&
     batch.status === BatchStatus.IMAGE_STORING &&
-    progress.failed > 0 &&
-    progress.stored + progress.failed === progress.total
+    !progress.running &&
+    progress.stored < progress.total
   )
 }
 
@@ -141,11 +141,9 @@ function StoringCell({ batch }: { batch: Batch }): ReactElement {
       )}
       {stopped && progress !== undefined && (
         <Alert severity="warning" sx={{ mt: 0.5 }}>
-          Storing stopped with {progress.failed} image
-          {progress.failed === 1 ? '' : 's'} not stored. Retry{' '}
-          {progress.failed === 1 ? 'it' : 'them'}, or take{' '}
-          {progress.failed === 1 ? 'it' : 'them'} out, on the batch's Post-process page,
-          then resume storing.
+          Storing stopped with {progress.total - progress.stored} image
+          {progress.total - progress.stored === 1 ? '' : 's'} not stored. Resume storing
+          to store {progress.total - progress.stored === 1 ? 'it' : 'them'} again.
         </Alert>
       )}
     </TableCell>
@@ -197,7 +195,7 @@ function BatchActionCell({
     )
   } else if (alone && storingStopped(batch, progressQuery.data)) {
     action = (
-      <Tooltip title="Stores again what failed to store, once it has been retried or taken out.">
+      <Tooltip title="Stores what is not stored, those that failed included.">
         <span>
           <Button
             size="small"

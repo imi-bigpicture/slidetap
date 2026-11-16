@@ -640,6 +640,8 @@ class BatchService:
                     "of the project is stored on its own. Store each batch on "
                     "its own."
                 )
+            if batch.status == BatchStatus.IMAGE_STORING:
+                self._retry_failed_to_store(batch, session)
             batch.status = BatchStatus.IMAGE_STORING
             self._logger.info(f"Batch {batch.uid} set as storing.")
             session.commit()
@@ -680,6 +682,8 @@ class BatchService:
             batch = self._database_service.get_batch(session, batch)
             self._schema_service.assert_can_change(batch, session)
             if batch.image_storing and batch.stored_alone:
+                self._retry_failed_to_store(batch, session)
+                session.commit()
                 return batch.model
             if batch.status != BatchStatus.LOCKED:
                 raise NotAllowedActionError(
@@ -729,6 +733,29 @@ class BatchService:
             )
             session.commit()
             return batch.model
+
+    def _retry_failed_to_store(self, batch: DatabaseBatch, session: Session) -> None:
+        """Set the selected images of a storing batch that failed to store back
+        as post-processed, as retrying each does, for storing the batch again to
+        take them."""
+        root = self._schema_service.root_of(batch.project, session)
+        retried = 0
+        for image_schema in root.images.values():
+            for image in self._database_service.get_images(
+                session,
+                schema=image_schema,
+                batch=batch.uid,
+                selected=True,
+                status_filter=[ImageStatus.STORING_FAILED],
+            ):
+                image.set_status_message("")
+                image.reset_as_post_processed()
+                retried += 1
+        if retried > 0:
+            self._logger.info(
+                f"{retried} images of batch {batch.uid} that failed to store are "
+                "stored again."
+            )
 
     def _take_over_shared_items(
         self,
@@ -954,6 +981,22 @@ class BatchService:
                     + " ".join(unverified)
                 )
                 raise NotAllowedActionError(error)
+            without_parent = self._samples_without_required_parent(batch, session)
+            if without_parent:
+                # Validated again, so that they show as not valid where they are
+                # curated, and kept even though the lock is refused.
+                self._validation_service.validate_relations_for(without_parent, session)
+                session.commit()
+                named = ", ".join(
+                    self._database_service.get_item(session, uid).identifier
+                    for uid in without_parent[:10]
+                )
+                error = (
+                    f"Can not set batch {batch.uid} as {BatchStatus.LOCKED.name}: "
+                    f"{len(without_parent)} samples lack a parent they require "
+                    f"({named}). Curate them, or take them out of the project."
+                )
+                raise NotAllowedActionError(error)
             self._lock_contents(batch, True, session)
             batch.status = BatchStatus.LOCKED
             self._logger.info(f"Batch {batch.uid} set as locked.")
@@ -1082,6 +1125,28 @@ class BatchService:
             self._logger.info(f"Batch {batch.uid} set as failed: {message}")
             session.commit()
             return batch.model
+
+    def _samples_without_required_parent(
+        self, batch: DatabaseBatch, session: Session
+    ) -> list[UUID]:
+        """The selected samples of the batch that lack a parent their schema
+        requires, such as a slide with no block.
+
+        Read from the links rather than from what validation stored, which a
+        link going without the sample being validated again leaves saying the
+        sample is valid. What the lock lets through is exported, and a slide on
+        no block is exported under no specimen, case or patient.
+        """
+        root = self._schema_service.root_of(batch.project, session)
+        return [
+            uid
+            for sample_schema in root.samples.values()
+            for relation in sample_schema.parents
+            if relation.parents.required
+            for uid in self._database_service.selected_samples_without_parent(
+                session, batch.uid, sample_schema.uid, relation.parent_uid
+            )
+        ]
 
     def _handle_project_status(self, project: DatabaseProject):
         # A project on its way out is not brought back by what happens to its

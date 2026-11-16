@@ -154,6 +154,155 @@ def set_status(
         session.commit()
 
 
+class Images:
+    """Images on a slide of their own, in a given status."""
+
+    @staticmethod
+    def add(
+        database_service: DatabaseService,
+        schema: ExampleSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        status: ImageStatus,
+        selected: bool = True,
+    ) -> UUID:
+        with database_service.get_session() as session:
+            slide = sample(
+                session, dataset.uid, batch_uid, schema.slide_schema_uid, "slide"
+            )
+            image = DatabaseImage(
+                dataset.uid,
+                batch_uid,
+                schema.image_schema_uid,
+                "image",
+                ImageFormat.DICOM_WSI,
+                samples=slide,
+            )
+            image.status = status
+            image.status_message = "failed" if status.name.endswith("FAILED") else ""
+            image.selected = selected
+            session.add(image)
+            session.commit()
+            return image.uid
+
+    @staticmethod
+    def status(database_service: DatabaseService, image_uid: UUID) -> ImageStatus:
+        with database_service.get_session() as session:
+            return database_service.get_image(session, image_uid).status
+
+
+@pytest.mark.integration
+class TestResumingStoring:
+    def test_storing_alone_again_stores_images_that_failed_to_store(
+        self,
+        batch_service: BatchService,
+        stored_database_service: DatabaseService,
+        schema: ExampleSchema,
+        dataset: Dataset,
+        batches: tuple[UUID, UUID],
+    ):
+        # Arrange
+        first, _ = batches
+        batch_service.set_as_storing_alone(first)
+        failed = Images.add(
+            stored_database_service,
+            schema,
+            dataset,
+            first,
+            ImageStatus.STORING_FAILED,
+        )
+
+        # Act
+        batch_service.set_as_storing_alone(first)
+
+        # Assert
+        assert (
+            Images.status(stored_database_service, failed) == ImageStatus.POST_PROCESSED
+        )
+
+    def test_storing_with_the_project_again_stores_images_that_failed_to_store(
+        self,
+        batch_service: BatchService,
+        stored_database_service: DatabaseService,
+        schema: ExampleSchema,
+        dataset: Dataset,
+        batches: tuple[UUID, UUID],
+    ):
+        # Arrange
+        first, _ = batches
+        batch_service.set_as_storing(first)
+        failed = Images.add(
+            stored_database_service,
+            schema,
+            dataset,
+            first,
+            ImageStatus.STORING_FAILED,
+        )
+
+        # Act
+        batch_service.set_as_storing(first)
+
+        # Assert
+        assert (
+            Images.status(stored_database_service, failed) == ImageStatus.POST_PROCESSED
+        )
+
+    def test_a_deselected_image_that_failed_to_store_is_left_as_it_is(
+        self,
+        batch_service: BatchService,
+        stored_database_service: DatabaseService,
+        schema: ExampleSchema,
+        dataset: Dataset,
+        batches: tuple[UUID, UUID],
+    ):
+        # Arrange
+        first, _ = batches
+        batch_service.set_as_storing_alone(first)
+        deselected = Images.add(
+            stored_database_service,
+            schema,
+            dataset,
+            first,
+            ImageStatus.STORING_FAILED,
+            selected=False,
+        )
+
+        # Act
+        batch_service.set_as_storing_alone(first)
+
+        # Assert
+        assert (
+            Images.status(stored_database_service, deselected)
+            == ImageStatus.STORING_FAILED
+        )
+
+    def test_storing_a_locked_batch_leaves_images_that_failed_to_store(
+        self,
+        batch_service: BatchService,
+        stored_database_service: DatabaseService,
+        schema: ExampleSchema,
+        dataset: Dataset,
+        batches: tuple[UUID, UUID],
+    ):
+        # Arrange
+        first, _ = batches
+        failed = Images.add(
+            stored_database_service,
+            schema,
+            dataset,
+            first,
+            ImageStatus.STORING_FAILED,
+        )
+
+        # Act
+        batch_service.set_as_storing(first)
+
+        # Assert
+        assert (
+            Images.status(stored_database_service, failed) == ImageStatus.STORING_FAILED
+        )
+
+
 @pytest.mark.integration
 class TestStoringAlone:
     def test_a_locked_batch_is_stored_into_a_folder_of_its_own(
@@ -382,30 +531,6 @@ class TestExportingAlone:
         set_status(stored_database_service, first, BatchStatus.COMPLETED)
         return first
 
-    def add_image(
-        self,
-        database_service: DatabaseService,
-        schema: ExampleSchema,
-        dataset: Dataset,
-        batch_uid: UUID,
-        status: ImageStatus,
-    ) -> None:
-        with database_service.get_session() as session:
-            slide = sample(
-                session, dataset.uid, batch_uid, schema.slide_schema_uid, "slide"
-            )
-            image = DatabaseImage(
-                dataset.uid,
-                batch_uid,
-                schema.image_schema_uid,
-                "image",
-                ImageFormat.DICOM_WSI,
-                samples=slide,
-            )
-            image.status = status
-            session.add(image)
-            session.commit()
-
     def test_a_batch_stored_alone_is_exported_and_then_exported(
         self,
         batch_service: BatchService,
@@ -470,7 +595,7 @@ class TestExportingAlone:
         stored_alone: UUID,
     ):
         # Arrange
-        self.add_image(
+        Images.add(
             stored_database_service,
             schema,
             dataset,

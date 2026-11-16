@@ -253,14 +253,15 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_name = str(image.uid)
         dicom_path = working_folder.joinpath(dicom_name)
         os.makedirs(dicom_path)
+        # What the file said about itself, kept when it was read. An image from
+        # before it was kept has nothing to write over.
+        base = self._metadata_writer.recorded(image.source_metadata)
         if image.format == ImageFormat.DICOM_WSI:
             self._logger.info(
                 f"De-identifying DICOM image {image.uid} in {path} to {dicom_path}."
             )
-            # What the file said about itself, kept when it was read. An image
-            # from before it was kept has nothing to write over, and what the
-            # file says is merged under what is produced, as it was before.
-            base = self._metadata_writer.recorded(image.source_metadata)
+            # Without a record, what the file says is merged under what is
+            # produced, as it was before.
             metadata = self._metadata_producer.create(
                 schema, image, base if base is not None else WsiDicomizerMetadata()
             )
@@ -273,6 +274,13 @@ class DicomProcessingStep(ImageProcessingStep):
                 f"with settings {self._config}."
             )
             files, metadata = self._dicomize(schema, image, path, dicom_path)
+            if base is not None:
+                # Fingerprinted as storing fingerprints it, from what the file
+                # said as it was kept. The conversion hands the producer less,
+                # and fills in the rest from the file after, so what it is
+                # handed back would never match, and every image would be
+                # written again when stored.
+                metadata = self._metadata_producer.create(schema, image, base)
         image.files = [
             ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
             for file in files

@@ -48,4 +48,6 @@ export interface BatchStoringProgress {
     readonly stored: number
     /** How many failed to store, and wait to be retried or taken out. */
     readonly failed: number
+    /** Whether storing the batch is queued or running. */
+    readonly running: boolean
 }

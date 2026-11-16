@@ -2327,6 +2327,44 @@ class DatabaseService:
             or_(*(item.c.uid.in_(parents) for parents in held_by)),
         )
 
+    def selected_samples_without_parent(
+        self,
+        session: Session,
+        batch_uid: UUID,
+        child_schema_uid: UUID,
+        parent_schema_uid: UUID,
+    ) -> list[UUID]:
+        """The selected samples of a schema in the batch with no selected parent
+        of another, read from the links themselves.
+
+        Not from what validation stored on the samples: a link can go without
+        the sample under it being validated again, such as when the parent is
+        deleted, and the stored answer then still says it has one.
+        """
+        item = _table_of(DatabaseItem)
+        parent = item.alias("parent")
+        sample_to_sample = DatabaseSample.sample_to_sample
+        has_parent = (
+            select(sample_to_sample.c.parent_uid)
+            .join(parent, parent.c.uid == sample_to_sample.c.parent_uid)
+            .where(
+                sample_to_sample.c.child_uid == item.c.uid,
+                parent.c.schema_uid == parent_schema_uid,
+                parent.c.selected,
+            )
+            .exists()
+        )
+        return list(
+            session.scalars(
+                select(item.c.uid).where(
+                    item.c.batch_uid == batch_uid,
+                    item.c.schema_uid == child_schema_uid,
+                    item.c.selected,
+                    ~has_parent,
+                )
+            )
+        )
+
     def move_items_held_by_other_batches(
         self,
         session: Session,

@@ -629,6 +629,7 @@ def delete_batch(
 def get_storing_progress(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
+    scheduler: FromDishka[Scheduler],
 ) -> BatchStoringProgress:
     """How far storing the images of a batch to the outbox has come.
 
@@ -640,10 +641,13 @@ def get_storing_progress(
     Returns
     ----------
     BatchStoringProgress
-        How many images the batch stores, how many are stored, and how many
-        failed.
+        How many images the batch stores, how many are stored, how many
+        failed, and whether storing it is queued or running.
     """
-    return batch_service.get_storing_progress(batch_uid)
+    progress = batch_service.get_storing_progress(batch_uid)
+    return progress.model_copy(
+        update={"running": scheduler.storing_is_queued(batch_uid)}
+    )
 
 
 @batch_router.get("/batch/{batch_uid}/validation")

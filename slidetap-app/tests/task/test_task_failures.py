@@ -561,3 +561,35 @@ class TestSchedulerDeferral:
         # Act & Assert
         with pytest.raises(ConnectionError):
             scheduler.post_process_image(image)  # type: ignore[arg-type]
+
+
+@pytest.mark.unittest
+class TestStoringIsQueued:
+    @pytest.mark.parametrize(
+        ("waiting", "running", "expected"),
+        [
+            (["job"], [], True),
+            ([], ["job"], True),
+            ([], [], False),
+        ],
+    )
+    def test_storing_is_queued_while_a_store_of_the_batch_waits_or_runs(
+        self, decoy: Decoy, waiting: list[str], running: list[str], expected: bool
+    ):
+        # Arrange
+        batch_uid = uuid4()
+        app = decoy.mock(cls=scheduler_module.TaskApp)
+        lock = f"store-{batch_uid}"
+        decoy.when(app.job_manager.list_jobs(lock=lock, status="todo")).then_return(
+            waiting
+        )
+        decoy.when(app.job_manager.list_jobs(lock=lock, status="doing")).then_return(
+            running
+        )
+        scheduler = Scheduler(app)
+
+        # Act
+        queued = scheduler.storing_is_queued(batch_uid)
+
+        # Assert
+        assert queued is expected

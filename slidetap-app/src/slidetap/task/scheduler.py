@@ -191,8 +191,22 @@ class Scheduler:
         """
         self._logger.info(f"Storing images for batch {batch.uid}")
         store_batch_images_to_outbox.configure(
-            lock=f"store-{batch.uid}",
+            lock=self._store_lock(batch.uid),
         ).defer(batch_uid=str(batch.uid))
+
+    def storing_is_queued(self, batch_uid: UUID) -> bool:
+        """Whether storing the batch is waiting in the queue or running."""
+        return any(
+            self._app.job_manager.list_jobs(
+                lock=self._store_lock(batch_uid), status=status
+            )
+            for status in ("todo", "doing")
+        )
+
+    @staticmethod
+    def _store_lock(batch_uid: UUID) -> str:
+        """The lock storing a batch takes, one store of a batch at a time."""
+        return f"store-{batch_uid}"
 
     def metadata_batch_import(self, batch: Batch, search_parameters: Any):
         """Defer a metadata search for the given batch.

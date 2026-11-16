@@ -68,3 +68,6 @@ class BatchStoringProgress(CamelCaseBaseModel):
     """How many of them are in the outbox."""
     failed: int
     """How many failed to store, and wait to be retried or taken out."""
+    running: bool = False
+    """Whether storing the batch is queued or running. Not, with images left,
+    is storing that stopped and waits to be resumed."""

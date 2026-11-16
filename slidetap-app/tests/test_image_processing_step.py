@@ -12,16 +12,29 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 from decoy import Decoy
+from wsidicom.metadata import Study
 from wsidicomizer import WsiDicomizer
+from wsidicomizer.metadata import WsiDicomizerMetadata
 
-from slidetap.image_processor.image_processing_step import ImageProcessingStep
-from slidetap.model import Image, ImageFile, ImageFormat
+from slidetap.config import DicomizationConfig
+from slidetap.external_interfaces.dicom_metadata_producer import (
+    DicomMetadataProducer,
+)
+from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
+from slidetap.image_processor.image_processing_step import (
+    DicomProcessingStep,
+    ImageProcessingStep,
+)
+from slidetap.model import Image, ImageFile, ImageFormat, Project, RootSchema
+from slidetap.services import StorageService
+from tests.download_test_images import image_paths
 
 
 class _NoopStep(ImageProcessingStep):
@@ -140,3 +153,114 @@ class TestOpenWsidicomizer:
         # Act / Assert
         with step._open_wsidicomizer(image, tmp_path) as opened:
             assert opened is None
+
+
+class StudyProducer(DicomMetadataProducer):
+    """Puts a study identifier in, as a producer puts in what the items say."""
+
+    def __init__(self, study_identifier: str):
+        self._study_identifier = study_identifier
+
+    def create(
+        self, schema: RootSchema, image: Image, base: WsiDicomizerMetadata
+    ) -> WsiDicomizerMetadata:
+        return replace(base, study=Study(identifier=self._study_identifier))
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not image_paths()[0].exists(),
+    reason="Test images not found. Run `uv run python tests/download_test_images.py`.",
+)
+class TestDicomProcessingStepDigest:
+    """The digest taken when an image is converted is compared with the one
+    taken when it is stored, to move the files rather than write them again
+    where nothing has changed."""
+
+    @pytest.fixture
+    def slide(self) -> Path:
+        return image_paths()[0]
+
+    @pytest.fixture
+    def writer(self) -> DicomMetadataWriter:
+        return DicomMetadataWriter()
+
+    @pytest.fixture
+    def image(self, slide: Path, writer: DicomMetadataWriter) -> Image:
+        # What the file said about itself, kept as the import keeps it.
+        with WsiDicomizer.open(slide) as wsi:
+            source_metadata = writer.source_metadata(wsi.metadata)
+        assert source_metadata is not None
+        return Image(
+            uid=uuid4(),
+            identifier="img-1",
+            dataset_uid=uuid4(),
+            schema_uid=uuid4(),
+            format=ImageFormat.OTHER_WSI,
+            files=[ImageFile(uid=uuid4(), filename=slide.name)],
+            source_metadata=source_metadata,
+        )
+
+    def convert(
+        self,
+        decoy: Decoy,
+        image: Image,
+        slide: Path,
+        working_folder: Path,
+        writer: DicomMetadataWriter,
+    ) -> tuple[RootSchema, Image]:
+        schema = decoy.mock(cls=RootSchema)
+        step = DicomProcessingStep(
+            DicomizationConfig(levels=[-1]),
+            StudyProducer("CASE-1"),
+            writer,
+        )
+        _, converted = step.run(
+            schema,
+            decoy.mock(cls=StorageService),
+            decoy.mock(cls=Project),
+            image,
+            slide.parent,
+            working_folder,
+            "task",
+        )
+        return schema, converted
+
+    def test_the_digest_is_the_one_storing_takes_when_nothing_has_changed(
+        self,
+        decoy: Decoy,
+        image: Image,
+        slide: Path,
+        tmp_path: Path,
+        writer: DicomMetadataWriter,
+    ):
+        # Arrange
+        schema, converted = self.convert(decoy, image, slide, tmp_path, writer)
+        base = writer.recorded(converted.source_metadata)
+        assert base is not None
+
+        # Act
+        digest = writer.digest(StudyProducer("CASE-1").create(schema, converted, base))
+
+        # Assert
+        assert converted.metadata_digest is not None
+        assert digest == converted.metadata_digest
+
+    def test_the_digest_differs_from_the_one_storing_takes_when_the_items_changed(
+        self,
+        decoy: Decoy,
+        image: Image,
+        slide: Path,
+        tmp_path: Path,
+        writer: DicomMetadataWriter,
+    ):
+        # Arrange
+        schema, converted = self.convert(decoy, image, slide, tmp_path, writer)
+        base = writer.recorded(converted.source_metadata)
+        assert base is not None
+
+        # Act
+        digest = writer.digest(StudyProducer("CASE-2").create(schema, converted, base))
+
+        # Assert
+        assert digest != converted.metadata_digest
