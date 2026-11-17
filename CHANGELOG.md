@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SLIDETAP_DOWNLOAD` and `SLIDETAP_PROCESSING` set the download and processing folders apart from `SLIDETAP_STORAGE`. Unset, they are subfolders of it, as before.
 - `ImageImportInterface.pre_processes_separately`, True by default. When False, a batch goes from search straight to post-processing, and each image is downloaded and pre-processed in its post-processing task. Retries resume where they stopped, and a converted image's download is removed. `ApplicationPolicy` and `GET /api/application/policy` tell the client, which then hides the pre-processing step.
 - `ImageViewInterface`, given to `WebAppProvider` as `image_view_interface`, reads images for viewing. The default, `FileImageViewInterface`, reads the downloaded files. It is given an `ImageToView`, kept for `image_cache.image_seconds` (5 by default). A moved image is opened from where it now is, and one whose files are gone gives not found.
+- `slidetap-db snapshot create`, `list`, `restore` and `prune` take and restore snapshots of the database, kept in `SLIDETAP_SNAPSHOTS` or else in the `snapshots` folder of `SLIDETAP_STORAGE`. A Postgres database needs the Postgres client tools of the server's version. A restore is refused while other sessions are connected, unless `--force` ends them, and takes a snapshot of what it replaces first.
 
 ### Changed
 
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Drag handles show their own hand cursor, visible on both themes.
 - Codes two levels down, such as in a list inside an object, are mapped.
 - A mapping expression longer than 128 characters is stored. `mapping_item.expression` and `literal` are text, with a migration.
+- Editing one attribute in an object attribute keeps what was mapped of the others. The edit used to start from the imported value, so the other attributes showed unmapped from then on.
 - Storing moves a converted image whose metadata has not changed, instead of writing it again. Its digest is now taken the same way at conversion as at storing.
 - Locking a batch is refused while a selected sample lacks a parent its schema requires, such as a slide with no block. This is read from the links themselves, so a sample still marked valid after losing its parent is caught.
 - Resuming storing of a batch stores its images that failed to store again, without retrying each first. Resume storing is offered whenever no store of the batch is queued or running, also when images were set back by hand.

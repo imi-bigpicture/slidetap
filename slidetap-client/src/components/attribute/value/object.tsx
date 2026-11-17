@@ -27,6 +27,7 @@ import AttributeDetails from '../attribute_details'
 import AttributeValueControls from '../attribute_value_controls'
 import DisplayMappableValue from '../display_mappable_value'
 import OutlinedFormControl from '../outlined_form_control'
+import { withHeldAttributeUpdated } from './object_update'
 import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayObjectAttributeProps {
@@ -51,18 +52,7 @@ export default function DisplayObjectAttribute({
   const handleOwnAttributeUpdate = (
     tag: string,
     updatedAttribute: Attribute<AttributeValueTypes>,
-  ): ObjectAttribute => {
-    const updated = { ...attribute }
-    if (updated.updatedValue === null) {
-      if (updated.originalValue === null) {
-        updated.updatedValue = {}
-      } else {
-        updated.updatedValue = updated.originalValue
-      }
-    }
-    updated.updatedValue[tag] = updatedAttribute
-    return updated
-  }
+  ): ObjectAttribute => withHeldAttributeUpdated(attribute, tag, updatedAttribute)
   const handleNestedAttributeUpdate = (
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
