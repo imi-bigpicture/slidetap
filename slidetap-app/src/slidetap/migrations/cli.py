@@ -148,10 +148,6 @@ def stamp(
     print(f"Stamped database at {revision}.")
 
 
-if __name__ == "__main__":
-    app()
-
-
 @app.command()
 def unmapped_values(
     db_uri: DbUri = "",
@@ -193,3 +189,112 @@ def unmapped_values(
             written = repair_service.rebuild_unmapped_values(project, session=session)
             session.commit()
             print(f"Rebuilt: {written} value(s) recorded.")
+
+
+snapshot_app = typer.Typer(
+    help=(
+        "Take, list, restore and prune snapshots of the database, kept in "
+        "SLIDETAP_SNAPSHOTS or else in the snapshots folder of SLIDETAP_STORAGE."
+    ),
+    no_args_is_help=True,
+)
+app.add_typer(snapshot_app, name="snapshot")
+
+Folder = Annotated[
+    str,
+    typer.Option(
+        "--folder",
+        envvar="SLIDETAP_SNAPSHOTS",
+        help="Folder of the snapshots, else the snapshots folder of SLIDETAP_STORAGE.",
+    ),
+]
+
+
+def _snapshots(db_uri: str, folder: str):
+    """The snapshots of the database, in the folder given or configured."""
+    from pathlib import Path
+
+    from slidetap.migrations.snapshot import DatabaseSnapshots
+
+    _setup(db_uri)
+    try:
+        return DatabaseSnapshots(
+            os.environ["SLIDETAP_DBURI"],
+            Path(folder) if folder else DatabaseSnapshots.folder_from_environment(),
+        )
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        raise SystemExit(1) from error
+
+
+@snapshot_app.command("create")
+def snapshot_create(
+    label: Annotated[
+        str, typer.Option(help="Why it is taken, such as deploy or before-remap.")
+    ] = "manual",
+    db_uri: DbUri = "",
+    folder: Folder = "",
+) -> None:
+    """Take a snapshot of the database."""
+    snapshots = _snapshots(db_uri, folder)
+    snapshot = snapshots.create(label)
+    print(
+        f"Snapshot {snapshot.name} taken, {snapshot.size / 1e6:.1f} MB, at revision "
+        f"{snapshot.revision}, in {snapshots.folder}."
+    )
+
+
+@snapshot_app.command("list")
+def snapshot_list(db_uri: DbUri = "", folder: Folder = "") -> None:
+    """List the snapshots, oldest first."""
+    snapshots = _snapshots(db_uri, folder)
+    listed = snapshots.all()
+    if not listed:
+        print(f"No snapshots in {snapshots.folder}.")
+        return
+    for snapshot in listed:
+        print(
+            f"{snapshot.name}  {snapshot.size / 1e6:9.1f} MB  "
+            f"revision {snapshot.revision}  {snapshot.label}"
+        )
+
+
+@snapshot_app.command("restore")
+def snapshot_restore(
+    name: Annotated[str, typer.Argument(help="The snapshot, as listed.")],
+    force: Annotated[
+        bool,
+        typer.Option(help="End the other sessions on the database rather than refuse."),
+    ] = False,
+    db_uri: DbUri = "",
+    folder: Folder = "",
+) -> None:
+    """Replace what the database holds with a snapshot.
+
+    A snapshot of what it holds now is taken first, so the restore can be
+    undone. Stop the app and the worker before: a restore is refused while
+    other sessions are connected, unless --force ends them.
+    """
+    snapshots = _snapshots(db_uri, folder)
+    try:
+        before = snapshots.restore(name, force=force)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        raise SystemExit(1) from error
+    print(f"Restored {name}. What the database held before is snapshot {before.name}.")
+
+
+@snapshot_app.command("prune")
+def snapshot_prune(
+    keep: Annotated[int, typer.Option(help="How many of the newest to keep.")] = 10,
+    db_uri: DbUri = "",
+    folder: Folder = "",
+) -> None:
+    """Remove all but the newest snapshots."""
+    snapshots = _snapshots(db_uri, folder)
+    removed = snapshots.prune(keep)
+    print(f"Removed {len(removed)} snapshot(s), kept the newest {keep}.")
+
+
+if __name__ == "__main__":
+    app()
