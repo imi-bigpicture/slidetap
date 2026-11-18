@@ -18,6 +18,7 @@ Storing is designed around these, and mocks the operations to test itself, so
 they are pinned here against a real file system.
 """
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,19 @@ def folder(tmp_path: Path) -> Path:
 
 @pytest.mark.unittest
 class TestFileOperations:
+    def test_checksum_is_the_sha256_of_the_file(
+        self, file_operations: FileOperations, folder: Path
+    ):
+        # Arrange
+        path = folder.joinpath("image.dcm")
+        path.write_bytes(b"image data")
+
+        # Act
+        checksum = file_operations.checksum(path)
+
+        # Assert
+        assert checksum == hashlib.sha256(b"image data").hexdigest()
+
     def test_rename_moves_folder(
         self, file_operations: FileOperations, folder: Path, tmp_path: Path
     ) -> None:

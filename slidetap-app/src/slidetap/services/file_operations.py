@@ -14,6 +14,7 @@
 
 """File system operations."""
 
+import hashlib
 import shutil
 from pathlib import Path
 
@@ -75,6 +76,11 @@ class FileOperations:
     def make_folder(self, path: Path) -> None:
         """Create folder, and any missing parents of it."""
         path.mkdir(parents=True, exist_ok=True)
+
+    def checksum(self, path: Path) -> str:
+        """SHA-256 of the file, as a hex string."""
+        with open(path, "rb") as file:
+            return hashlib.file_digest(file, "sha256").hexdigest()
 
     def list_files(self, folder: Path) -> list[Path]:
         """Files in folder and its subfolders, in sorted order."""

@@ -744,6 +744,8 @@ def store_batch_images_to_outbox(
                 dicom_metadata_writer,
                 bundled_batch,
             )
+            # Outside the session, as reading every file takes long.
+            storage_service.checksum_stored_image(image_model)
             with database_service.get_session() as session:
                 database_image = database_service.get_image(session, image_model.uid)
                 database_image.folder_path = image_model.folder_path
@@ -751,7 +753,9 @@ def store_batch_images_to_outbox(
                 database_image.metadata_digest = image_model.metadata_digest
                 database_image.files.clear()
                 for image_file in image_model.files:
-                    stored_file = DatabaseImageFile(database_image, image_file.filename)
+                    stored_file = DatabaseImageFile(
+                        database_image, image_file.filename, image_file.checksum
+                    )
                     session.add(stored_file)
                     database_image.files.add(stored_file)
                 database_image.set_as_stored()

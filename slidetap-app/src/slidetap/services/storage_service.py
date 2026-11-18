@@ -491,6 +491,24 @@ class StorageService:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
 
+    def checksum_stored_image(self, image: Image) -> None:
+        """Set the SHA-256 of each file of an image stored to the outbox.
+
+        Raises
+        ------
+        TransientTaskError
+            If a file cannot be read.
+        """
+        if image.folder_path is None:
+            return
+        folder = Path(image.folder_path)
+        for file in image.files:
+            path = folder.joinpath(file.filename)
+            try:
+                file.checksum = self._file_operations.checksum(path)
+            except OSError as exception:
+                raise TransientTaskError(f"Failed to checksum {path}") from exception
+
     def recover_stored_image(
         self,
         project: Project,

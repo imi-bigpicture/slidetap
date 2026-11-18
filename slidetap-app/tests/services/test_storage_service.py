@@ -36,6 +36,7 @@ from slidetap.model import (
     BatchStatus,
     Dataset,
     Image,
+    ImageFile,
     ImageFormat,
     Project,
     RootSchema,
@@ -883,3 +884,51 @@ class TestBatchBundle:
             StorageService.batch_folder_name(batch, ["BATCH_first"])
             == f"BATCH_first.{batch.uid}"
         )
+
+
+@pytest.mark.unittest
+class TestChecksumStoredImage:
+    def test_each_file_gets_its_checksum(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        image: Image,
+        tmp_path: Path,
+    ):
+        # Arrange
+        image.folder_path = str(tmp_path)
+        image.files = [
+            ImageFile(uid=uuid4(), filename="0.dcm"),
+            ImageFile(uid=uuid4(), filename="1.dcm"),
+        ]
+        decoy.when(file_operations.checksum(tmp_path.joinpath("0.dcm"))).then_return(
+            "zero"
+        )
+        decoy.when(file_operations.checksum(tmp_path.joinpath("1.dcm"))).then_return(
+            "one"
+        )
+
+        # Act
+        storage_service.checksum_stored_image(image)
+
+        # Assert
+        assert [file.checksum for file in image.files] == ["zero", "one"]
+
+    def test_a_file_that_cannot_be_read_is_a_transient_error(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        image: Image,
+        tmp_path: Path,
+    ):
+        """Retried, as when the outbox is unreachable while storing."""
+        # Arrange
+        image.folder_path = str(tmp_path)
+        image.files = [ImageFile(uid=uuid4(), filename="0.dcm")]
+        decoy.when(file_operations.checksum(Anything())).then_raise(DISCONNECT)
+
+        # Act & Assert
+        with pytest.raises(TransientTaskError):
+            storage_service.checksum_stored_image(image)

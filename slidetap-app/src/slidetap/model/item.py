@@ -81,6 +81,9 @@ class Annotation(Item):
 class ImageFile(CamelCaseBaseModel):
     uid: UUID
     filename: str
+    checksum: str | None = None
+    """SHA-256 of the file as stored to the outbox, None for a file not stored
+    yet or stored before checksums were kept."""
 
 
 class ImageFormat(Enum):

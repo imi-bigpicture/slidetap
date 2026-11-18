@@ -1330,6 +1330,57 @@ class TestStoreBatchImagesToOutbox:
         )
         assert batch.value.storage_folder == "BATCH_batch"
 
+    def test_the_checksum_of_each_stored_file_is_kept(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        storage_service: StorageService,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        """So that an export need not read the files again."""
+        # Arrange
+        stored = _add_batch(stored_database_service, schema, BatchStatus.IMAGE_STORING)
+        image_uid = _add_image(
+            stored_database_service,
+            schema,
+            stored,
+            ImageStatus.POST_PROCESSED,
+            folder_path=str(tmp_path),
+        )
+
+        def store(project: Any, image: Image, dataset: Any, batch: Any) -> None:
+            image.files = [ImageFile(uid=uuid4(), filename="0.dcm")]
+
+        def checksum(image: Image) -> None:
+            for file in image.files:
+                file.checksum = "sha256 of " + file.filename
+
+        decoy.when(
+            storage_service.store_image_to_outbox(
+                Anything(), Anything(), Anything(), None
+            )
+        ).then_do(store)
+        decoy.when(storage_service.checksum_stored_image(Anything())).then_do(checksum)
+
+        # Act
+        self._store(
+            stored.batch_uid,
+            stored_database_service,
+            batch_service,
+            schema_service,
+            storage_service,
+            _not_retried,
+        )
+
+        # Assert
+        with stored_database_service.get_session() as session:
+            image = stored_database_service.get_image(session, image_uid)
+            assert image.status == ImageStatus.STORED
+            assert [file.checksum for file in image.files] == ["sha256 of 0.dcm"]
+
     def test_a_transient_failure_that_is_retried_leaves_the_image_storing(
         self,
         decoy: Decoy,

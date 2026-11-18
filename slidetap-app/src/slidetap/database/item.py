@@ -544,6 +544,8 @@ class DatabaseImageFile(Base):
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     filename: Mapped[str] = mapped_column(String(512))
+    checksum: Mapped[str | None] = mapped_column(String(64))
+    """SHA-256 of the file as stored to the outbox, see `ImageFile.checksum`."""
 
     # For relations
     # TODO should optional be allowed here?
@@ -557,19 +559,22 @@ class DatabaseImageFile(Base):
     )
     __tablename__ = "image_file"
 
-    def __init__(self, image: DatabaseImage, filename: str):
+    def __init__(
+        self, image: DatabaseImage, filename: str, checksum: str | None = None
+    ):
         """A file stored for a image.
 
         Parameters
         ----------
         filename: Name of file relative to image folder.
+        checksum: SHA-256 of the file, where it is stored to the outbox.
 
         """
-        super().__init__(image=image, filename=filename, uid=uuid4())
+        super().__init__(image=image, filename=filename, checksum=checksum, uid=uuid4())
 
     @property
     def model(self) -> ImageFile:
-        return ImageFile(uid=self.uid, filename=self.filename)
+        return ImageFile(uid=self.uid, filename=self.filename, checksum=self.checksum)
 
 
 class DatabaseImage(DatabaseItem[Image]):
