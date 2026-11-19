@@ -18,7 +18,7 @@ import json
 import logging
 import re
 import shutil
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
@@ -451,7 +451,10 @@ class StorageService:
         task_id: str,
         use_pseudonyms: bool = False,
     ) -> Path:
-        """Copy image to a task-specific processing directory (not outbox)."""
+        """Copy image to a task-specific processing directory (not outbox).
+
+        The checksum of each of the image's files is set from the copy.
+        """
         project_folder = self._task_processing_images(project, task_id)
         if use_pseudonyms:
             if image.pseudonym is None:
@@ -464,7 +467,9 @@ class StorageService:
             f"Storing processed image {image.identifier} to "
             f"{project_folder.joinpath(folder_name)}."
         )
-        return self._copy_folder(path, project_folder, folder_name)
+        copied_path, checksums = self._copy_folder(path, project_folder, folder_name)
+        self._set_checksums(image, checksums)
+        return copied_path
 
     def store_thumbnail_to_processing(
         self,
@@ -492,7 +497,9 @@ class StorageService:
         return thumbnail_path
 
     def checksum_stored_image(self, image: Image) -> None:
-        """Set the SHA-256 of each file of an image stored to the outbox.
+        """Set the SHA-256 of each file of an image stored to the outbox that has
+        none, as one written again when stored, or processed before checksums
+        were taken.
 
         Raises
         ------
@@ -503,6 +510,8 @@ class StorageService:
             return
         folder = Path(image.folder_path)
         for file in image.files:
+            if file.checksum is not None:
+                continue
             path = folder.joinpath(file.filename)
             try:
                 file.checksum = self._file_operations.checksum(path)
@@ -573,7 +582,9 @@ class StorageService:
         Reads the image's current ``folder_path`` and ``thumbnail_path`` (which
         point into a task-specific processing directory) and moves them to the
         final outbox location. Updates the paths in-place. The image goes into the
-        dataset bundle folder, the thumbnail stays at the outbox root.
+        dataset bundle folder, the thumbnail stays at the outbox root. Where the
+        image is copied, as across file systems, the checksums of its files are
+        set from the copy.
 
         The caller is expected to persist the paths and set the image as stored
         before storing the next image, so that the paths on record follow the data
@@ -595,6 +606,7 @@ class StorageService:
                 self._move_to_outbox(
                     Path(image.folder_path),
                     self._project_images_outbox(project, dataset, batch),
+                    image,
                 )
             )
         if image.thumbnail_path is not None:
@@ -655,7 +667,9 @@ class StorageService:
                 )
             )
 
-    def _move_to_outbox(self, source: Path, destination_folder: Path) -> Path:
+    def _move_to_outbox(
+        self, source: Path, destination_folder: Path, image: Image | None = None
+    ) -> Path:
         """Move source file or folder into destination folder.
 
         The source is only ever renamed into its destination, and is otherwise
@@ -675,6 +689,9 @@ class StorageService:
             File or folder to move.
         destination_folder: Path
             Folder to move the source into.
+        image: Image | None = None
+            Image whose files the source holds, whose checksums are set where the
+            source is copied.
 
         Returns
         -------
@@ -704,7 +721,7 @@ class StorageService:
 
         staged = destination.with_name(f"{destination.name}.{uuid4().hex[:8]}.tmp")
         try:
-            self._file_operations.copy(source, staged)
+            checksums = self._file_operations.copy(source, staged)
         except OSError as exception:
             self._remove_path(staged)
             raise TransientTaskError(
@@ -716,7 +733,18 @@ class StorageService:
             self._remove_path(staged)
             raise
         self._discard_path(source)
+        if image is not None:
+            self._set_checksums(image, checksums)
         return destination
+
+    @staticmethod
+    def _set_checksums(image: Image, checksums: Mapping[Path, str]) -> None:
+        """Set the checksums of the image's files, by their paths in its folder,
+        from a copy of the folder."""
+        for file in image.files:
+            checksum = checksums.get(Path(file.filename))
+            if checksum is not None:
+                file.checksum = checksum
 
     def _rename_into_place(self, source: Path, destination: Path) -> None:
         """Rename source to destination, keeping any existing destination.
@@ -900,8 +928,13 @@ class StorageService:
                 return True
         return False
 
-    def _copy_folder(self, folder: Path, target_folder: Path, new_name: str) -> Path:
+    def _copy_folder(
+        self, folder: Path, target_folder: Path, new_name: str
+    ) -> tuple[Path, dict[Path, str]]:
         """Copy folder into target folder under a new name.
+
+        Returns the path copied to, and the checksum of each file copied, by its
+        path in the folder.
 
         Parameters
         ----------
@@ -920,9 +953,9 @@ class StorageService:
         copied_path = target_folder.joinpath(new_name)
         self._make_folder(copied_path.parent)
         try:
-            self._file_operations.copy(folder, copied_path)
+            checksums = self._file_operations.copy(folder, copied_path)
         except OSError as exception:
             raise TransientTaskError(
                 f"Failed to copy folder {folder} to {copied_path}"
             ) from exception
-        return copied_path
+        return copied_path, checksums

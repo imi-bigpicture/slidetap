@@ -629,7 +629,11 @@ def post_process_image(
             )
             database_image.files.clear()
             for image_file in post_processed.files:
-                new_file = DatabaseImageFile(database_image, image_file.filename)
+                # With the checksum taken as it was copied to processing, kept
+                # as long as the file is moved as it is.
+                new_file = DatabaseImageFile(
+                    database_image, image_file.filename, image_file.checksum
+                )
                 session.add(new_file)
                 database_image.files.add(new_file)
             database_image.format = post_processed.format
@@ -744,7 +748,8 @@ def store_batch_images_to_outbox(
                 dicom_metadata_writer,
                 bundled_batch,
             )
-            # Outside the session, as reading every file takes long.
+            # For the files without one, outside the session, as reading them
+            # takes long.
             storage_service.checksum_stored_image(image_model)
             with database_service.get_session() as session:
                 database_image = database_service.get_image(session, image_model.uid)

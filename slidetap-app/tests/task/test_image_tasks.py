@@ -676,6 +676,59 @@ class TestPostProcessImage:
             == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
         )
 
+    def test_the_checksum_taken_when_converted_is_kept(
+        self,
+        decoy: Decoy,
+        stored_database_service: DatabaseService,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        storage_service: StorageService,
+        schema: ExampleSchema,
+        tmp_path: Path,
+    ):
+        """As the converted files were copied to processing, so that storing
+        them as they are reads none of them again."""
+        # Arrange
+        stored = _add_batch(
+            stored_database_service, schema, BatchStatus.IMAGE_POST_PROCESSING
+        )
+        image_uid = _add_image(
+            stored_database_service, schema, stored, ImageStatus.PRE_PROCESSED
+        )
+
+        def export(image: Image, batch: Any, project: Any, task_id: str) -> Image:
+            return image.model_copy(
+                update={
+                    "folder_path": str(tmp_path),
+                    "files": [
+                        ImageFile(uid=uuid4(), filename="0.dcm", checksum="copied")
+                    ],
+                }
+            )
+
+        image_export_interface = decoy.mock(cls=ImageExportInterface)
+        decoy.when(
+            image_export_interface.export(
+                Anything(), Anything(), Anything(), task_id="1"
+            )
+        ).then_do(export)
+
+        # Act
+        _post_process(
+            image_uid,
+            stored_database_service,
+            batch_service,
+            schema_service,
+            storage_service,
+            image_export_interface,
+            _not_retried,
+        )
+
+        # Assert
+        with stored_database_service.get_session() as session:
+            files = stored_database_service.get_image(session, image_uid).files
+            assert [file.checksum for file in files] == ["copied"]
+
 
 """The pipeline of an application without an image pre-processor."""
 

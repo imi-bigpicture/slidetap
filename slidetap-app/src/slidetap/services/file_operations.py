@@ -16,7 +16,13 @@
 
 import hashlib
 import shutil
+from collections.abc import Iterator
+from io import RawIOBase
 from pathlib import Path
+
+CHUNK_SIZE = 16 * 1024 * 1024
+"""Bytes read at a time. Large, as image files are large and often on a network
+share, where each read is a round trip."""
 
 
 class FileOperations:
@@ -59,12 +65,24 @@ class FileOperations:
         """Rename source to destination. Atomic, and only within a filesystem."""
         source.rename(destination)
 
-    def copy(self, source: Path, destination: Path) -> None:
-        """Copy source file or folder to destination."""
-        if source.is_dir():
-            shutil.copytree(source, destination)
-        else:
-            shutil.copy2(source, destination)
+    def copy(self, source: Path, destination: Path) -> dict[Path, str]:
+        """Copy source file or folder to destination.
+
+        Returns the SHA-256 of each file copied, as a hex string, by its path
+        relative to the source folder, or by its name for a file. Taken from what
+        is written, so the files are read only once.
+        """
+        if not source.is_dir():
+            return {Path(source.name): self._copy_file(source, destination)}
+        checksums: dict[Path, str] = {}
+
+        def copy_file(file: str, copied: str) -> None:
+            checksums[Path(file).relative_to(source)] = self._copy_file(
+                Path(file), Path(copied)
+            )
+
+        shutil.copytree(source, destination, copy_function=copy_file)
+        return checksums
 
     def remove(self, path: Path) -> None:
         """Remove file or folder."""
@@ -79,9 +97,33 @@ class FileOperations:
 
     def checksum(self, path: Path) -> str:
         """SHA-256 of the file, as a hex string."""
-        with open(path, "rb") as file:
-            return hashlib.file_digest(file, "sha256").hexdigest()
+        digest = hashlib.sha256()
+        with open(path, "rb", buffering=0) as file:
+            for chunk in self._chunks(file):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def list_files(self, folder: Path) -> list[Path]:
         """Files in folder and its subfolders, in sorted order."""
         return sorted(path for path in folder.rglob("*") if path.is_file())
+
+    def _copy_file(self, source: Path, destination: Path) -> str:
+        """Copy a file with its metadata, as `shutil.copy2` does, and return the
+        SHA-256 of what was written."""
+        digest = hashlib.sha256()
+        with (
+            open(source, "rb", buffering=0) as reader,
+            open(destination, "wb") as writer,
+        ):
+            for chunk in self._chunks(reader):
+                digest.update(chunk)
+                writer.write(chunk)
+        shutil.copystat(source, destination)
+        return digest.hexdigest()
+
+    @staticmethod
+    def _chunks(file: RawIOBase) -> Iterator[memoryview]:
+        """The file's content, read `CHUNK_SIZE` at a time into one buffer."""
+        buffer = memoryview(bytearray(CHUNK_SIZE))
+        while read := file.readinto(buffer):
+            yield buffer[:read]

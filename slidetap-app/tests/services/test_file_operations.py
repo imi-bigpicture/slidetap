@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from slidetap.services import file_operations as file_operations_module
 from slidetap.services.file_operations import FileOperations
 
 
@@ -53,6 +54,62 @@ class TestFileOperations:
 
         # Assert
         assert checksum == hashlib.sha256(b"image data").hexdigest()
+
+    def test_checksum_of_a_file_larger_than_a_chunk_is_of_all_of_it(
+        self,
+        file_operations: FileOperations,
+        folder: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        # Arrange
+        monkeypatch.setattr(file_operations_module, "CHUNK_SIZE", 4)
+        path = folder.joinpath("image.dcm")
+        path.write_bytes(b"image data")
+
+        # Act
+        checksum = file_operations.checksum(path)
+
+        # Assert
+        assert checksum == hashlib.sha256(b"image data").hexdigest()
+
+    def test_copy_gives_the_checksum_of_each_file_by_its_path_in_the_folder(
+        self,
+        file_operations: FileOperations,
+        folder: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Taken from what is written, a chunk at a time."""
+        # Arrange
+        monkeypatch.setattr(file_operations_module, "CHUNK_SIZE", 4)
+        folder.joinpath("level").mkdir()
+        folder.joinpath("level", "1.dcm").write_bytes(b"level one data")
+        destination = tmp_path.joinpath("copied folder")
+
+        # Act
+        checksums = file_operations.copy(folder, destination)
+
+        # Assert
+        assert checksums == {
+            Path("file.dcm"): hashlib.sha256(b"bytes").hexdigest(),
+            Path("level", "1.dcm"): hashlib.sha256(b"level one data").hexdigest(),
+        }
+        assert destination.joinpath("level", "1.dcm").read_bytes() == b"level one data"
+
+    def test_copy_of_a_file_gives_its_checksum_by_its_name(
+        self, file_operations: FileOperations, tmp_path: Path
+    ):
+        # Arrange
+        source = tmp_path.joinpath("thumbnail.jpeg")
+        source.write_bytes(b"thumbnail bytes")
+
+        # Act
+        checksums = file_operations.copy(source, tmp_path.joinpath("copied.jpeg"))
+
+        # Assert
+        assert checksums == {
+            Path("thumbnail.jpeg"): hashlib.sha256(b"thumbnail bytes").hexdigest()
+        }
 
     def test_rename_moves_folder(
         self, file_operations: FileOperations, folder: Path, tmp_path: Path

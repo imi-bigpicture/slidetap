@@ -236,6 +236,34 @@ class TestStorageService:
         decoy.verify(file_operations.rename(staged.value, image_destination), times=1)
         decoy.verify(file_operations.remove(discarded.value), times=1)
 
+    def test_store_image_to_outbox_across_filesystems_sets_checksums_from_the_copy(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        dataset: Dataset,
+        processed_image: Image,
+        image_destination: Path,
+    ) -> None:
+        """What was copied is what is stored, so no file is read again."""
+        # Arrange
+        processed_image.files = [ImageFile(uid=uuid4(), filename="0.dcm")]
+        source_folder = Path(processed_image.folder_path or "")
+        decoy.when(file_operations.same_filesystem(Anything(), Anything())).then_return(
+            False
+        )
+        decoy.when(file_operations.exists(image_destination)).then_return(False)
+        decoy.when(file_operations.copy(source_folder, Anything())).then_return(
+            {Path("0.dcm"): "copied"}
+        )
+
+        # Act
+        storage_service.store_image_to_outbox(project, processed_image, dataset)
+
+        # Assert
+        assert [file.checksum for file in processed_image.files] == ["copied"]
+
     def test_store_image_to_outbox_removes_staged_copy_when_copy_fails(
         self,
         decoy: Decoy,
@@ -451,6 +479,35 @@ class TestStorageService:
             storage_service.store_image_to_processing(
                 project, image, source, task_id="task id"
             )
+
+    def test_store_image_to_processing_sets_checksums_from_the_copy(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        project: Project,
+        image: Image,
+        tmp_path: Path,
+    ) -> None:
+        """Taken as the converted files are copied, so that storing them as they
+        are reads none of them again."""
+        # Arrange
+        source = tmp_path.joinpath("source image")
+        image.files = [
+            ImageFile(uid=uuid4(), filename="0.dcm"),
+            ImageFile(uid=uuid4(), filename=str(Path("level", "1.dcm"))),
+        ]
+        decoy.when(file_operations.copy(source, Anything())).then_return(
+            {Path("0.dcm"): "zero", Path("level", "1.dcm"): "one"}
+        )
+
+        # Act
+        storage_service.store_image_to_processing(
+            project, image, source, task_id="task id"
+        )
+
+        # Assert
+        assert [file.checksum for file in image.files] == ["zero", "one"]
 
 
 @pytest.mark.integration
@@ -914,6 +971,26 @@ class TestChecksumStoredImage:
 
         # Assert
         assert [file.checksum for file in image.files] == ["zero", "one"]
+
+    def test_a_file_with_a_checksum_is_not_read_again(
+        self,
+        decoy: Decoy,
+        storage_service: StorageService,
+        file_operations: FileOperations,
+        image: Image,
+        tmp_path: Path,
+    ):
+        """As one taken when it was copied to processing."""
+        # Arrange
+        image.folder_path = str(tmp_path)
+        image.files = [ImageFile(uid=uuid4(), filename="0.dcm", checksum="copied")]
+
+        # Act
+        storage_service.checksum_stored_image(image)
+
+        # Assert
+        assert image.files[0].checksum == "copied"
+        decoy.verify(file_operations.checksum(Anything()), times=0)
 
     def test_a_file_that_cannot_be_read_is_a_transient_error(
         self,
